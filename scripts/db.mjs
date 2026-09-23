@@ -237,10 +237,27 @@ function reset() {
   }
 }
 
+/**
+ * Start the cluster and STAY in the foreground.
+ *
+ * On Windows the postmaster can only keep spawning backends while the job
+ * object of the process that launched it is still alive. Once `db:start`
+ * returns, that job is torn down and every new client connection dies with
+ * `0xC0000142 (STATUS_DLL_INIT_FAILED)` — the postmaster looks healthy
+ * (`pg_ctl status` says running, the port is listening) but no backend can
+ * start. Keeping a long-lived parent alive avoids that.
+ */
+async function serve() {
+  await start();
+  log("PostgreSQL is serving. Press Ctrl+C to stop this supervisor.");
+  // Never resolves: this supervisor must outlive the cluster's usefulness.
+  await new Promise(() => {});
+}
+
 // ------------------------------------------------------------------ main
 
 const command = process.argv[2] ?? "start";
-const commands = { init, start, stop, status, reset, sql, ping };
+const commands = { init, start, stop, status, reset, serve, sql, ping };
 
 if (!commands[command]) {
   fail(`unknown command "${command}". Use: ${Object.keys(commands).join(" | ")}`);

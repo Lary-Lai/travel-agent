@@ -165,9 +165,29 @@ npm run db:generate
 npm run dev
 ```
 
-打开 <http://localhost:3000>。
+打开 <http://localhost:3001>。
+
+> **端口固定为 3001**（`next dev -p 3001`）。本机 3000 端口被另一个项目（`D:\project\expense reimbursement`）的 dev server 占用，固定端口可以避免两个项目互相抢占、URL 也不再来回变化。要改用其他端口，编辑 `package.json` 里的 `dev` / `start` 脚本即可。
 
 > 也可以一步完成第 2–4 步：`npm run setup`
+
+#### 数据库连不上或连接被重置？
+
+在受进程管理器（Job Object）约束的环境里（CI、某些 IDE/终端封装器），当 `npm run db:start` 这条命令**执行结束**时，它所在的 Job Object 会被回收，而 postmaster 虽然还活着（`pg_ctl status` 显示 running、端口也在监听），却**再也无法派生 backend 进程**，客户端连接会得到 `ECONNRESET`，日志里是：
+
+```
+client backend (PID ...) was terminated by exception 0xC0000142   # STATUS_DLL_INIT_FAILED
+```
+
+这种情况改用前台守护模式即可，它会保持一个长生命周期的父进程：
+
+```bash
+npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
+```
+
+普通终端里 `npm run db:start` 是够用的（命令结束后终端本身仍在）。
+
+> ⚠️ 请不要在 `npm run dev` 运行期间执行 `npm run build`：两个 Next 进程争用 `.next` 目录可能导致 dev server 被终止。
 
 ### 演示账号
 
@@ -188,6 +208,7 @@ npm run dev
 | `npm run lint` | ESLint |
 | `npm run format` | Prettier 格式化 |
 | `npm run db:start` / `db:stop` / `db:status` | 启动 / 停止 / 查看嵌入式 PostgreSQL |
+| `npm run db:serve` | 前台守护模式启动数据库（父进程常驻，适合受进程管理器约束的环境） |
 | `npm run db:ping` | 测试数据库连通性 |
 | `npm run db:psql -- "select 1"` | 执行一条 SQL（注意：该发行包不含 psql.exe，此命令走 `pg` 驱动） |
 | `npm run db:reset` | **删除**全部本地数据 |
