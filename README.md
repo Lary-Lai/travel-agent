@@ -328,6 +328,7 @@ node scripts/smoke-agent.mjs     # Agent 端到端：51 项断言，含 PDF / �
 node scripts/smoke-weather-profile.mjs  # 天气 + 个人主页 + ★账号跨播种保留：39 项断言
 npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
+node scripts/diagnose-images.mjs # 诊断房源图片：区分"上游挂了 / 上游太慢 / 优化器坏了"
 node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
 node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试文件
 ```
@@ -818,6 +819,30 @@ FATAL: An unexpected Turbopack error occurred
 改完后连续跑 3 次都是 **39 / 39**。
 
 教训：**测试第三方依赖时，要把"确定性"和"依赖外部"的断言分开**。前者永不免除，后者该跳过就跳过。让供应商的一次超时显示成红色的失败，会让人逐渐不再相信这套测试 —— 那比没有测试更糟。
+
+**21. 部分房源图片加载失败（是网络，不是代码）**
+
+症状：搜索结果页有几张房源卡片显示成占位块。因为这一轮刚好给图片加了"失败就显示居中说明文字"的降级，所以需要先确认：**到底是我们的改动错了，还是真的加载不到？**
+
+排查：写了 `scripts/diagnose-images.mjs`，用真实的房源数据同时请求**上游原图**和 **`/_next/image` 优化后的地址**，并且把结论分成三种互斥的成因：
+
+```
+  listing                               upstream      via /_next/image  verdict
+  蚕室站步行2分钟 · 温馨公寓｜首尔                 ERR 10670ms         200 44KB 0.0s  ok
+  肖尔迪奇独栋小院 · 可住8人｜伦敦                 ERR 10730ms          504 0KB 0.0s  too slow for Next
+  梨泰院站步行4分钟 · 通透公寓｜首尔                ERR 10726ms          504 0KB 0.0s  too slow for Next
+  代官山站步行4分钟 · 精致公寓｜东京             200 110KB 0.0s         200 34KB 0.0s  ok
+  ...
+
+  => The optimizer is fine. The failures are the upstream network path
+     to images.unsplash.com, not our code.
+```
+
+结论很明确：**上游 200 的时候，优化器 100% 都能正常返回**（0 例优化器失败）。失败的那几张是到 `images.unsplash.com` 的连接本身中断（约 10.7 秒后报错），其中一张单独测时甚至用了 **114 秒**才下载完 148KB——而 Next 的图片优化器给上游只有约 7 秒，超时就回 504。所以这是**本机到 Unsplash 的网络通路问题**，不是应用代码的问题。
+
+顺带确认了这个降级的价值：如果没有 `SafeImage`，这几张卡片会显示成浏览器原生的裂图图标；现在它们优雅地降级成居中的图标加说明文字，页面整体观感依然成立。
+
+> 如果你在自己的网络下也遇到同样的裂图，可以直接跑 `node scripts/diagnose-images.mjs` 看到底是哪一段慢。种子脚本里的 45 个图片 id 在写入时**逐个验证过返回 200**，所以 4xx 基本可以排除。
 
 ### 技术选择记录
 
