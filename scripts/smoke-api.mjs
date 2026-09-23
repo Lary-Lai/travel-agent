@@ -409,6 +409,120 @@ async function main() {
   check("stats expose a pending counter", typeof tripsAfterPay.body?.data?.stats?.pending === "number",
     String(tripsAfterPay.body?.data?.stats?.pending));
 
+  // ----------------------------------------------------------------- refunds
+  console.log("\n— refunds (cancellation policy)");
+
+  /** Create a booking (optionally paid) and remember it for cleanup. */
+  const book = async ({ checkIn, checkOut, guests = 2, method }) => {
+    const created = await alice.request("/api/bookings", {
+      method: "POST",
+      body: { listingId: items[0].id, checkIn, checkOut, guests },
+    });
+    const booking = created.body?.data?.booking;
+    if (booking?.id) createdBookingIds.push(booking.id);
+    if (method && booking?.id) {
+      await alice.request(`/api/bookings/${booking.id}/pay`, {
+        method: "POST",
+        body: { method },
+      });
+      const fresh = await alice.request(`/api/bookings/${booking.id}`);
+      return fresh.body?.data?.booking;
+    }
+    return booking;
+  };
+
+  // ---- tier: NOT_PAID
+  const unpaid = await book({ checkIn: addDays(200), checkOut: addDays(202) });
+  const unpaidQuote = await alice.request(`/api/bookings/${unpaid.id}/refund-quote`);
+  check("refund quote for an unpaid booking -> 200", unpaidQuote.status === 200, `got ${unpaidQuote.status}`);
+  check("unpaid booking quote is NOT_PAID", unpaidQuote.body?.data?.quote?.tier === "NOT_PAID",
+    unpaidQuote.body?.data?.quote?.tier);
+  check("unpaid booking refunds nothing", unpaidQuote.body?.data?.quote?.amount === 0);
+
+  // ---- tier: FREE (>= 7 days out)
+  const freeBooking = await book({ checkIn: addDays(30), checkOut: addDays(33), guests: 3, method: "WECHAT" });
+  const freeQuote = (await alice.request(`/api/bookings/${freeBooking.id}/refund-quote`)).body?.data?.quote;
+  check("free-cancellation tier detected", freeQuote?.tier === "FREE", freeQuote?.tier);
+  check("free cancellation refunds the full amount",
+    freeQuote?.amount === freeBooking.roomPrice + freeBooking.cleaningFee + freeBooking.serviceFee,
+    `${freeQuote?.amount} vs ${freeBooking.roomPrice + freeBooking.cleaningFee + freeBooking.serviceFee}`);
+  check("free cancellation refunds the service fee too", freeQuote?.serviceRefund === freeBooking.serviceFee);
+  check("quote reports the full paid amount", freeQuote?.totalPaid === freeBooking.totalPrice);
+  check("quote counts days until check-in", typeof freeQuote?.daysUntilCheckIn === "number" && freeQuote.daysUntilCheckIn >= 29,
+    String(freeQuote?.daysUntilCheckIn));
+
+  // ---- tier: PARTIAL (3-6 days out)
+  const partialBooking = await book({ checkIn: addDays(5), checkOut: addDays(7), guests: 2, method: "ALIPAY" });
+  const partialQuote = (await alice.request(`/api/bookings/${partialBooking.id}/refund-quote`)).body?.data?.quote;
+  const expectedPartial = Math.round(partialBooking.roomPrice * 0.5) + partialBooking.cleaningFee;
+  check("partial-refund tier detected", partialQuote?.tier === "PARTIAL", partialQuote?.tier);
+  check("partial refund = 50% room + full cleaning",
+    partialQuote?.amount === expectedPartial,
+    `${partialQuote?.amount} vs ${expectedPartial}`);
+  check("partial refund returns the cleaning fee", partialQuote?.cleaningRefund === partialBooking.cleaningFee);
+  check("partial refund withholds the service fee", partialQuote?.serviceRefund === 0);
+  check("partial refund is less than what was paid", partialQuote?.amount < partialBooking.totalPrice);
+
+  // ---- tier: NONE (<= 2 days out)
+  const lateBooking = await book({ checkIn: addDays(2), checkOut: addDays(4), guests: 2, method: "CARD" });
+  const lateQuote = (await alice.request(`/api/bookings/${lateBooking.id}/refund-quote`)).body?.data?.quote;
+  check("no-refund tier detected", lateQuote?.tier === "NONE", lateQuote?.tier);
+  check("no-refund tier refunds nothing", lateQuote?.amount === 0);
+  check("no-refund tier still reports the paid amount", lateQuote?.totalPaid === lateBooking.totalPrice);
+
+  // ---- cancelling an unpaid booking creates no refund
+  const cancelledUnpaid = await alice.request(`/api/bookings/${unpaid.id}`, { method: "DELETE" });
+  check("cancel unpaid booking -> 200", cancelledUnpaid.status === 200, `got ${cancelledUnpaid.status}`);
+  check("unpaid cancellation records no refund", cancelledUnpaid.body?.data?.booking?.refund === null,
+    JSON.stringify(cancelledUnpaid.body?.data?.booking?.refund));
+
+  // ---- cancelling a paid booking creates a PROCESSING refund
+  const cancelledFree = await alice.request(`/api/bookings/${freeBooking.id}`, { method: "DELETE" });
+  const freeRefund = cancelledFree.body?.data?.booking?.refund;
+  check("paid cancellation -> 200", cancelledFree.status === 200, `got ${cancelledFree.status}`);
+  check("cancellation created a refund record", Boolean(freeRefund), JSON.stringify(freeRefund));
+  check("refund amount matches the quote", freeRefund?.amount === freeQuote?.amount,
+    `${freeRefund?.amount} vs ${freeQuote?.amount}`);
+  check("refund starts as PROCESSING", freeRefund?.status === "PROCESSING", freeRefund?.status);
+  check("refund status has a Chinese label", freeRefund?.statusLabel === "退款处理中", freeRefund?.statusLabel);
+  check("refund carries a tier label", freeRefund?.tierLabel === "免费取消", freeRefund?.tierLabel);
+  check("refund returns to the original channel", freeRefund?.method === "WECHAT" && freeRefund.methodLabel === "微信支付",
+    `${freeRefund?.method}/${freeRefund?.methodLabel}`);
+  check("refund has a trade number", typeof freeRefund?.tradeNo === "string" && freeRefund.tradeNo.startsWith("RF"),
+    freeRefund?.tradeNo);
+  check("refund is not settled yet", freeRefund?.isSettled === false);
+  check("refund never exceeds what was paid", freeRefund?.amount <= freeBooking.totalPrice);
+  check("cancelled booking keeps its paid marker", cancelledFree.body?.data?.booking?.isPaid === true);
+
+  const quoteAfterCancel = (await alice.request(`/api/bookings/${freeBooking.id}/refund-quote`)).body?.data?.quote;
+  check("quote on a cancelled booking reports ALREADY_CANCELLED",
+    quoteAfterCancel?.tier === "ALREADY_CANCELLED", quoteAfterCancel?.tier);
+
+  // ---- settle (simulated channel payout)
+  const settled = await alice.request(`/api/refunds/${freeRefund.id}/settle`, { method: "POST" });
+  check("settle refund -> 200", settled.status === 200, `got ${settled.status}`);
+  check("refund becomes SUCCEEDED", settled.body?.data?.refund?.status === "SUCCEEDED",
+    settled.body?.data?.refund?.status);
+  check("refund records completion time", Boolean(settled.body?.data?.refund?.completedAt));
+  check("refund reports isSettled", settled.body?.data?.refund?.isSettled === true);
+
+  const settleAgain = await alice.request(`/api/refunds/${freeRefund.id}/settle`, { method: "POST" });
+  check("settling twice -> 409", settleAgain.status === 409, `got ${settleAgain.status}`);
+
+  const unknownRefund = await alice.request("/api/refunds/does-not-exist/settle", { method: "POST" });
+  check("settling an unknown refund -> 404", unknownRefund.status === 404, `got ${unknownRefund.status}`);
+
+  const anonQuote = await createClient().request(`/api/bookings/${freeBooking.id}/refund-quote`);
+  check("refund quote without a session -> 401", anonQuote.status === 401, `got ${anonQuote.status}`);
+
+  const tripsAfterRefund = await alice.request("/api/bookings");
+  const refundStats = tripsAfterRefund.body?.data?.stats;
+  check("stats expose refunded total", refundStats?.refunded >= freeRefund.amount,
+    `${refundStats?.refunded} vs ${freeRefund.amount}`);
+
+  const cancelledCard = (tripsAfterRefund.body?.data?.bookings ?? []).find((x) => x.id === freeBooking.id);
+  check("cancelled trip still lists its refund", cancelledCard?.refund?.status === "SUCCEEDED");
+
   // ------------------------------------------------- cross-user isolation
   console.log("\n— cross-user isolation (the security-critical part)");
 
@@ -457,6 +571,16 @@ async function main() {
   const bobPaymentPage = await bob.request(`/payment/${aliceBookingId}`, {});
   check("user B cannot open user A's checkout page", bobPaymentPage.status === 404,
     `got ${bobPaymentPage.status}`);
+
+  const bobRefundQuote = await bob.request(`/api/bookings/${freeBooking.id}/refund-quote`, {});
+  check("user B cannot read user A's refund quote", bobRefundQuote.status === 403,
+    `got ${bobRefundQuote.status}`);
+
+  const bobSettlesAliceRefund = await bob.request(`/api/refunds/${freeRefund.id}/settle`, {
+    method: "POST",
+  });
+  check("user B cannot settle user A's refund", bobSettlesAliceRefund.status === 403,
+    `got ${bobSettlesAliceRefund.status}`);
 
   const bobTrips = await bob.request("/api/bookings");
   check("user B sees no bookings", (bobTrips.body?.data?.bookings ?? []).length === 0);

@@ -39,6 +39,19 @@ enum PaymentMethod {
   CARD
 }
 
+/// Refund lifecycle. A refund is created when a PAID booking is cancelled and
+/// starts life as PROCESSING, mirroring how real channels settle asynchronously.
+enum RefundStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundReason {
+  USER_CANCELLED
+  HOST_CANCELLED
+}
+
 // ---------------------------------------------------------------- models
 
 model User {
@@ -179,9 +192,40 @@ model Booking {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  refunds Refund[]
 
   @@index([userId])
   @@index([listingId])
   @@index([userId, status])
   @@index([listingId, checkIn, checkOut])
+}
+
+/// Refund record for a cancelled booking.
+///
+/// A separate table (rather than fields on Booking) so a refund has its own
+/// lifecycle, its own amount — the cancellation policy may refund only part of
+/// what was paid — and an auditable trail.
+model Refund {
+  id        String @id @default(cuid())
+  bookingId String
+  /// Amount actually refunded, in CNY. May be less than the booking total.
+  amount    Int
+  status    RefundStatus @default(PROCESSING)
+  reason    RefundReason @default(USER_CANCELLED)
+  /// Which cancellation tier applied when the refund was calculated.
+  tier      String
+  /// Refunds always go back to the original payment channel.
+  method    PaymentMethod
+  /// Simulated channel refund reference.
+  tradeNo   String?
+  /// Human-readable policy explanation shown to the user.
+  note      String?
+
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@index([status])
 }

@@ -57,6 +57,35 @@ export const PAYMENT_METHOD_HINTS: Record<PaymentMethodValue, string> = {
   CARD: "支持 Visa / Mastercard / 银联借记卡与信用卡",
 };
 
+/** Refund lifecycle state. */
+export type RefundStatusValue = "PROCESSING" | "SUCCEEDED" | "FAILED";
+
+export const REFUND_STATUS_LABELS: Record<RefundStatusValue, string> = {
+  PROCESSING: "退款处理中",
+  SUCCEEDED: "退款成功",
+  FAILED: "退款失败",
+};
+
+export type RefundDto = {
+  id: string;
+  bookingId: string;
+  /** Amount returned to the original payment channel. */
+  amount: number;
+  status: RefundStatusValue;
+  statusLabel: string;
+  /** Which cancellation tier applied, e.g. FREE / PARTIAL / NONE. */
+  tier: string;
+  tierLabel: string;
+  method: PaymentMethodValue;
+  methodLabel: string;
+  tradeNo: string | null;
+  note: string | null;
+  requestedAt: string;
+  completedAt: string | null;
+  /** True once the channel has settled the refund. */
+  isSettled: boolean;
+};
+
 export const SORT_OPTIONS = ["recommended", "price_asc", "price_desc", "rating_desc"] as const;
 export type SortOption = (typeof SORT_OPTIONS)[number];
 
@@ -168,6 +197,8 @@ export type BookingDto = {
   paidAt: string | null;
   paymentTradeNo: string | null;
   isPaid: boolean;
+  /** Present once a paid booking has been cancelled. */
+  refund: RefundDto | null;
   listing: ListingSummary;
 };
 

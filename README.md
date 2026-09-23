@@ -19,7 +19,7 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 | 业务链 | 流程 |
 | --- | --- |
 | **住宿平台** | 首页 → 搜索 → 房源列表 → 房源详情 → 收藏 → 心愿单 |
-| **预订系统** | 房源 → 日期/人数 → 价格计算 → 确认预订 → 生成订单 → **收银台支付** → Trips |
+| **预订系统** | 房源 → 日期/人数 → 价格计算 → 确认预订 → 生成订单 → **收银台支付** → Trips → **取消与退款** |
 | **AI Agent** | 自然语言需求 → LLM → Tool Calling → Service → PostgreSQL → 返回真实数据 → UI 展示/执行操作 |
 
 ### 收银台（模拟支付）
@@ -35,6 +35,31 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 支付成功后订单转为**已确认（CONFIRMED）**，并记录支付方式、支付时间与模拟交易号，成功页会完整展示这些信息；Trips 页面则显示「待支付」标签与「去支付」入口。
 
 > **不接入真实支付网关**：二维码是**不可扫描的装饰图案**（既然没有网关，生成一个真码反而会误导用户）；卡号仅在前端做格式校验，**不会被发送或存储**。页面上明确标注"演示环境，不产生真实扣款"。
+
+### 取消与退款
+
+**已支付**的订单被取消时，会按取消政策生成一条**真实的退款记录**（而不是让钱凭空消失）。取消确认弹窗会先向服务端**查询报价**，把每一项退款金额摊开给用户看，再让用户确认：
+
+| 取消时间（距入住） | 房费 | 清洁费 | 服务费 | 结果 |
+| --- | --- | --- | --- | --- |
+| ≥ 7 天 | 全额 | 全额 | 全额 | 全额退款 |
+| 3 – 6 天 | 50% | 全额 | 不退 | 部分退款 |
+| ≤ 2 天 | 不退 | 不退 | 不退 | 不可退款 |
+
+清洁费在最后一刻之前都全额退还（服务根本没有发生），平台服务费不退 —— 这是主流预订平台的通行结构。
+
+退款走自己的状态机，与真实渠道的异步到账一致：
+
+```
+取消已支付订单 → PROCESSING（退款处理中，预计 1-3 个工作日）
+                      │
+              渠道结算 ├──► SUCCEEDED（退款成功，记录到账时间）
+                      └──► FAILED（退款失败）
+```
+
+退款**原路退回**到下单时使用的渠道（微信 / 支付宝 / 银行卡），并带独立退款单号。Trips 页面会展示退款档次、金额、去向渠道、退款单号与到账时间。
+
+> 演示环境提供「模拟退款到账」按钮来推进 `PROCESSING → SUCCEEDED`，否则永远看不到退款完成。真实的退款是异步的，这一点在状态机里如实保留。
 
 ### AI Agent 特色
 
@@ -186,7 +211,7 @@ node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
 | 脚本 | 结果 |
 | --- | --- |
 | `verify-db.ts` | ✅ ALL CHECKS PASSED |
-| `smoke-api.mjs` | ✅ **93 / 93** |
+| `smoke-api.mjs` | ✅ **134 / 134** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `smoke-agent.mjs` | ✅ **26 / 26** |
@@ -208,7 +233,9 @@ travel-agent/
 │   └── api/                      # Route Handlers
 │       ├── listings/             #   GET 搜索 / GET 详情
 │       ├── wishlists/            #   心愿单 CRUD + items 增删
-│       ├── bookings/             #   订单创建 / 列表 / 取消 / [id]/pay 模拟支付
+│       ├── bookings/             #   订单创建 / 列表 / 取消 / [id]/pay 支付
+│       │                         #   [id]/refund-quote 退款报价
+│       ├── refunds/              #   [id]/settle 模拟退款到账
 │       ├── auth/                 #   register / login / logout / session
 │       ├── saved/                #   当前用户已收藏的房源 id
 │       ├── meta/                 #   目的地、设施字典、价格区间
@@ -220,6 +247,7 @@ travel-agent/
 │   ├── filter-panel.tsx          #   价格滑块 / 类型 / 设施 / 人数
 │   ├── booking-widget.tsx        #   预订面板 + 价格明细
 │   ├── payment-panel.tsx         #   收银台：三种支付方式 + 订单摘要 + 成功页
+│   ├── cancel-booking-dialog.tsx #   取消确认：退款报价 + 逐项明细 + 取消政策表
 │   ├── qr-placeholder.tsx        #   确定性伪二维码 SVG（不可扫描，仅装饰）
 │   ├── listing-gallery.tsx       #   图片画廊 + 灯箱
 │   ├── agent-drawer.tsx          #   悬浮按钮 + 侧边抽屉
@@ -236,7 +264,8 @@ travel-agent/
 ├── server/                       # Service 层（唯一允许访问数据库的地方）
 │   ├── listing.service.ts        #   搜索、详情、推荐、城市统计
 │   ├── wishlist.service.ts       #   心愿单 CRUD + 归属校验
-│   ├── booking.service.ts        #   订单创建、可用性、价格重算
+│   ├── booking.service.ts        #   订单创建、可用性、价格重算、支付、取消退款
+│   ├── refund.service.ts         #   退款查询与模拟到账（归属校验）
 │   └── user.service.ts           #   注册、登录校验
 │
 ├── agent/                        # AI Agent
@@ -258,7 +287,7 @@ travel-agent/
 │       └── index.ts
 │
 ├── prisma/
-│   ├── schema.prisma             # 8 张表：User, Listing, ListingImage, Amenity,
+│   ├── schema.prisma             # 9 张表：User, Listing, ListingImage, Amenity,
 │   │                             #        ListingAmenity, Wishlist, WishlistItem, Booking
 │   ├── seed.ts                   # 确定性种子脚本（固定随机种子）
 │   └── migrations/
@@ -270,6 +299,7 @@ travel-agent/
 │   ├── validators.ts             # zod 校验（API 层）
 │   ├── search-params.ts          # URL ↔ 搜索条件（宽松解析）
 │   ├── pricing.ts                # 价格计算（前后端共用同一模块）
+│   ├── refund.ts                 # 取消政策与退款金额计算（前后端共用同一模块）
 │   ├── format.ts                 # 货币 / 日期格式化
 │   ├── cities.ts                 # 城市元数据 + 中英文归一
 │   ├── amenities.ts              # 设施字典
@@ -352,7 +382,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 ## 七、数据库设计
 
-8 张表，含枚举、外键、唯一约束与索引。原生枚举三个：`PropertyType`、`BookingStatus`（PENDING / CONFIRMED / CANCELLED）、`PaymentMethod`（WECHAT / ALIPAY / CARD）。
+9 张表，含枚举、外键、唯一约束与索引。原生枚举四个：`PropertyType`、`BookingStatus`（PENDING / CONFIRMED / CANCELLED）、`PaymentMethod`（WECHAT / ALIPAY / CARD）、`RefundStatus`（PROCESSING / SUCCEEDED / FAILED）。
 
 | 表 | 关键字段 | 约束 / 索引 |
 | --- | --- | --- |
@@ -364,6 +394,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | `Wishlist` | name, userId | `(userId, name)` 唯一 —— 同一用户不能有同名心愿单 |
 | `WishlistItem` | wishlistId, listingId | `(wishlistId, listingId)` 唯一 —— 同一房源不能重复收藏 |
 | `Booking` | userId, listingId, checkIn, checkOut, guests, nights, roomPrice, cleaningFee, serviceFee, totalPrice, status, **paymentMethod, paidAt, paymentTradeNo** | `(listingId, checkIn, checkOut)` 索引用于可用性查询 |
+| `Refund` | bookingId, amount, status, reason, tier, method, tradeNo, note, requestedAt, completedAt | `bookingId` / `status` 索引；随订单级联删除 |
 
 关系：`User 1—N Listing`（房东）、`User 1—N Wishlist`、`Wishlist N—M Listing`（经 `WishlistItem`）、`Listing N—M Amenity`（经 `ListingAmenity`）、`User 1—N Booking`。
 
@@ -377,6 +408,17 @@ LLM 生成中文回答 + 界面渲染房源卡片
 ```
 
 可用性查询会把 **PENDING 与 CONFIRMED 都视为占用**，所以下单即锁房，避免两个人同时支付同一段日期。`payBooking` 会重新校验归属、是否已取消、是否已支付，因此重复支付返回 409、支付他人订单返回 403。
+
+退款是独立状态机，同样落库：
+
+```
+取消已支付订单 ──► 按政策计算退款额 ──► 创建 Refund(PROCESSING)
+                                              │
+                                      渠道结算 ├──► SUCCEEDED
+                                              └──► FAILED
+```
+
+`Refund` 单独建表而不是挂在 `Booking` 上，原因是：退款有自己的生命周期与**自己的金额**（政策可能只退一部分），并且需要独立的审计轨迹。退款记录与订单状态变更在**同一个事务**里写入，所以不存在"订单已取消但没有退款记录"的中间态。
 
 ### 价格计算
 
@@ -475,6 +517,9 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | 二维码用装饰图案而非真码 | 既然没有网关，生成一个**可扫描**的二维码会让用户以为真能付款，属于误导。所以画的是不可扫描的装饰图案，并在旁边明确标注"演示用，不可真实支付" |
 | 银行卡号只在前端校验 | 用 Luhn 算法做前端格式校验，卡号**不发送、不存储**，演示项目不承担任何卡数据责任 |
 | 下单即锁房（PENDING 也占用日期） | 否则两人可同时支付同一段日期。可用性查询同时排除 PENDING 与 CONFIRMED |
+| 退款独立建表而非挂在订单上 | 退款有自己的生命周期与金额（政策可能只退一部分），也需要独立审计轨迹；与状态变更同事务写入，杜绝"取消了却没有退款记录" |
+| 退款金额由服务端按政策计算 | 与价格计算同理：客户端只展示，不参与计算，避免篡改退款额 |
+| 取消前先调 refund-quote 接口 | 让用户在确认前看到**真实**的退款金额与政策档次，而不是取消后才知道退多少 |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
 | 价格计算抽成共享模块 | 避免"前端显示一个数、后端存另一个数"这类经典 bug |
@@ -495,6 +540,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 - **模型必须支持 function calling**。`deepseek-chat` 已验证可用；`deepseek-reasoner` 不支持工具调用，换成它 Agent 会退化。为此提供了 `node scripts/verify-ai.mjs`，改配置后先跑一次即可确认。
 - **待支付订单不会自动过期**。PENDING 会一直占用日期；生产环境应加超时释放（例如 15 分钟后自动取消）。收银台上的倒计时只是前端提示，不改变后端状态。
+- **退款的「到账」是手动模拟的**。真实渠道退款是异步回调驱动的（1-3 个工作日），演示环境用「模拟退款到账」按钮推进 `PROCESSING → SUCCEEDED`，没有真实资金流动，也没有接入渠道退款回调。
 - 会话记忆是**进程内**的，重启服务即清空；生产环境应换成 Redis。
 - 未接入真实支付（需求明确不要求）。
 - `@prisma/adapter-pg` 会打印一条 `pg` 的弃用警告（`client.query() when the client is already executing a query`），来自依赖内部，不影响功能。
@@ -511,11 +557,12 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234` |
 | ⑤ | 收藏房源 | 爱心 → 选择/新建心愿单 → Toast 反馈 |
 | ⑥ | 完成一次预订并支付 | 选日期人数 → 价格实时计算 → 确认 → **跳转收银台** → 依次展示微信 / 支付宝 / 银行卡 → 模拟支付成功 |
-| ⑦ | 打开 AI 助手，输入自然语言需求 | 流式输出 + **"正在搜索房源…"→"✓ 找到 N 个房源"** 工具执行状态 + 房源卡片 |
-| ⑧ | "帮我选三个" | 调用 `recommendListings`，返回带推荐理由的 3 张卡片 |
-| ⑨ | "比较刚才这三个" | 调用 `compareListings`，输出结构化对比与结论 |
-| ⑩ | "把第一个加入东京旅行心愿单" | 调用 `addToWishlist` **真实写库** → 打开心愿单页面看到该房源 |
-| ⑪ | 上传旅行计划 PDF | 解析出目的地/天数/人数/预算/景点 → Agent 继续推荐住宿 |
+| ⑦ | 取消并退款 | Trips 点「取消订单」→ 弹窗展示**取消政策与逐项退款金额** → 确认 → 订单取消、退款处理中 → 点「模拟退款到账」 |
+| ⑧ | 打开 AI 助手，输入自然语言需求 | 流式输出 + **"正在搜索房源…"→"✓ 找到 N 个房源"** 工具执行状态 + 房源卡片 |
+| ⑨ | "帮我选三个" | 调用 `recommendListings`，返回带推荐理由的 3 张卡片 |
+| ⑩ | "比较刚才这三个" | 调用 `compareListings`，输出结构化对比与结论 |
+| ⑪ | "把第一个加入东京旅行心愿单" | 调用 `addToWishlist` **真实写库** → 打开心愿单页面看到该房源 |
+| ⑫ | 上传旅行计划 PDF | 解析出目的地/天数/人数/预算/景点 → Agent 继续推荐住宿 |
 
 **演示重点**：`AI Agent → Tool → Service → Database → UI` 这一完整链路，以及"AI 的推荐来自真实数据库、AI 的操作真实落库"。
 
@@ -530,6 +577,6 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 5 个可复现脚本共 **164 项断言**（93 + 45 + 26 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 5 个可复现脚本共 **205 项断言**（134 + 45 + 26 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

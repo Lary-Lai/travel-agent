@@ -1,35 +1,38 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CreditCard, LogIn, MapPin, Route, Users } from "lucide-react";
+import {
+  CalendarDays,
+  CreditCard,
+  LogIn,
+  MapPin,
+  Route,
+  Undo2,
+  Users,
+  Wallet,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { CancelBookingDialog } from "@/components/cancel-booking-dialog";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { useSession } from "@/components/session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiClientError } from "@/lib/api";
 import { formatCurrency, formatDate, todayUtc } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import type { BookingDto } from "@/types";
 
 export function TripsView() {
   const queryClient = useQueryClient();
   const { user, isLoading: sessionLoading } = useSession();
-  const [pendingCancel, setPendingCancel] = useState<{ id: string; title: string } | null>(null);
+  const [cancelling, setCancelling] = useState<BookingDto | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["bookings"],
@@ -37,17 +40,21 @@ export function TripsView() {
     enabled: Boolean(user),
   });
 
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => api.cancelBooking(id),
-    onSuccess: () => {
-      toast.success("订单已取消");
-      setPendingCancel(null);
-      void queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      // The dates are free again, so search results may change.
-      void queryClient.invalidateQueries({ queryKey: ["listings"] });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ["bookings"] });
+    void queryClient.invalidateQueries({ queryKey: ["listings"] });
+  };
+
+  const settleMutation = useMutation({
+    mutationFn: (refundId: string) => api.settleRefund(refundId),
+    onSuccess: (result) => {
+      toast.success(`退款 ${formatCurrency(result.refund.amount)} 已到账`, {
+        description: "演示环境：模拟支付渠道完成退款",
+      });
+      invalidate();
     },
     onError: (error) => {
-      toast.error(error instanceof ApiClientError ? error.message : "取消失败，请稍后重试");
+      toast.error(error instanceof ApiClientError ? error.message : "操作失败，请稍后重试");
     },
   });
 
@@ -66,7 +73,7 @@ export function TripsView() {
       <EmptyState
         icon={Route}
         title="登录后查看你的行程"
-        description="完成预订后，行程会显示在这里，包含房源、日期、人数与订单状态。"
+        description="完成预订后，行程会显示在这里，包含房源、日期、人数、订单状态与退款进度。"
         action={
           <Button asChild className="gap-2">
             <Link href="/login?redirect=%2Ftrips">
@@ -82,26 +89,38 @@ export function TripsView() {
   const bookings = data?.bookings ?? [];
   const stats = data?.stats;
 
+  // Refund tiles only appear once there is something to report.
+  const statTiles = stats
+    ? [
+        { label: "全部订单", value: String(stats.total), show: true },
+        { label: "待支付", value: String(stats.pending), show: true },
+        { label: "即将出行", value: String(stats.upcoming), show: true },
+        { label: "累计晚数", value: `${stats.totalNights} 晚`, show: true },
+        { label: "总支出", value: formatCurrency(stats.totalSpend), show: true },
+        {
+          label: "退款处理中",
+          value: formatCurrency(stats.refunding),
+          show: stats.refunding > 0,
+        },
+        { label: "已退款", value: formatCurrency(stats.refunded), show: stats.refunded > 0 },
+      ].filter((tile) => tile.show)
+    : [];
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">我的行程</h1>
-        <p className="text-muted-foreground mt-1 text-sm">管理你的预订，查看入住信息与订单状态</p>
+        <p className="text-muted-foreground mt-1 text-sm">
+          管理你的预订，查看入住信息、订单状态与退款进度
+        </p>
       </div>
 
-      {/* stats */}
-      {stats && stats.total > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {[
-            { label: "全部订单", value: String(stats.total) },
-            { label: "待支付", value: String(stats.pending) },
-            { label: "即将出行", value: String(stats.upcoming) },
-            { label: "累计晚数", value: `${stats.totalNights} 晚` },
-            { label: "总支出", value: formatCurrency(stats.totalSpend) },
-          ].map((item) => (
-            <div key={item.label} className="rounded-2xl border p-4">
-              <p className="text-muted-foreground text-xs">{item.label}</p>
-              <p className="mt-1 text-lg font-semibold tabular-nums">{item.value}</p>
+      {statTiles.length > 0 ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {statTiles.map((tile) => (
+            <div key={tile.label} className="rounded-2xl border p-4">
+              <p className="text-muted-foreground text-xs">{tile.label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums">{tile.value}</p>
             </div>
           ))}
         </div>
@@ -135,13 +154,16 @@ export function TripsView() {
             const isCancelled = booking.status === "CANCELLED";
             const isPending = booking.status === "PENDING";
             const isPast = new Date(booking.checkIn) < todayUtc();
+            const refund = booking.refund;
+            const refundProcessing = refund?.status === "PROCESSING";
 
             return (
               <article
                 key={booking.id}
                 className={cn(
                   "grid gap-5 rounded-2xl border p-4 sm:grid-cols-[220px_1fr]",
-                  isCancelled && "opacity-60",
+                  // Muted rather than faded, so refund details stay readable.
+                  isCancelled && "bg-muted/30 border-dashed",
                 )}
               >
                 <Link
@@ -153,7 +175,7 @@ export function TripsView() {
                     alt={booking.listing.title}
                     fill
                     sizes="220px"
-                    className="object-cover"
+                    className={cn("object-cover", isCancelled && "opacity-70 grayscale")}
                   />
                 </Link>
 
@@ -247,18 +269,77 @@ export function TripsView() {
                       ) : null}
 
                       {!isCancelled ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setPendingCancel({ id: booking.id, title: booking.listing.title })
-                          }
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setCancelling(booking)}>
                           取消订单
                         </Button>
                       ) : null}
                     </div>
                   </div>
+
+                  {/* ------------------------------------------- refund status */}
+                  {isCancelled ? (
+                    <div className="rounded-xl border bg-background p-3">
+                      {refund ? (
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge
+                                variant="secondary"
+                                className={cn(
+                                  refund.status === "SUCCEEDED" &&
+                                    "border-emerald-500/30 bg-emerald-500/15 text-emerald-700",
+                                  refundProcessing &&
+                                    "border-amber-500/30 bg-amber-500/15 text-amber-700",
+                                  refund.status === "FAILED" &&
+                                    "border-destructive/30 bg-destructive/10 text-destructive",
+                                )}
+                              >
+                                {refund.statusLabel}
+                              </Badge>
+                              <span className="text-sm font-semibold tabular-nums">
+                                {formatCurrency(refund.amount)}
+                              </span>
+                              <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                                <Wallet className="size-3" />
+                                退回{refund.methodLabel}
+                              </span>
+                            </div>
+
+                            <p className="text-muted-foreground mt-1.5 text-[11px] leading-relaxed">
+                              {refund.tierLabel} · {refund.note}
+                            </p>
+                            <p className="text-muted-foreground mt-1 text-[11px] tabular-nums">
+                              退款单号 {refund.tradeNo}
+                              {refund.completedAt
+                                ? ` · 到账于 ${formatDate(refund.completedAt)}`
+                                : " · 预计 1-3 个工作日到账"}
+                            </p>
+                          </div>
+
+                          {refundProcessing ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="gap-1.5"
+                              disabled={settleMutation.isPending}
+                              onClick={() => settleMutation.mutate(refund.id)}
+                            >
+                              <Undo2 className="size-3.5" />
+                              模拟退款到账
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : booking.isPaid ? (
+                        <p className="text-muted-foreground text-xs">
+                          该订单在取消时已超出可退款期，按取消政策无可退款金额。
+                        </p>
+                      ) : (
+                        <p className="text-muted-foreground text-xs">
+                          该订单未支付，取消后无需退款，房源日期已释放。
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </article>
             );
@@ -266,28 +347,10 @@ export function TripsView() {
         </div>
       )}
 
-      <Dialog open={Boolean(pendingCancel)} onOpenChange={(open) => !open && setPendingCancel(null)}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>取消这笔订单？</DialogTitle>
-            <DialogDescription>
-              将取消「{pendingCancel?.title}」的预订，取消后日期会重新开放预订。
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPendingCancel(null)}>
-              再想想
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={cancelMutation.isPending}
-              onClick={() => pendingCancel && cancelMutation.mutate(pendingCancel.id)}
-            >
-              确认取消
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CancelBookingDialog
+        booking={cancelling}
+        onOpenChange={(open) => !open && setCancelling(null)}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import type {
   ListingSearchInput,
   ListingSearchResult,
   PaymentMethodValue,
+  RefundDto,
   SessionUserDto,
   WishlistDto,
 } from "@/types";
@@ -158,11 +159,38 @@ export const api = {
         completed: number;
         totalSpend: number;
         totalNights: number;
+        refunding: number;
+        refunded: number;
       };
     }>("/api/bookings"),
 
   getBooking: (id: string) =>
     request<{ booking: BookingDto }>(`/api/bookings/${encodeURIComponent(id)}`),
+
+  /** Preview the refund a cancellation would produce (no side effects). */
+  getRefundQuote: (bookingId: string) =>
+    request<{
+      quote: {
+        bookingId: string;
+        tier: string;
+        tierLabel: string;
+        daysUntilCheckIn: number;
+        roomRefund: number;
+        cleaningRefund: number;
+        serviceRefund: number;
+        amount: number;
+        totalPaid: number;
+        refundable: boolean;
+        description: string;
+        alreadyCancelled: boolean;
+      };
+    }>(`/api/bookings/${encodeURIComponent(bookingId)}/refund-quote`),
+
+  /** Simulated channel settlement: PROCESSING -> SUCCEEDED. */
+  settleRefund: (refundId: string) =>
+    request<{ refund: RefundDto }>(`/api/refunds/${encodeURIComponent(refundId)}/settle`, {
+      method: "POST",
+    }),
 
   createBooking: (input: { listingId: string; checkIn: string; checkOut: string; guests: number }) =>
     request<{ booking: BookingDto }>("/api/bookings", {
