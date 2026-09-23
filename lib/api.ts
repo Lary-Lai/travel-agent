@@ -117,8 +117,21 @@ export const api = {
   logout: () => request<{ signedOut: boolean }>("/api/auth/logout", { method: "POST" }),
 
   // --------------------------------------------------------------- profile
-  /** Update display name / avatar. Email is intentionally not editable. */
-  updateProfile: (input: { name: string; avatar?: string }) =>
+  /**
+   * Update the profile. Email is intentionally not editable.
+   * Fields that are omitted are left untouched by the server, so a save always
+   * sends the whole object to keep the form and the stored row in step.
+   */
+  updateProfile: (input: {
+    name: string;
+    avatar?: string;
+    coverPreset?: string;
+    coverImage?: string;
+    tags?: string[];
+    dreamDestinations?: string[];
+    hobbies?: string[];
+    visitedPlaces?: string[];
+  }) =>
     request<{ user: SessionUserDto }>("/api/users/me", {
       method: "PATCH",
       body: JSON.stringify(input),

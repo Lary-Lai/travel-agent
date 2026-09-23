@@ -230,6 +230,18 @@ export type SessionUserDto = {
   name: string;
   avatar: string | null;
   createdAt: string;
+  /** Key into COVER_PRESETS, or null for the default gradient. */
+  coverPreset: string | null;
+  /** Custom banner image URL; takes precedence over coverPreset. */
+  coverImage: string | null;
+  /** Free-form self-description chips. */
+  tags: string[];
+  /** 心仪地点 — places the user wants to visit. */
+  dreamDestinations: string[];
+  /** 生活爱好 */
+  hobbies: string[];
+  /** 已旅行地点 — the display case. */
+  visitedPlaces: string[];
 };
 
 /** Uniform API envelope. */

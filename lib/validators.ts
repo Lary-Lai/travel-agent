@@ -9,7 +9,9 @@
 import { z } from "zod";
 
 import { badRequest } from "./http";
+import { isPresetAvatar } from "./avatars";
 import { MAX_GUESTS } from "./pricing";
+import { isCoverPreset, MAX_CHIPS, normaliseChips } from "./profile-options";
 import { SORT_OPTIONS, type ListingSearchInput, type PropertyTypeValue } from "../types";
 
 export const propertyTypeSchema = z.enum([
@@ -145,13 +147,55 @@ export const loginSchema = z.object({
   password: z.string().min(1, "请输入密码"),
 });
 
-/** Profile edit: display name, plus an optional avatar URL ("" clears it). */
+/**
+ * An avatar may be: cleared (""), one of the bundled presets, or an absolute
+ * http(s) URL. Presets are same-origin paths, so a bare `z.url()` rejects them.
+ */
+const avatarValueSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      if (value === "") return true;
+      if (isPresetAvatar(value)) return true;
+      return z.url().safeParse(value).success;
+    },
+    { message: "头像地址必须是有效的图片链接，或从下方选择内置预设头像" },
+  )
+  .transform((value) => (value === "" ? null : value));
+
+/**
+ * Same rule for the banner: cleared (""), a bundled gradient preset key, or an
+ * absolute http(s) image URL.
+ */
+const coverImageSchema = z
+  .string()
+  .trim()
+  .refine((value) => value === "" || z.url().safeParse(value).success, {
+    message: "背景图地址必须是有效的图片链接",
+  })
+  .transform((value) => (value === "" ? null : value));
+
+const chipListSchema = (limit: number) =>
+  z
+    .array(z.string())
+    .max(limit, `最多 ${limit} 项`)
+    .transform((values) => normaliseChips(values, limit));
+
+/** Profile edit: identity, banner, and the personalisation chip lists. */
 export const updateProfileSchema = z.object({
   name: z.string().trim().min(1, "请填写昵称").max(40, "昵称不能超过 40 个字符"),
-  avatar: z
-    .union([z.url("头像地址必须是有效的 URL"), z.literal("")])
+  avatar: avatarValueSchema.optional(),
+  coverPreset: z
+    .union([z.string().trim().refine(isCoverPreset, "未知的背景预设"), z.literal("")])
     .optional()
+    // "" clears it; omitting the field leaves the stored value alone.
     .transform((value) => (value === "" ? null : value)),
+  coverImage: coverImageSchema.optional(),
+  tags: chipListSchema(MAX_CHIPS.tags).optional(),
+  dreamDestinations: chipListSchema(MAX_CHIPS.dreamDestinations).optional(),
+  hobbies: chipListSchema(MAX_CHIPS.hobbies).optional(),
+  visitedPlaces: chipListSchema(MAX_CHIPS.visitedPlaces).optional(),
 });
 
 export const changePasswordSchema = z

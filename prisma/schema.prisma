@@ -62,7 +62,22 @@ model User {
   avatar    String?
   createdAt DateTime @default(now())
 
-  hostedListings Listing[]     @relation("HostListings")
+  // ---------------------------------------------------------- personalisation
+  // All optional: a fresh account renders fine with none of these set.
+  /// Key into lib/profile-options.ts COVER_PRESETS (a local CSS gradient).
+  coverPreset       String?
+  /// Custom banner image URL; wins over coverPreset when set.
+  coverImage        String?
+  /// Free-form self-description chips, e.g. 摄影爱好者 / 咖啡因驱动.
+  tags              String[] @default([])
+  /// 心仪地点 — places the user wants to go.
+  dreamDestinations String[] @default([])
+  /// 生活爱好
+  hobbies           String[] @default([])
+  /// 已旅行地点 — the "display case" of places already visited.
+  visitedPlaces     String[] @default([])
+
+  hostedListings Listing[]  @relation("HostListings")
   wishlists      Wishlist[]
   bookings       Booking[]
 
@@ -127,10 +142,10 @@ model ListingImage {
 
 /// Canonical amenity dictionary, shared across listings (many-to-many).
 model Amenity {
-  id       String  @id @default(cuid())
-  name     String  @unique
-  icon     String?
-  category String?
+  id          String  @id @default(cuid())
+  name        String  @unique
+  icon        String?
+  category    String?
   /// Plain-language explanation, shown when a guest taps the amenity.
   description String?
 
@@ -203,8 +218,8 @@ model Booking {
   /// Simulated transaction reference, shown on the confirmation screen.
   paymentTradeNo String?
 
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   refunds Refund[]
 
   @@index([userId])
@@ -219,12 +234,12 @@ model Booking {
 /// lifecycle, its own amount — the cancellation policy may refund only part of
 /// what was paid — and an auditable trail.
 model Refund {
-  id        String @id @default(cuid())
+  id        String        @id @default(cuid())
   bookingId String
   /// Amount actually refunded, in CNY. May be less than the booking total.
   amount    Int
-  status    RefundStatus @default(PROCESSING)
-  reason    RefundReason @default(USER_CANCELLED)
+  status    RefundStatus  @default(PROCESSING)
+  reason    RefundReason  @default(USER_CANCELLED)
   /// Which cancellation tier applied when the refund was calculated.
   tier      String
   /// Refunds always go back to the original payment channel.

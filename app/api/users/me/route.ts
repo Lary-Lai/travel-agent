@@ -8,8 +8,12 @@ import { updateProfile } from "@/server/user.service";
 /**
  * PATCH /api/users/me
  *
- * Update the signed-in user's display name and avatar. The user id comes from
- * the session cookie, so this can only ever modify the caller's own profile.
+ * Update the signed-in user's profile: display name, avatar, banner, and the
+ * personalisation chip lists. The user id comes from the session cookie, so this
+ * can only ever modify the caller's own profile.
+ *
+ * Fields left out of the body are not touched, so the editor can save one
+ * section without clearing the rest.
  */
 export const PATCH = handler(async (request: NextRequest) => {
   const current = await requireUser();

@@ -16,8 +16,8 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
 import { presetAvatarFor } from "./avatars";
-import { prisma } from "./db";
 import { unauthorized } from "./http";
+import { getUserById } from "../server/user.service";
 import type { SessionUserDto } from "../types";
 
 export const SESSION_COOKIE = "ta_session";
@@ -84,19 +84,9 @@ export async function getCurrentUser(): Promise<SessionUserDto | null> {
   const userId = await readSessionUserId();
   if (!userId) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { id: true, email: true, name: true, avatar: true, createdAt: true },
-  });
-  if (!user) return null;
-
-  return {
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatar: user.avatar,
-    createdAt: user.createdAt.toISOString(),
-  };
+  // Delegated so the DTO shape lives in exactly one place: duplicating the
+  // select/mapping here is how fields silently go missing from a session.
+  return getUserById(userId);
 }
 
 /** Same as getCurrentUser but throws a 401 ApiError when signed out. */

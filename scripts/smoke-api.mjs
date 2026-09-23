@@ -106,6 +106,37 @@ async function main() {
     (byType.body?.data?.items ?? []).every((i) => i.propertyType === "APARTMENT"),
   );
 
+  // A solo traveller is a first-class case: 1 must be a valid filter value and
+  // must behave like any other (≥1 capacity), not be rejected as "no filter".
+  const solo = await anon.request("/api/listings?location=tokyo&guests=1&pageSize=50");
+  const soloItems = solo.body?.data?.items ?? [];
+  check("guests=1 -> 200", solo.status === 200, `got ${solo.status}`);
+  check("guests=1 returns results", soloItems.length > 0, `got ${soloItems.length}`);
+  check("every result sleeps at least 1", soloItems.every((i) => i.maxGuests >= 1));
+
+  // guests=1 must not filter anything out that the unfiltered search returns,
+  // since every listing sleeps at least one person.
+  const unfiltered = await anon.request("/api/listings?location=tokyo&pageSize=50");
+  check(
+    "guests=1 keeps every listing (all sleep >= 1)",
+    (unfiltered.body?.data?.items ?? []).length === soloItems.length,
+    `${soloItems.length} vs ${(unfiltered.body?.data?.items ?? []).length}`,
+  );
+
+  // guests=0 is not a filter value: the UI omits the param for 不限. The API
+  // validates strictly (min 1), while a page URL stays lenient and just drops
+  // it — both layers are asserted so neither can drift.
+  const zeroGuests = await anon.request("/api/listings?guests=0");
+  check("guests=0 -> 400 (min is 1; 不限 omits the param)", zeroGuests.status === 400, `got ${zeroGuests.status}`);
+  check(
+    "guests=-1 -> 400",
+    (await anon.request("/api/listings?guests=-1")).status === 400,
+  );
+  check(
+    "guests=17 -> 400 (above the cap)",
+    (await anon.request("/api/listings?guests=17")).status === 400,
+  );
+
   const sorted = await anon.request("/api/listings?sort=price_asc&pageSize=10");
   const prices = (sorted.body?.data?.items ?? []).map((i) => i.pricePerNight);
   check(

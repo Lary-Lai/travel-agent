@@ -13,6 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
 import { formatPrice } from "@/lib/format";
+import { decreaseGuests, GUESTS_ANY, guestsLabel, increaseGuests } from "@/lib/guests";
+import { MAX_GUESTS } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type { ListingSearchInput, PropertyTypeValue } from "@/types";
 import { PROPERTY_TYPE_LABELS } from "@/types";
@@ -177,22 +179,23 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
             variant="outline"
             size="icon"
             className="size-8"
-            onClick={() => onChange({ guests: guests <= 3 ? undefined : guests - 1 })}
-            disabled={guests === 0}
+            onClick={() => {
+              const next = decreaseGuests(guests);
+              onChange({ guests: next === GUESTS_ANY ? undefined : next });
+            }}
+            disabled={guests === GUESTS_ANY}
             aria-label="减少人数"
           >
             <Minus className="size-3.5" />
           </Button>
-          <span className="min-w-16 text-center text-sm tabular-nums">
-            {guests === 0 ? "不限" : `${guests} 位`}
-          </span>
+          <span className="min-w-16 text-center text-sm tabular-nums">{guestsLabel(guests)}</span>
           <Button
             type="button"
             variant="outline"
             size="icon"
             className="size-8"
-            onClick={() => onChange({ guests: guests === 0 ? 2 : Math.min(16, guests + 1) })}
-            disabled={guests >= 16}
+            onClick={() => onChange({ guests: increaseGuests(guests) })}
+            disabled={guests >= MAX_GUESTS}
             aria-label="增加人数"
           >
             <Plus className="size-3.5" />

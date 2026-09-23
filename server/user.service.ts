@@ -1,26 +1,58 @@
 /** User + credential service (registration, login, profile). */
 import bcrypt from "bcryptjs";
 
-import { presetAvatarFor } from "../lib/avatars";
+import { presetAvatarFor, isPresetAvatar } from "../lib/avatars";
 import { prisma } from "../lib/db";
 import { badRequest, conflict, unauthorized } from "../lib/http";
+import { isCoverPreset, MAX_CHIPS, normaliseChips } from "../lib/profile-options";
 import type { SessionUserDto } from "../types";
 
 /** bcrypt cost. 10 is the usual balance of safety and login latency. */
 const BCRYPT_ROUNDS = 10;
 
-const toDto = (user: {
+/** Everything the session/user DTO exposes. Kept in one place so every query
+ * projects the same columns — adding a field to the profile means touching this
+ * type and `toDto`, not four `select` blocks. */
+const userSelect = {
+  id: true,
+  email: true,
+  name: true,
+  avatar: true,
+  createdAt: true,
+  coverPreset: true,
+  coverImage: true,
+  tags: true,
+  dreamDestinations: true,
+  hobbies: true,
+  visitedPlaces: true,
+} as const;
+
+type SelectedUser = {
   id: string;
   email: string;
   name: string;
   avatar: string | null;
   createdAt: Date;
-}): SessionUserDto => ({
+  coverPreset: string | null;
+  coverImage: string | null;
+  tags: string[];
+  dreamDestinations: string[];
+  hobbies: string[];
+  visitedPlaces: string[];
+};
+
+const toDto = (user: SelectedUser): SessionUserDto => ({
   id: user.id,
   email: user.email,
   name: user.name,
   avatar: user.avatar,
   createdAt: user.createdAt.toISOString(),
+  coverPreset: user.coverPreset,
+  coverImage: user.coverImage,
+  tags: user.tags,
+  dreamDestinations: user.dreamDestinations,
+  hobbies: user.hobbies,
+  visitedPlaces: user.visitedPlaces,
 });
 
 export const normaliseEmail = (email: string) => email.trim().toLowerCase();
@@ -44,7 +76,7 @@ export async function registerUser(input: {
       // Deterministic bundled avatar so new accounts look finished immediately.
       avatar: presetAvatarFor(email),
     },
-    select: { id: true, email: true, name: true, avatar: true, createdAt: true },
+    select: userSelect,
   });
 
   return toDto(user);
@@ -63,7 +95,7 @@ export async function verifyCredentials(
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, email: true, name: true, avatar: true, createdAt: true, password: true },
+    select: { ...userSelect, password: true },
   });
 
   if (!user) throw unauthorized("邮箱或密码不正确");
@@ -71,47 +103,75 @@ export async function verifyCredentials(
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) throw unauthorized("邮箱或密码不正确");
 
-  // Project explicitly rather than destructuring the hash away, so the DTO can
-  // never accidentally carry a credential field.
-  return toDto({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    avatar: user.avatar,
-    createdAt: user.createdAt,
-  });
+  // `toDto` maps field by field and never copies `password`, so the credential
+  // cannot reach the DTO even though we hand it the row that contains the hash.
+  return toDto(user);
 }
 
 export async function getUserById(id: string): Promise<SessionUserDto | null> {
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: { id: true, email: true, name: true, avatar: true, createdAt: true },
-  });
+  const user = await prisma.user.findUnique({ where: { id }, select: userSelect });
   return user ? toDto(user) : null;
 }
 
 /**
  * Update the editable parts of a profile.
+ *
  * The email is deliberately NOT editable here: it identifies the account and is
  * used for login, so changing it would need a verification flow.
+ *
+ * Every personalisation field is optional and, when omitted, is left untouched —
+ * so the editor can save one section without clearing the others.
  */
 export async function updateProfile(
   userId: string,
-  input: { name: string; avatar?: string | null },
+  input: {
+    name: string;
+    avatar?: string | null;
+    coverPreset?: string | null;
+    coverImage?: string | null;
+    tags?: string[];
+    dreamDestinations?: string[];
+    hobbies?: string[];
+    visitedPlaces?: string[];
+  },
 ): Promise<SessionUserDto> {
   const name = input.name.trim();
   if (name.length === 0) throw badRequest("昵称不能为空");
   if (name.length > 40) throw badRequest("昵称不能超过 40 个字符");
 
-  const avatar = input.avatar?.trim() ?? null;
-  if (avatar && !/^https?:\/\//i.test(avatar)) {
-    throw badRequest("头像地址必须以 http:// 或 https:// 开头");
+  // `undefined` means "the caller did not send this field" — leave the stored
+  // value untouched. `null`/"" means "clear it". The editor saves in sections,
+  // so a request that only edits hobbies must not wipe the banner.
+  const avatar = input.avatar === undefined ? undefined : input.avatar?.trim() || null;
+  if (avatar && !isPresetAvatar(avatar) && !/^https?:\/\//i.test(avatar)) {
+    throw badRequest("头像地址必须是有效的图片链接，或选择内置预设头像");
+  }
+
+  const coverImage = input.coverImage === undefined ? undefined : input.coverImage?.trim() || null;
+  if (coverImage && !/^https?:\/\//i.test(coverImage)) {
+    throw badRequest("背景图地址必须以 http:// 或 https:// 开头");
+  }
+
+  if (input.coverPreset && !isCoverPreset(input.coverPreset)) {
+    throw badRequest("未知的背景预设");
   }
 
   const user = await prisma.user.update({
     where: { id: userId },
-    data: { name, avatar: avatar || null },
-    select: { id: true, email: true, name: true, avatar: true, createdAt: true },
+    data: {
+      name,
+      avatar,
+      coverImage,
+      coverPreset: input.coverPreset,
+      tags: input.tags && normaliseChips(input.tags, MAX_CHIPS.tags),
+      dreamDestinations:
+        input.dreamDestinations &&
+        normaliseChips(input.dreamDestinations, MAX_CHIPS.dreamDestinations),
+      hobbies: input.hobbies && normaliseChips(input.hobbies, MAX_CHIPS.hobbies),
+      visitedPlaces:
+        input.visitedPlaces && normaliseChips(input.visitedPlaces, MAX_CHIPS.visitedPlaces),
+    },
+    select: userSelect,
   });
 
   return toDto(user);

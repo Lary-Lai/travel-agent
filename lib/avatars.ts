@@ -29,3 +29,18 @@ export function presetAvatarFor(seed: string): string {
   }
   return PRESET_AVATARS[(hash >>> 0) % PRESET_AVATAR_COUNT];
 }
+
+/**
+ * Is this one of the bundled preset paths (e.g. `/avatars/avatar-3.svg`)?
+ *
+ * Presets are same-origin paths, not absolute URLs, so a plain `z.url()` check
+ * rejects them — which silently broke "pick a preset, then save" once the
+ * presets stopped being https URLs (i.pravatar.cc era).
+ *
+ * Matching against the exact list, rather than an `/avatars/*` prefix, keeps the
+ * accepted set to precisely the 12 files we ship: nobody can point an avatar at
+ * an arbitrary same-origin path, and there is no prefix to escape.
+ */
+export function isPresetAvatar(value: string): boolean {
+  return PRESET_AVATARS.includes(value);
+}
