@@ -80,6 +80,16 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 > 演示使用图库图片，因此角度标签描述的是「这张图代表的视角」，而不是对真实房源的核验拍摄。
 
+### 界面与交互细节
+
+**夜间模式** —— 顶栏提供主题切换（浅色 / 深色 / 跟随系统），默认跟随系统，选择会持久化。基于 `next-themes` 切换 `<html>` 上的 `.dark` 类，与 `app/globals.css` 中的深色 token 对应。
+
+**AI 回复按 Markdown 渲染** —— 模型输出里的 `**加粗**`、`- 列表`、`1. 编号`、`` `代码` ``、`[链接](url)` 都会被正确渲染，而不是把星号原样显示给用户。列表用主题色圆点、编号列表用圆形序号徽标、小标题带左侧强调条。解析逻辑在 `lib/agent-markdown.ts`（纯函数、可单测），渲染在 `components/agent-markdown.tsx`，**不使用 `dangerouslySetInnerHTML`**，模型输出无法注入标记。
+
+**头像预设** —— 个人主页提供 24 个预设头像（间距取样，避免看起来都差不多），也可粘贴任意图片链接。
+
+**助手面板头部** —— 「清空」与「关闭」并排在同一行，不再重叠。
+
 ### 城市天气
 
 房源详情页与搜索结果页都会显示**所选城市的实时天气**，数据来自 [Open-Meteo](https://open-meteo.com/)——**免费且无需 API Key**，所以克隆下来就能用。
@@ -102,7 +112,7 @@ GET /api/weather?all=1           → 全部 6 座城市
 | 区块 | 内容 |
 | --- | --- |
 | 账号概览 | 心愿单 / 收藏房源 / 行程订单数量、注册时间 |
-| 公开资料 | 昵称、8 个预设头像 + 自定义头像 URL、实时预览、未保存时可撤销 |
+| 公开资料 | 昵称、24 个预设头像 + 自定义头像 URL、实时预览、未保存时可撤销 |
 | 账号安全 | 修改密码（需验证当前密码） |
 
 两个刻意的设计：
@@ -303,6 +313,7 @@ node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function 
 node scripts/test-vision.mjs     # AI 端点：★是否支持图片输入（扫描件 OCR 的前提）
 node scripts/smoke-agent.mjs     # Agent 端到端：51 项断言，含 PDF / 扫描件 / 图片解析
 node scripts/smoke-weather-profile.mjs  # 天气 + 个人主页 + ★账号跨播种保留：37 项断言
+npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
 node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
 node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试文件
@@ -319,6 +330,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `test-vision.mjs` | ✅ 支持图片输入（远程 URL 与 data URI） |
 | `smoke-agent.mjs` | ✅ **51 / 51** |
 | `smoke-weather-profile.mjs` | ✅ **37 / 37** |
+| `verify-markdown.ts` | ✅ **21 / 21** |
 
 ---
 
@@ -728,6 +740,20 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 2. **`npm run db:serve`**：父进程常驻的前台守护模式，供确实无法脱离 Job 的环境使用。
 3. README 里明确写了「请在你自己的终端里启动服务」——终端本身就是那个长生命周期父进程，不会有这个问题。
 
+**16. AI 回复里的 `**` 直接显示给用户 + 助手面板按钮重叠**
+
+两个纯 UI 问题，但都直接影响观感：
+
+- 模型输出的是 Markdown（`**加粗**`、`- 列表`），而聊天气泡只是 `whitespace-pre-wrap` 原样输出，于是星号被当成了正文。
+- Sheet 组件自带的关闭按钮是 `absolute top-3 right-3`，而对话头部右上角也放了「清空」按钮（`px-4 py-3`），两者区域重叠。
+
+修法：
+
+- 写了 Markdown 子集的解析与渲染。**特意没有引入 markdown 库**：模型只会用很有限的几种语法，而且解析逻辑被我抽成 `lib/agent-markdown.ts` 的**纯函数**，可以直接单元测试（`scripts/verify-markdown.ts`，21 项断言，测试数据直接取自截图中那段真实回复）。渲染层不使用 `dangerouslySetInnerHTML`，模型输出无法注入标记。
+- 助手面板关闭内置关闭按钮（`showCloseButton={false}`），改由对话头部自己渲染「清空 + 关闭」两个按钮，放在同一行自然就不会重叠。
+
+另外做了一个小重构：Markdown 解析最初写在 React 组件里，导致**无法测试**——而这恰恰是用户报的问题。把它抽成纯模块后，才会发现"加粗整行不会被误判为列表项"这类边界，也才有测试守住。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -740,6 +766,8 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 | 退款金额由服务端按政策计算 | 与价格计算同理：客户端只展示，不参与计算，避免篡改退款额 |
 | 取消前先调 refund-quote 接口 | 让用户在确认前看到**真实**的退款金额与政策档次，而不是取消后才知道退多少 |
 | 天气用 Open-Meteo 而不是付费天气 API | 免注册、免 API Key、全球覆盖，`git clone` 后无需额外配置即可运行；代价是依赖外部服务，因此加了 15 分钟缓存与"取不到就不渲染"的兜底 |
+| 自写 Markdown 子集而非引入 markdown 库 | 模型只用几种语法，自写体积为零、且是纯函数可单测；同时完全不碰 HTML 解析，没有注入面 |
+| 主题切换用 CSS 而非读取 `resolvedTheme` | 服务端不知道主题，读它需要 mounted 守卫，而在 effect 里 setState 正是 React lint 规则禁止的。用 `dark:hidden` / `dark:block` 两个图标由 CSS 决定，既无水合不一致也不需要守卫 |
 | `Listing.seedKey` 唯一键 | 让种子脚本能 upsert 而不是先删后建，房源 id 稳定 → 真实用户的心愿单与订单不会被级联删除 |
 | 改密码必须验证当前密码 | 只凭会话 Cookie 不能改密码，避免 Cookie 泄露后被永久夺号 |
 | 头像用普通 `<img>` 而非 `next/image` | 用户可填任意图片 URL，走 `next/image` 需要把每个域名加进 `remotePatterns`，对用户自定义地址不现实 |
@@ -802,6 +830,6 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 6 个可复现脚本共 **273 项断言**（140 + 45 + 51 + 37 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 6 个可复现脚本共 **294 项断言**（140 + 45 + 51 + 37 + 21 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

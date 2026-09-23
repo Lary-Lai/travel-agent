@@ -9,6 +9,7 @@ import {
   Sparkles,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ import { AgentMessage } from "@/components/agent-message";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useAgentStore } from "@/lib/store";
 
 const SUGGESTIONS = [
   "国庆想去东京玩 5 天，4 个人，每晚预算 800 元左右，希望离地铁近一点。",
@@ -31,6 +33,7 @@ export function AgentChat() {
   const { user } = useSession();
   const { messages, status, busy, error, send, stop, clear, retryLast, agentStatus, notConfigured } =
     useAgent();
+  const setOpen = useAgentStore((state) => state.setOpen);
 
   const [input, setInput] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -128,18 +131,32 @@ export function AgentChat() {
           </div>
         </div>
 
-        {messages.length > 0 ? (
+        {/* Header actions. The Sheet's own ✕ is disabled (see agent-drawer), so
+            both controls live here in one row and never overlap. */}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {messages.length > 0 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground gap-1.5 text-xs"
+              onClick={clear}
+              disabled={busy}
+            >
+              <Trash2 className="size-3.5" />
+              清空
+            </Button>
+          ) : null}
+
           <Button
             variant="ghost"
-            size="sm"
-            className="text-muted-foreground gap-1.5 text-xs"
-            onClick={clear}
-            disabled={busy}
+            size="icon-sm"
+            className="text-muted-foreground hover:text-foreground"
+            onClick={() => setOpen(false)}
+            aria-label="关闭助手"
           >
-            <Trash2 className="size-3.5" />
-            清空
+            <X className="size-4" />
           </Button>
-        ) : null}
+        </div>
       </div>
 
       {notConfigured ? (

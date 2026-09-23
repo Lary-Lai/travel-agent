@@ -19,9 +19,17 @@ import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SessionUserDto } from "@/types";
 
-const AVATAR_PRESETS = [1, 5, 12, 20, 32, 45, 51, 60].map(
-  (n) => `https://i.pravatar.cc/160?img=${n}`,
-);
+/**
+ * Preset avatars.
+ *
+ * A spread of pravatar ids rather than a consecutive block, so the choices look
+ * genuinely varied instead of like near-duplicates of each other.
+ */
+const AVATAR_PRESET_IDS = [
+  1, 3, 5, 8, 11, 12, 14, 18, 20, 23, 26, 28, 32, 35, 38, 41, 45, 47, 51, 54, 57, 60, 63, 68,
+];
+
+const AVATAR_PRESETS = AVATAR_PRESET_IDS.map((n) => `https://i.pravatar.cc/160?img=${n}`);
 
 /**
  * Profile page.
@@ -160,8 +168,13 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
           </div>
 
           <div className="space-y-2">
-            <Label>选择头像</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center justify-between">
+              <Label>选择头像</Label>
+              <span className="text-muted-foreground text-xs">
+                {AVATAR_PRESETS.length} 个预设
+              </span>
+            </div>
+            <div className="grid grid-cols-8 gap-1.5 sm:grid-cols-12">
               {AVATAR_PRESETS.map((preset) => (
                 <button
                   key={preset}
@@ -170,15 +183,15 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
                   aria-label="使用该头像"
                   aria-pressed={avatar === preset}
                   className={cn(
-                    "relative size-10 overflow-hidden rounded-full border-2 transition-all",
+                    "relative aspect-square overflow-hidden rounded-full border-2 transition-all",
                     avatar === preset ? "border-primary" : "border-transparent hover:opacity-80",
                   )}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={preset} alt="" className="size-full object-cover" />
+                  <img src={preset} alt="" className="size-full object-cover" loading="lazy" />
                   {avatar === preset ? (
                     <span className="bg-primary text-primary-foreground absolute inset-0 flex items-center justify-center">
-                      <Check className="size-4" />
+                      <Check className="size-3.5" />
                     </span>
                   ) : null}
                 </button>

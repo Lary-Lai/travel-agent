@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 
 import { AgentListingCard, type AgentListing } from "@/components/agent-listing-card";
+import { AgentMarkdown } from "@/components/agent-markdown";
 import { cn } from "@/lib/utils";
 
 /** Per-tool presentation: label + icon shown while the tool runs. */
@@ -144,13 +145,24 @@ export function AgentMessage({ message }: { message: UIMessage }) {
       {message.parts.map((part, index) => {
         if (isTextUIPart(part)) {
           if (!part.text.trim()) return null;
+
+          // The model writes Markdown; render it for assistant replies so the
+          // raw **asterisks** never reach the user. User text stays literal.
+          if (!isUser) {
+            return (
+              <div
+                key={index}
+                className="bg-muted max-w-[95%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed"
+              >
+                <AgentMarkdown text={part.text} />
+              </div>
+            );
+          }
+
           return (
             <div
               key={index}
-              className={cn(
-                "max-w-[95%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
-                isUser ? "bg-primary text-primary-foreground" : "bg-muted",
-              )}
+              className="bg-primary text-primary-foreground max-w-[95%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap"
             >
               {part.text}
             </div>

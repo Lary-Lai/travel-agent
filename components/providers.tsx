@@ -10,6 +10,7 @@ import { AgentDrawer } from "./agent-drawer";
 import { AgentProvider } from "./agent-provider";
 import { SavedSync } from "./saved-sync";
 import { SessionProvider } from "./session-provider";
+import { ThemeProvider } from "./theme-provider";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -33,18 +34,20 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        {/* AgentProvider sits above the drawer so chat history survives closing it. */}
-        <AgentProvider>
-          <TooltipProvider delayDuration={200}>
-            <SavedSync />
-            {children}
-            <AgentDrawer />
-            <Toaster position="top-center" richColors closeButton />
-          </TooltipProvider>
-        </AgentProvider>
-      </SessionProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          {/* AgentProvider sits above the drawer so chat history survives closing it. */}
+          <AgentProvider>
+            <TooltipProvider delayDuration={200}>
+              <SavedSync />
+              {children}
+              <AgentDrawer />
+              <Toaster position="top-center" richColors closeButton />
+            </TooltipProvider>
+          </AgentProvider>
+        </SessionProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

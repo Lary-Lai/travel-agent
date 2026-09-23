@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { useSession } from "@/components/session-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -126,6 +127,9 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex-1" />
+
+        {/* Night mode */}
+        <ThemeToggle />
 
         {/* AI Agent entry point */}
         <Button

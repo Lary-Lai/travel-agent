@@ -24,6 +24,10 @@ export function AgentDrawer() {
           side="right"
           className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
           aria-describedby={undefined}
+          // The built-in close button is absolutely positioned at top-3 right-3,
+          // which collided with the chat header's 清空 button. The header renders
+          // its own close button instead, so both sit in one aligned row.
+          showCloseButton={false}
         >
           <SheetTitle className="sr-only">AI 旅行助手</SheetTitle>
           <AgentChat />
