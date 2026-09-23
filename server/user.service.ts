@@ -2,7 +2,7 @@
 import bcrypt from "bcryptjs";
 
 import { prisma } from "../lib/db";
-import { conflict, unauthorized } from "../lib/http";
+import { badRequest, conflict, unauthorized } from "../lib/http";
 import type { SessionUserDto } from "../types";
 
 /** bcrypt cost. 10 is the usual balance of safety and login latency. */
@@ -87,4 +87,59 @@ export async function getUserById(id: string): Promise<SessionUserDto | null> {
     select: { id: true, email: true, name: true, avatar: true, createdAt: true },
   });
   return user ? toDto(user) : null;
+}
+
+/**
+ * Update the editable parts of a profile.
+ * The email is deliberately NOT editable here: it identifies the account and is
+ * used for login, so changing it would need a verification flow.
+ */
+export async function updateProfile(
+  userId: string,
+  input: { name: string; avatar?: string | null },
+): Promise<SessionUserDto> {
+  const name = input.name.trim();
+  if (name.length === 0) throw badRequest("昵称不能为空");
+  if (name.length > 40) throw badRequest("昵称不能超过 40 个字符");
+
+  const avatar = input.avatar?.trim() ?? null;
+  if (avatar && !/^https?:\/\//i.test(avatar)) {
+    throw badRequest("头像地址必须以 http:// 或 https:// 开头");
+  }
+
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { name, avatar: avatar || null },
+    select: { id: true, email: true, name: true, avatar: true, createdAt: true },
+  });
+
+  return toDto(user);
+}
+
+/**
+ * Change the password.
+ *
+ * Requires the current password so a stolen session cookie alone cannot lock
+ * the real owner out of their account.
+ */
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, password: true },
+  });
+  if (!user) throw unauthorized("账号不存在，请重新登录");
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) throw badRequest("当前密码不正确");
+
+  if (currentPassword === newPassword) throw badRequest("新密码不能与当前密码相同");
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { password: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
+  });
 }

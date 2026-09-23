@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, Heart, Loader2, LogOut, Menu, Route, Search, Sparkles, User } from "lucide-react";
+import { Compass, Heart, Loader2, LogOut, Menu, Route, Search, Settings, Sparkles, User } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -175,6 +175,12 @@ export function SiteHeader() {
                 <Link href="/trips" className="cursor-pointer">
                   <Route className="size-4" />
                   我的行程
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/profile" className="cursor-pointer">
+                  <Settings className="size-4" />
+                  个人主页
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

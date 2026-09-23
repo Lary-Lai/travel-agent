@@ -145,6 +145,30 @@ export const loginSchema = z.object({
   password: z.string().min(1, "请输入密码"),
 });
 
+/** Profile edit: display name, plus an optional avatar URL ("" clears it). */
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(1, "请填写昵称").max(40, "昵称不能超过 40 个字符"),
+  avatar: z
+    .union([z.url("头像地址必须是有效的 URL"), z.literal("")])
+    .optional()
+    .transform((value) => (value === "" ? null : value)),
+});
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "请输入当前密码"),
+    newPassword: z.string().min(8, "新密码至少 8 位").max(72, "密码过长"),
+    confirmPassword: z.string().min(1, "请再次输入新密码"),
+  })
+  .refine((value) => value.newPassword === value.confirmPassword, {
+    message: "两次输入的新密码不一致",
+    path: ["confirmPassword"],
+  })
+  .refine((value) => value.newPassword !== value.currentPassword, {
+    message: "新密码不能与当前密码相同",
+    path: ["newPassword"],
+  });
+
 export const createWishlistSchema = z.object({
   name: z.string().trim().min(1, "请填写心愿单名称").max(60, "名称不能超过 60 个字符"),
 });

@@ -7,6 +7,7 @@
  */
 import type {
   BookingDto,
+  CityWeather,
   ListingDetail,
   ListingSearchInput,
   ListingSearchResult,
@@ -94,6 +95,10 @@ export const api = {
       priceBounds: { min: number; max: number };
     }>("/api/meta"),
 
+  /** Current conditions + short forecast for a city (Open-Meteo, no API key). */
+  getCityWeather: (city: string) =>
+    request<{ weather: CityWeather | null }>(`/api/weather${buildQuery({ city })}`),
+
   // ------------------------------------------------------------------ auth
   getSession: () => request<{ user: SessionUserDto | null }>("/api/auth/session"),
 
@@ -110,6 +115,24 @@ export const api = {
     }),
 
   logout: () => request<{ signedOut: boolean }>("/api/auth/logout", { method: "POST" }),
+
+  // --------------------------------------------------------------- profile
+  /** Update display name / avatar. Email is intentionally not editable. */
+  updateProfile: (input: { name: string; avatar?: string }) =>
+    request<{ user: SessionUserDto }>("/api/users/me", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  changePassword: (input: {
+    currentPassword: string;
+    newPassword: string;
+    confirmPassword: string;
+  }) =>
+    request<{ updated: boolean }>("/api/users/me/password", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 
   // ------------------------------------------------------------- wishlists
   listWishlists: () => request<{ wishlists: WishlistDto[] }>("/api/wishlists"),

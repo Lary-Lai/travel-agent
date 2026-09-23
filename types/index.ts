@@ -6,6 +6,9 @@
  * resolved image URLs) and never leaks password hashes or host emails.
  */
 
+/** Weather codes live with the weather vocabulary; see lib/weather.ts. */
+import type { WeatherKind } from "../lib/weather";
+
 export type PropertyTypeValue =
   | "APARTMENT"
   | "HOUSE"
@@ -42,7 +45,6 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatusValue, string> = {
 
 /** Checkout channels shown on the payment page. */
 export type PaymentMethodValue = "WECHAT" | "ALIPAY" | "CARD";
-
 export const PAYMENT_METHODS: PaymentMethodValue[] = ["WECHAT", "ALIPAY", "CARD"];
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethodValue, string> = {
@@ -231,6 +233,52 @@ export type SessionUserDto = {
 };
 
 /** Uniform API envelope. */
+// ------------------------------------------------------------------ weather
+
+export type WeatherCurrent = {
+  temperature: number;
+  apparentTemperature: number;
+  humidity: number;
+  windSpeed: number;
+  weatherCode: number;
+  kind: WeatherKind;
+  description: string;
+  /** lucide-react export name. */
+  icon: string;
+  isDay: boolean;
+  observedAt: string;
+};
+
+export type WeatherDay = {
+  date: string;
+  weatherCode: number;
+  kind: WeatherKind;
+  description: string;
+  icon: string;
+  maxTemperature: number;
+  minTemperature: number;
+  precipitationProbability: number;
+};
+
+/** Current conditions plus a short forecast for one city. */
+export type CityWeather = {
+  city: string;
+  cityLabel: string;
+  countryLabel: string;
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  current: WeatherCurrent;
+  forecast: WeatherDay[];
+  advice: string;
+  fetchedAt: string;
+  provider: string;
+  /** True when served from the in-process cache. */
+  cached: boolean;
+  /** True when a fresh request failed and a stale reading was reused. */
+  stale: boolean;
+};
+
 export type ApiSuccess<T> = { ok: true; data: T };
 export type ApiFailure = {
   ok: false;

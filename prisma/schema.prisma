@@ -89,6 +89,14 @@ model Listing {
   hostId        String
   createdAt     DateTime     @default(now())
 
+  /// Stable identity for seeded rows (e.g. "tokyo-apartment-3").
+  ///
+  /// This is what lets `prisma db seed` be re-run safely: listings are upserted
+  /// by this key instead of being deleted and recreated, so their ids survive
+  /// and real users' wishlists and bookings are never cascade-deleted. Null for
+  /// any listing created outside the seed.
+  seedKey String? @unique
+
   host          User             @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
   images        ListingImage[]
   amenities     ListingAmenity[]

@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { FilterPanel } from "@/components/filter-panel";
 import { ListingCard, ListingGridSkeleton } from "@/components/listing-card";
+import { CityWeatherStrip } from "@/components/city-weather-strip";
 import { SearchBar } from "@/components/search-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -129,6 +130,9 @@ export function SearchResults() {
           })
         }
       />
+
+      {/* Weather for the city currently being searched. */}
+      {criteria.location ? <CityWeatherStrip city={criteria.location} /> : null}
 
       <div className="flex gap-8">
         {/* -------------------------------------------------- desktop filters */}

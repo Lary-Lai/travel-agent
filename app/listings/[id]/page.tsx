@@ -20,9 +20,11 @@ import { ListingGallery } from "@/components/listing-gallery";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { WeatherCard } from "@/components/weather-card";
 import { formatCount, formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
 import { getListingDetail } from "@/server/listing.service";
+import { getCityWeather } from "@/server/weather.service";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -51,6 +53,10 @@ export default async function ListingDetailPage({ params }: Props) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;
   }
+
+  // Weather for the city this listing sits in. Resolves to null (card hidden)
+  // if the provider is unreachable, so it can never break the page.
+  const weather = await getCityWeather(listing.city);
 
   const highlights = [
     { icon: Users, label: `可住 ${listing.maxGuests} 人` },
@@ -178,6 +184,17 @@ export default async function ListingDetailPage({ params }: Props) {
               </p>
             </div>
           </section>
+
+          {/* weather in the destination city */}
+          {weather ? (
+            <>
+              <Separator />
+              <section className="space-y-3">
+                <h2 className="text-base font-semibold">当地天气</h2>
+                <WeatherCard weather={weather} />
+              </section>
+            </>
+          ) : null}
         </div>
 
         {/* ---------------------------------------------------- booking panel */}

@@ -80,6 +80,54 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 > 演示使用图库图片，因此角度标签描述的是「这张图代表的视角」，而不是对真实房源的核验拍摄。
 
+### 城市天气
+
+房源详情页与搜索结果页都会显示**所选城市的实时天气**，数据来自 [Open-Meteo](https://open-meteo.com/)——**免费且无需 API Key**，所以克隆下来就能用。
+
+- 当前温度、体感温度、湿度、风速、天气描述（中文）与对应图标
+- **未来 5 天预报**：最高/最低温 + 降水概率
+- 出行建议（如「记得带伞」「气温偏低，建议厚外套」），由温度、风力和降水概率推导
+- 服务端**进程内缓存 15 分钟**；天气服务不可用时优先返回上一次的缓存值，完全取不到就不渲染这张卡片（绝不让它拖垮页面）
+- 夜间会自动切换成月亮图标；城市坐标直接复用 `lib/cities.ts` 里已有的经纬度
+
+```
+GET /api/weather?city=Tokyo      → 单个城市
+GET /api/weather?all=1           → 全部 6 座城市
+```
+
+### 个人主页
+
+从右上角头像菜单进入 `/profile`：
+
+| 区块 | 内容 |
+| --- | --- |
+| 账号概览 | 心愿单 / 收藏房源 / 行程订单数量、注册时间 |
+| 公开资料 | 昵称、8 个预设头像 + 自定义头像 URL、实时预览、未保存时可撤销 |
+| 账号安全 | 修改密码（需验证当前密码） |
+
+两个刻意的设计：
+
+- **邮箱不可改**：它是登录凭据与账号标识，修改需要邮箱验证流程，不适合放在这个演示里。
+- **改密码必须验证当前密码**：否则仅凭泄露的会话 Cookie 就能把真正的账号主人锁在门外。
+
+### 账号会保留（`db:seed` 现在是非破坏性的）
+
+**早期版本的种子脚本会 `deleteAll()` 掉所有用户**，所以每次重新生成演示数据都会把注册过的账号一起删掉——这正是"下次登录又要重新注册"的原因。
+
+现在 `npm run db:seed` 可以**反复安全执行**：
+
+- 种子用户按邮箱 **upsert**，真实注册的账号**完全不动**
+- 房源按新增的 `Listing.seedKey` **upsert**，因此**房源 id 保持稳定**
+- 因为 id 稳定，真实用户的心愿单与订单**也不会被级联删除**
+- 演示心愿单只在"不存在或为空"时补种，用户自己整理过的内容不会被覆盖
+- 每次执行都会打印保留了几个真实账号
+
+```
+[seed] accounts: 11 total, 2 registered by real users (preserved)
+```
+
+> 从旧版本升级会执行一次性清理：没有 `seedKey` 的历史种子房源会被移除（此应用不提供创建房源的功能，所以无 key 的房源必然来自旧种子）。
+
 ### AI Agent 特色
 
 - **真实 Tool Calling**：LLM 通过 AI SDK 的 `tool()` 机制决定调用哪个工具、传什么参数，而不是关键词匹配。
@@ -238,12 +286,13 @@ npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
 
 ```bash
 npx tsx scripts/verify-db.ts     # 数据库：枚举、CRUD、唯一约束、级联删除
-node scripts/smoke-api.mjs       # API：63 项断言，含跨用户越权测试（需先 npm run dev）
+node scripts/smoke-api.mjs       # API：140 项断言，含跨用户越权测试（需先 npm run dev）
 npx tsx scripts/verify-tools.ts  # Agent 工具：45 项断言，含真实写入校验
 node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function calling 能力
 node scripts/test-vision.mjs     # AI 端点：★是否支持图片输入（扫描件 OCR 的前提）
 node scripts/smoke-agent.mjs     # Agent 端到端：51 项断言，含 PDF / 扫描件 / 图片解析
-node scripts/inspect.ts          # 查看种子数据分布
+node scripts/smoke-weather-profile.mjs  # 天气 + 个人主页 + ★账号跨播种保留：37 项断言
+npx tsx scripts/inspect.ts       # 查看种子数据分布
 node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
 node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试文件
 ```
@@ -258,6 +307,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `test-vision.mjs` | ✅ 支持图片输入（远程 URL 与 data URI） |
 | `smoke-agent.mjs` | ✅ **51 / 51** |
+| `smoke-weather-profile.mjs` | ✅ **37 / 37** |
 
 ---
 
@@ -271,6 +321,7 @@ travel-agent/
 │   ├── listings/[id]/page.tsx    # 房源详情：画廊、设施、房东、预订面板
 │   ├── wishlist/page.tsx         # 我的心愿单
 │   ├── trips/page.tsx            # 我的行程
+│   ├── profile/page.tsx          # 个人主页：资料编辑 + 修改密码
 │   ├── login/ · register/        # 登录 / 注册
 │   ├── error.tsx · not-found.tsx # 错误边界
 │   └── api/                      # Route Handlers
@@ -281,6 +332,8 @@ travel-agent/
 │       ├── refunds/              #   [id]/settle 模拟退款到账
 │       ├── auth/                 #   register / login / logout / session
 │       ├── saved/                #   当前用户已收藏的房源 id
+│       ├── users/me/             #   PATCH 资料；POST /password 修改密码
+│       ├── weather/              #   GET 城市实时天气与预报（Open-Meteo）
 │       ├── meta/                 #   目的地、设施字典、价格区间
 │       └── agent/                #   POST 流式 Agent；upload 解析 PDF
 │
@@ -292,6 +345,9 @@ travel-agent/
 │   ├── payment-panel.tsx         #   收银台：三种支付方式 + 订单摘要 + 成功页
 │   ├── cancel-booking-dialog.tsx #   取消确认：退款报价 + 逐项明细 + 取消政策表
 │   ├── amenity-list.tsx          #   可点击的设施列表 + 设施说明弹窗
+│   ├── weather-card.tsx          #   天气卡片（当前 + 5 日预报）
+│   ├── city-weather-strip.tsx    #   搜索页跟随所选城市的天气条
+│   ├── profile-form.tsx          #   个人主页表单（资料 / 密码）
 │   ├── listing-gallery.tsx       #   多视角画廊 + 灯箱 + 缩略图条
 │   ├── qr-placeholder.tsx        #   确定性伪二维码 SVG（不可扫描，仅装饰）
 │   ├── agent-drawer.tsx          #   悬浮按钮 + 侧边抽屉
@@ -311,6 +367,7 @@ travel-agent/
 │   ├── booking.service.ts        #   订单创建、可用性、价格重算、支付、取消退款
 │   ├── refund.service.ts         #   退款查询与模拟到账（归属校验）
 │   ├── travel-plan.service.ts    #   旅行计划取文：PDF 文字层 / 扫描件栅格化 OCR / 图片 OCR
+│   ├── weather.service.ts        #   城市天气（Open-Meteo，带 15 分钟缓存与兜底）
 │   └── user.service.ts           #   注册、登录校验
 │
 ├── agent/                        # AI Agent
@@ -465,7 +522,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | 表 | 关键字段 | 约束 / 索引 |
 | --- | --- | --- |
 | `User` | id, email, password, name, avatar, createdAt | `email` 唯一 |
-| `Listing` | title, description, location, city, country, lat/lng, pricePerNight, propertyType, rating, reviewCount, maxGuests, bedrooms, beds, bathrooms, hostId | `city` / `propertyType` / `pricePerNight` 索引，`(city, propertyType, pricePerNight)` 复合索引 |
+| `Listing` | title, description, location, city, country, lat/lng, pricePerNight, propertyType, rating, reviewCount, maxGuests, bedrooms, beds, bathrooms, hostId, **seedKey** | `city` / `propertyType` / `pricePerNight` 索引，`(city, propertyType, pricePerNight)` 复合索引，`seedKey` 唯一（让种子可重复执行） |
 | `ListingImage` | listingId, url, position, **caption（拍摄角度/房间）** | 级联删除 |
 | `Amenity` | name, icon, category, **description** | `name` 唯一 |
 | `ListingAmenity` | listingId, amenityId | 复合主键（多对多） |
@@ -622,6 +679,27 @@ unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用
 
 验证方式：用 `@napi-rs/canvas` 画一页行程 → 编码成 JPEG → 包进一个只含图片 XObject 的 PDF（**故意不放文字对象**），生成的 fixture 文字层确实是 0 字符，正好用来证明走的是 OCR 而不是文字层。
 
+**14. 重新生成演示数据会把注册过的账号一起删掉（"下次登录又要重新注册"）**
+
+用户反馈"下次登录还要重新注册"。查下来不是会话或登录的问题，而是**种子脚本自己的锅**：
+
+```ts
+await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注册的
+```
+
+会话 Cookie 有效期是 30 天，本来不该掉线；但我在开发与测试过程中反复执行 `npm run db:seed`，每次都把用户的账号删了。这个问题的隐蔽之处在于：**它不报错、不崩溃，只是"账号不见了"**，很容易被误判成认证逻辑有 bug。
+
+修法是让种子脚本变成**可重复执行且非破坏性**的：
+
+- 种子用户按邮箱 `upsert`（不再是先删后建），真实注册的账号完全不碰
+- 给 `Listing` 加了 `seedKey` 唯一键，房源改为按它 `upsert` —— **房源 id 因此保持稳定**
+- id 稳定这一点是关键：否则真实用户的心愿单条目与订单会因为外键级联而被连带删除
+- 演示心愿单只在"不存在或为空"时补种，用户自己整理过的内容不会被覆盖
+
+顺带踩到两个小坑：给已有数据的表加唯一索引时 Prisma 会要求交互确认（CI 里跑不了），所以改用 `migrate deploy` + 手写迁移 SQL；而用 PowerShell 的 `Set-Content -Encoding UTF8` 生成的 SQL 文件**带 BOM**，PostgreSQL 直接报 `syntax error at or near ""` —— 迁移文件必须用无 BOM 的 UTF-8。
+
+现在验证方式是 `scripts/smoke-weather-profile.mjs` 里的一条断言：注册账号 → 改资料改密码 → **真的执行一次 `db:seed`** → 再用新密码登录，必须成功。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -633,6 +711,10 @@ unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用
 | 退款独立建表而非挂在订单上 | 退款有自己的生命周期与金额（政策可能只退一部分），也需要独立审计轨迹；与状态变更同事务写入，杜绝"取消了却没有退款记录" |
 | 退款金额由服务端按政策计算 | 与价格计算同理：客户端只展示，不参与计算，避免篡改退款额 |
 | 取消前先调 refund-quote 接口 | 让用户在确认前看到**真实**的退款金额与政策档次，而不是取消后才知道退多少 |
+| 天气用 Open-Meteo 而不是付费天气 API | 免注册、免 API Key、全球覆盖，`git clone` 后无需额外配置即可运行；代价是依赖外部服务，因此加了 15 分钟缓存与"取不到就不渲染"的兜底 |
+| `Listing.seedKey` 唯一键 | 让种子脚本能 upsert 而不是先删后建，房源 id 稳定 → 真实用户的心愿单与订单不会被级联删除 |
+| 改密码必须验证当前密码 | 只凭会话 Cookie 不能改密码，避免 Cookie 泄露后被永久夺号 |
+| 头像用普通 `<img>` 而非 `next/image` | 用户可填任意图片 URL，走 `next/image` 需要把每个域名加进 `remotePatterns`，对用户自定义地址不现实 |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
 | 价格计算抽成共享模块 | 避免"前端显示一个数、后端存另一个数"这类经典 bug |
@@ -668,8 +750,8 @@ unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用
 | --- | --- | --- |
 | ① | 打开首页 | Hero、搜索组件、房源类型分类、热门目的地、推荐房源、Agent 入口 |
 | ② | 搜索东京，4 人 | 筛选面板、URL 同步（刷新后状态保持）、房源卡片信息完整 |
-| ③ | 进入房源详情 | **多视角图片画廊（带 客厅/主卧/厨房… 角度标签 + 灯箱缩略图）**、房东、**点开任一设施查看说明与当地普及度**、价格明细 |
-| ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234` |
+| ③ | 进入房源详情 | **多视角图片画廊（带 客厅/主卧/厨房… 角度标签 + 灯箱缩略图）**、房东、**点开任一设施查看说明与当地普及度**、**当地实时天气与 5 日预报**、价格明细 |
+| ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234`；右上角头像菜单 → **个人主页** 可改昵称/头像/密码 |
 | ⑤ | 收藏房源 | 爱心 → 选择/新建心愿单 → Toast 反馈 |
 | ⑥ | 完成一次预订并支付 | 选日期人数 → 价格实时计算 → 确认 → **跳转收银台** → 依次展示微信 / 支付宝 / 银行卡 → 模拟支付成功 |
 | ⑦ | 取消并退款 | Trips 点「取消订单」→ 弹窗展示**取消政策与逐项退款金额** → 确认 → 订单取消、退款处理中 → 点「模拟退款到账」 |
@@ -692,6 +774,6 @@ unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 5 个可复现脚本共 **236 项断言**（140 + 45 + 51 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 6 个可复现脚本共 **273 项断言**（140 + 45 + 51 + 37 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

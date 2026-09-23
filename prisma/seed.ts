@@ -136,6 +136,9 @@ const HOSTS = [
 const DEMO_EMAIL = "demo@travel-agent.dev";
 const DEMO_PASSWORD = "Demo1234";
 
+/** Every seeded account uses this domain; anything else is a real registration. */
+const SEED_EMAIL_DOMAIN = "@travel-agent.dev";
+
 /** Build a unique, realistic title for a listing. */
 function buildTitle(city: CityMeta, neighborhood: string, shape: Shape, used: Set<string>): string {
   const adj = pick(ADJECTIVES);
@@ -281,51 +284,79 @@ async function main() {
   }
   const prisma = new PrismaClient({ adapter: new PrismaPg(connectionString) });
 
-  console.log("[seed] clearing existing data ...");
-  // FK-safe order: children before parents.
-  await prisma.wishlistItem.deleteMany();
-  await prisma.wishlist.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.listingAmenity.deleteMany();
-  await prisma.listingImage.deleteMany();
-  await prisma.listing.deleteMany();
-  await prisma.amenity.deleteMany();
-  await prisma.user.deleteMany();
+  // ---------------------------------------------------------------------------
+  // This seed is RE-RUNNABLE and non-destructive to real user data.
+  //
+  // Earlier versions called `user.deleteMany()` and `listing.deleteMany()`, so
+  // re-seeding silently destroyed accounts that had been registered through the
+  // app. Now:
+  //   - seed users are upserted by email (their ids, and therefore the listings
+  //     they host, stay stable)
+  //   - listings are upserted by `seedKey`, so listing ids survive too
+  //   - accounts registered by real people are never touched
+  //   - because listing ids survive, real users' wishlists and bookings are
+  //     not cascade-deleted either
+  // ---------------------------------------------------------------------------
 
-  console.log("[seed] amenities ...");
-  await prisma.amenity.createMany({ data: AMENITY_CATALOG });
+  console.log("[seed] amenities (upsert) ...");
+  for (const amenity of AMENITY_CATALOG) {
+    await prisma.amenity.upsert({
+      where: { name: amenity.name },
+      create: amenity,
+      update: {
+        icon: amenity.icon,
+        category: amenity.category,
+        description: amenity.description,
+      },
+    });
+  }
   const amenities = await prisma.amenity.findMany();
   const amenityIdByName = new Map(amenities.map((a) => [a.name, a.id]));
 
   // One hash reused for every seeded account — bcrypt is intentionally slow.
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 10);
 
-  console.log("[seed] hosts + demo account ...");
-  const hosts = await Promise.all(
-    HOSTS.map((host, i) =>
-      prisma.user.create({
-        data: {
+  console.log("[seed] hosts + demo account (upsert) ...");
+  const hosts: Array<{ id: string }> = [];
+  for (const [i, host] of HOSTS.entries()) {
+    hosts.push(
+      await prisma.user.upsert({
+        where: { email: host.email },
+        create: {
           email: host.email,
           name: host.name,
           password: passwordHash,
           avatar: `https://i.pravatar.cc/160?img=${(i % 60) + 1}`,
         },
+        // Keep the password as-is so a changed demo password is not reset.
+        update: { name: host.name, avatar: `https://i.pravatar.cc/160?img=${(i % 60) + 1}` },
       }),
-    ),
-  );
+    );
+  }
 
-  const demoUser = await prisma.user.create({
-    data: {
+  const demoUser = await prisma.user.upsert({
+    where: { email: DEMO_EMAIL },
+    create: {
       email: DEMO_EMAIL,
       name: "演示用户",
       password: passwordHash,
       avatar: "https://i.pravatar.cc/160?img=68",
     },
+    update: {},
   });
 
-  console.log("[seed] listings ...");
+  // One-time transition: rows created by the previous destructive seed have no
+  // seedKey. They cannot be matched by upsert, so remove them once. Users cannot
+  // create listings in this app, so every keyless listing is legacy seed data.
+  const legacy = await prisma.listing.deleteMany({ where: { seedKey: null } });
+  if (legacy.count > 0) {
+    console.log(`[seed] removed ${legacy.count} legacy listing(s) with no seedKey`);
+  }
+
+  console.log("[seed] listings (upsert by seedKey) ...");
   const usedTitles = new Set<string>();
-  const createdIds: Array<{ id: string; city: string }> = [];
+  const listingIdsByCity = new Map<string, string[]>();
+  const producedKeys: string[] = [];
   let index = 0;
 
   for (const city of CITIES) {
@@ -341,68 +372,125 @@ async function main() {
       const amenityNames = buildAmenities(shape);
       const nearSubway = amenityNames.includes("地铁附近");
 
-      const listing = await prisma.listing.create({
-        data: {
-          title,
-          description: buildDescription(city, neighborhood, shape, nearSubway),
-          location: `${neighborhood}, ${city.nameZh}`,
-          city: city.name,
-          country: city.country,
-          latitude: Number((city.latitude + between(-0.045, 0.045)).toFixed(6)),
-          longitude: Number((city.longitude + between(-0.045, 0.045)).toFixed(6)),
-          pricePerNight: price,
-          propertyType: shape.propertyType,
-          rating: Number(between(4.2, 5.0).toFixed(2)),
-          reviewCount: intBetween(6, 480),
-          maxGuests: shape.maxGuests,
-          bedrooms: shape.bedrooms,
-          beds: shape.beds,
-          bathrooms: shape.bathrooms,
-          hostId: hosts[index % hosts.length].id,
+      // Stable across runs: same city + shape position -> same listing row.
+      const seedKey = `${city.name.toLowerCase().replace(/\s+/g, "-")}-${shape.propertyType.toLowerCase()}-${s}`;
+      producedKeys.push(seedKey);
+
+      const scalarFields = {
+        title,
+        description: buildDescription(city, neighborhood, shape, nearSubway),
+        location: `${neighborhood}, ${city.nameZh}`,
+        city: city.name,
+        country: city.country,
+        latitude: Number((city.latitude + between(-0.045, 0.045)).toFixed(6)),
+        longitude: Number((city.longitude + between(-0.045, 0.045)).toFixed(6)),
+        pricePerNight: price,
+        propertyType: shape.propertyType,
+        rating: Number(between(4.2, 5.0).toFixed(2)),
+        reviewCount: intBetween(6, 480),
+        maxGuests: shape.maxGuests,
+        bedrooms: shape.bedrooms,
+        beds: shape.beds,
+        bathrooms: shape.bathrooms,
+        hostId: hosts[index % hosts.length].id,
+      };
+
+      const amenityRows = amenityNames
+        .map((name) => amenityIdByName.get(name))
+        .filter((id): id is string => Boolean(id))
+        .map((amenityId) => ({ amenityId }));
+
+      const listing = await prisma.listing.upsert({
+        where: { seedKey },
+        create: {
+          seedKey,
+          ...scalarFields,
           images: { create: buildImages(index, shape.propertyType) },
-          amenities: {
-            create: amenityNames
-              .map((name) => amenityIdByName.get(name))
-              .filter((id): id is string => Boolean(id))
-              .map((amenityId) => ({ amenityId })),
-          },
+          amenities: { create: amenityRows },
+        },
+        update: {
+          ...scalarFields,
+          // Gallery and amenities are fully regenerated; the listing row (and
+          // therefore its id) is preserved.
+          images: { deleteMany: {}, create: buildImages(index, shape.propertyType) },
+          amenities: { deleteMany: {}, create: amenityRows },
         },
       });
 
-      createdIds.push({ id: listing.id, city: city.name });
+      const bucket = listingIdsByCity.get(city.name) ?? [];
+      bucket.push(listing.id);
+      listingIdsByCity.set(city.name, bucket);
       index++;
     }
   }
 
-  console.log("[seed] demo wishlists ...");
-  const tokyoListings = createdIds.filter((l) => l.city === "Tokyo").slice(0, 3);
-  const europeListings = createdIds.filter((l) => l.city === "Paris" || l.city === "London").slice(0, 2);
-
-  await prisma.wishlist.create({
-    data: {
-      name: "东京旅行",
-      userId: demoUser.id,
-      items: { create: tokyoListings.map((l) => ({ listingId: l.id })) },
-    },
+  // Remove only listings this seed used to produce but no longer does.
+  const stale = await prisma.listing.deleteMany({
+    where: { seedKey: { notIn: producedKeys } },
   });
+  if (stale.count > 0) console.log(`[seed] removed ${stale.count} stale listing(s)`);
 
-  await prisma.wishlist.create({
-    data: {
-      name: "欧洲之旅",
-      userId: demoUser.id,
-      items: { create: europeListings.map((l) => ({ listingId: l.id })) },
-    },
-  });
+  console.log("[seed] demo wishlists (upsert) ...");
+  const tokyoListings = (listingIdsByCity.get("Tokyo") ?? []).slice(0, 3);
+  const europeListings = [
+    ...(listingIdsByCity.get("Paris") ?? []).slice(0, 1),
+    ...(listingIdsByCity.get("London") ?? []).slice(0, 1),
+  ];
 
-  const [listingCount, wishlistCount, itemCount] = await Promise.all([
+  /**
+   * Ensure a demo wishlist exists with its starter listings.
+   *
+   * Deliberately non-destructive: if the user has already curated this wishlist
+   * (added or removed listings), it is left completely alone. Only an empty or
+   * missing one is (re)filled.
+   */
+  const ensureWishlist = async (name: string, listingIds: string[]) => {
+    const existing = await prisma.wishlist.findUnique({
+      where: { userId_name: { userId: demoUser.id, name } },
+      select: { id: true, _count: { select: { items: true } } },
+    });
+
+    if (!existing) {
+      await prisma.wishlist.create({
+        data: {
+          name,
+          userId: demoUser.id,
+          items: { create: listingIds.map((listingId) => ({ listingId })) },
+        },
+      });
+      return "created";
+    }
+
+    if (existing._count.items === 0) {
+      await prisma.wishlistItem.createMany({
+        data: listingIds.map((listingId) => ({ wishlistId: existing.id, listingId })),
+        skipDuplicates: true,
+      });
+      return "refilled";
+    }
+
+    return "kept";
+  };
+
+  const tokyoResult = await ensureWishlist("东京旅行", tokyoListings);
+  const europeResult = await ensureWishlist("欧洲之旅", europeListings);
+  console.log(`[seed] demo wishlists: 东京旅行=${tokyoResult}, 欧洲之旅=${europeResult}`);
+
+  const [listingCount, wishlistCount, itemCount, accountCount, realAccounts] = await Promise.all([
     prisma.listing.count(),
     prisma.wishlist.count(),
     prisma.wishlistItem.count(),
+    prisma.user.count(),
+    // Accounts that did NOT come from the seed — i.e. real registrations.
+    prisma.user.count({ where: { email: { not: { endsWith: SEED_EMAIL_DOMAIN } } } }),
   ]);
 
   console.log(
     `[seed] done: ${listingCount} listings, ${CITIES.length} cities, ${amenities.length} amenities, ` +
-      `${hosts.length + 1} users, ${wishlistCount} wishlists, ${itemCount} wishlist items`,
+      `${wishlistCount} wishlists, ${itemCount} wishlist items`,
+  );
+  console.log(
+    `[seed] accounts: ${accountCount} total, ${realAccounts} registered by real users (preserved)`,
   );
   console.log(`[seed] demo login -> ${DEMO_EMAIL} / ${DEMO_PASSWORD}`);
 
