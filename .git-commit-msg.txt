@@ -1,0 +1,11 @@
+fix(agent): force Chinese-only output from the model
+
+The model emitted an English preamble before its tool call (for example
+"I'll search for Tokyo listings..."), which broke the Chinese-only UI.
+
+The system prompt now explicitly forbids any English, including transitional
+text around tool calls, and tells the model to either call the tool silently or
+preface it with one short Chinese sentence.
+
+Verified: the answer is fully Chinese (the only Latin token is LOFT, which comes
+from a real listing title); the agent end-to-end suite still passes 26/26.
