@@ -20,7 +20,7 @@ try {
 async function main() {
   // Imported dynamically so that .env is loaded before lib/db.ts reads
   // process.env.DATABASE_URL at module scope.
-  const { prisma } = await import("../lib/db.ts");
+  const { prisma } = await import("../lib/db");
 
   let failed = false;
 
