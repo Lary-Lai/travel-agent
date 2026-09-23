@@ -88,7 +88,7 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 - **写入型工具**：Agent 可以真正创建心愿单、增删收藏，并直接把数据写入 PostgreSQL。
 - **指代消解**：服务端保存短期会话记忆，所以"把**刚才推荐的第一个**房源加入心愿单"可以正确解析。
 - **流式输出 + Tool 执行状态**：界面实时显示"正在搜索房源…"、"✓ 找到 6 个房源"等步骤。
-- **PDF 旅行计划解析**：上传 PDF → 提取文字 → LLM 结构化 → 交给 Agent 继续推荐住宿。
+- **旅行计划解析（PDF / 图片）**：上传 PDF **或手机拍的行程图** → 有文字层就直接读、没有（扫描件/拍照件）就渲染成图交给视觉模型 OCR → LLM 结构化 → 交给 Agent 继续推荐住宿。
 
 > **设计红线**：Agent 永远不直接访问数据库。所有工具都调用 `server/` 下的 Service 层，与 REST API 共用同一套业务逻辑和权限校验。
 
@@ -105,7 +105,7 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 | 数据库 | **PostgreSQL 18.4**（真实实例）、Prisma ORM 7.10 + `@prisma/adapter-pg` |
 | 认证 | JWT（`jose`）存于 HttpOnly Cookie + bcrypt 密码哈希 |
 | AI | AI SDK v7、`@ai-sdk/openai-compatible`、Tool Calling、Streaming |
-| 文件处理 | `unpdf`（PDF 文本提取）+ LLM 结构化解析 |
+| 文件处理 | `unpdf`（PDF 文本层提取 + 页面栅格化）、`@napi-rs/canvas`、视觉模型 OCR、LLM 结构化解析 |
 | 工程 | ESLint、Prettier、npm、Git |
 
 ### 关于认证方案的说明
@@ -241,9 +241,11 @@ npx tsx scripts/verify-db.ts     # 数据库：枚举、CRUD、唯一约束、�
 node scripts/smoke-api.mjs       # API：63 项断言，含跨用户越权测试（需先 npm run dev）
 npx tsx scripts/verify-tools.ts  # Agent 工具：45 项断言，含真实写入校验
 node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function calling 能力
-node scripts/smoke-agent.mjs     # Agent 端到端：26 项断言，真实模型驱动（需先 npm run dev）
-npx tsx scripts/inspect.ts       # 查看种子数据分布
-node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
+node scripts/test-vision.mjs     # AI 端点：★是否支持图片输入（扫描件 OCR 的前提）
+node scripts/smoke-agent.mjs     # Agent 端到端：51 项断言，含 PDF / 扫描件 / 图片解析
+node scripts/inspect.ts          # 查看种子数据分布
+node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
+node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试文件
 ```
 
 当前实测结果（全部通过）：
@@ -254,7 +256,8 @@ node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
 | `smoke-api.mjs` | ✅ **140 / 140** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
-| `smoke-agent.mjs` | ✅ **26 / 26** |
+| `test-vision.mjs` | ✅ 支持图片输入（远程 URL 与 data URI） |
+| `smoke-agent.mjs` | ✅ **51 / 51** |
 
 ---
 
@@ -307,6 +310,7 @@ travel-agent/
 │   ├── wishlist.service.ts       #   心愿单 CRUD + 归属校验
 │   ├── booking.service.ts        #   订单创建、可用性、价格重算、支付、取消退款
 │   ├── refund.service.ts         #   退款查询与模拟到账（归属校验）
+│   ├── travel-plan.service.ts    #   旅行计划取文：PDF 文字层 / 扫描件栅格化 OCR / 图片 OCR
 │   └── user.service.ts           #   注册、登录校验
 │
 ├── agent/                        # AI Agent
@@ -348,7 +352,8 @@ travel-agent/
 │   └── store.ts                  # Zustand
 │
 ├── types/index.ts                # 共享 DTO
-├── scripts/                      # db.mjs / verify-db.ts / smoke-api.mjs / verify-tools.ts …
+├── scripts/                      # db.mjs / verify-db.ts / smoke-api.mjs / verify-tools.ts
+│                                 # smoke-agent.mjs / verify-ai.mjs / test-vision.mjs / inspect.ts …
 ├── prisma.config.ts              # Prisma 7 配置（数据源 URL、迁移、seed）
 └── data/                         # 嵌入式 PostgreSQL 数据目录（已 gitignore）
 ```
@@ -409,6 +414,38 @@ LLM 生成中文回答 + 界面渲染房源卡片
 - "比较**刚才这三个**" → `compareListings({ positions: [1,2,3] })`
 
 该记忆是进程内、有上限（500 会话）、带 1 小时 TTL 的缓存，**不缓存任何与安全相关的数据**——归属校验每次都重新查库。
+
+### 旅行计划解析（PDF / 扫描件 / 图片）
+
+上传入口在 Agent 对话面板底部（**上传旅行计划**）。三条路径自动分流：
+
+```
+上传文件
+   │
+   ├─ PDF，有文字层 ─────────► 直接读文字            method: pdf-text
+   │
+   ├─ PDF，无文字层（扫描/拍照）
+   │        └─ 渲染每页为 PNG ──► 视觉模型 OCR        method: ocr
+   │
+   └─ 图片（JPG / PNG / WebP）──► 视觉模型 OCR        method: ocr
+                                        │
+                                        ▼
+                          LLM 结构化（destination / days /
+                          guests / budgetPerNight / places / summary）
+                                        │
+                                        ▼
+                          交回 Agent 继续 recommendListings
+```
+
+几个实现要点：
+
+- **扫描件判定**：PDF 文字层提取出的字符数低于阈值（40）就认为没有可用文字层，自动转入 OCR，而不是直接报错。
+- **OCR 用同一个模型配置**：渲染出的 PNG 以 data URI 交给当前配置的视觉模型逐页转录（提示词要求逐字转录、不加解释）。不需要额外接入 OCR 服务。
+- **页数上限**：最多渲染 5 页，兼顾识别质量与耗时。
+- **模型必须支持图片输入**：若模型不支持，扫描件会返回明确提示而不是静默失败。可用 `node scripts/test-vision.mjs` 一键检测当前端点是否支持图片输入。
+- 解析结果里会返回 `method`、`pageCount`、`textLayerChars`，便于排查是走了哪条路径。
+
+
 
 ### 错误处理策略
 
@@ -557,6 +594,34 @@ LLM 生成中文回答 + 界面渲染房源卡片
 解决：给容器一个确定高度（`md:h-[26rem] lg:h-[30rem]`），格子去掉 `h-full` 交给网格拉伸；移动端只显示主图，其余角度收进「查看全部」弹窗。
 教训：**先确认资源能不能加载，再怀疑布局**。如果一上来就去换图片地址或改 `next.config` 的 `images` 配置，方向会完全跑偏。
 
+**13. 扫描版 PDF 无法识别 → 接入视觉模型 OCR 时踩到两个 pdf.js 的坑**
+
+需求是"图片型 PDF 也要能识别"。动手前先做了一件省事的事：**验证当前端点到底支不支持图片输入**（`scripts/test-vision.mjs`）—— 结果 `deepseek-chat` 远程 URL 与 data URI 两种方式都能正确描述图片，所以 OCR 可行，不需要换provider。随后踩到两个坑：
+
+坑一：`canvasImport` 必须是**函数**而不是模块本身。
+
+```js
+// ✗ 报错 "Parameter canvasImport is required in Node.js environment."
+renderPageAsImage(bytes, 1, { canvasImport: await import("@napi-rs/canvas") })
+// ✓
+renderPageAsImage(bytes, 1, { canvasImport: () => import("@napi-rs/canvas") })
+```
+
+unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用这个 thunk。
+
+坑二（更隐蔽）：**pdf.js 会 transfer（detach）传进去的 ArrayBuffer**，所以同一份字节不能复用第二次。
+
+```
+先 extractText(pdf) 再 renderPageAsImage(bytes)  →  Cannot transfer object of unsupported type.
+每次调用都传一份新拷贝                              →  正常
+```
+
+原因是 pdf.js 通过 `postMessage` 把 buffer **转移**给 worker，原 buffer 随即被置空。第一版我的上传流程正好是"先抽文字、失败再渲染"，必然踩中。修法是 `server/travel-plan.service.ts` 里每次调用都传 `new Uint8Array(bytes)` 的**新拷贝**。
+
+顺带：`@napi-rs/canvas` 是原生模块，必须写进 `next.config.ts` 的 `serverExternalPackages`，否则 Next 会尝试打包 `.node` 二进制而失败。
+
+验证方式：用 `@napi-rs/canvas` 画一页行程 → 编码成 JPEG → 包进一个只含图片 XObject 的 PDF（**故意不放文字对象**），生成的 fixture 文字层确实是 0 字符，正好用来证明走的是 OCR 而不是文字层。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -587,6 +652,8 @@ LLM 生成中文回答 + 界面渲染房源卡片
 ### 已知限制
 
 - **模型必须支持 function calling**。`deepseek-chat` 已验证可用；`deepseek-reasoner` 不支持工具调用，换成它 Agent 会退化。为此提供了 `node scripts/verify-ai.mjs`，改配置后先跑一次即可确认。
+- **扫描件 OCR 还要求模型支持图片输入**。`deepseek-chat` 已验证支持；用 `node scripts/test-vision.mjs` 可以一键检测。若换成纯文本模型，扫描版 PDF / 图片上传会返回明确提示（有文字层的 PDF 与其余功能不受影响）。
+- **OCR 会消耗较多 token**：每页按图片计费，因此最多渲染 5 页；页数很多的扫描件建议只上传关键几页。
 - **待支付订单不会自动过期**。PENDING 会一直占用日期；生产环境应加超时释放（例如 15 分钟后自动取消）。收银台上的倒计时只是前端提示，不改变后端状态。
 - **退款的「到账」是手动模拟的**。真实渠道退款是异步回调驱动的（1-3 个工作日），演示环境用「模拟退款到账」按钮推进 `PROCESSING → SUCCEEDED`，没有真实资金流动，也没有接入渠道退款回调。
 - 会话记忆是**进程内**的，重启服务即清空；生产环境应换成 Redis。
@@ -625,6 +692,6 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 5 个可复现脚本共 **211 项断言**（140 + 45 + 26 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 5 个可复现脚本共 **236 项断言**（140 + 45 + 51 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

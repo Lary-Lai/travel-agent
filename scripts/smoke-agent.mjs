@@ -5,10 +5,12 @@
  * Drives the real /api/agent endpoint with a live model and asserts on the
  * streamed UI protocol: which tools the model chose to call, whether the tool
  * results carried real database rows, and whether a wishlist write actually
- * persisted.
+ * persisted. Also covers travel-plan upload (text PDF, scanned PDF, image).
  *
  * Usage: node scripts/smoke-agent.mjs   (requires `npm run dev` and a valid AI key)
  */
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 
 const BASE = process.argv[2] ?? "http://localhost:3000";
 const DEMO = { email: "demo@travel-agent.dev", password: "Demo1234" };
@@ -217,7 +219,73 @@ async function main() {
   );
 
   // ------------------------------------------------------ 5. graceful failure
-  console.log("\n— 5. 未登录使用收藏类工具");
+  // ------------------------------------- 5. travel-plan upload (PDF / image)
+  console.log("\n— 5. 旅行计划解析（文字版 PDF / 扫描版 PDF / 图片）");
+
+  // Fixtures are generated on demand so a fresh clone can run this suite.
+  const TEXT_PDF = "scripts/sample-travel-plan.pdf";
+  const SCAN_PDF = "scripts/sample-scanned-plan.pdf";
+  const SCAN_JPG = "scripts/sample-scanned-plan.jpg";
+
+  if (!existsSync(TEXT_PDF)) execFileSync("node", ["scripts/make-test-pdf.mjs"], { stdio: "ignore" });
+  if (!existsSync(SCAN_PDF)) {
+    execFileSync("node", ["scripts/make-scanned-pdf.mjs"], { stdio: "ignore" });
+  }
+
+  const uploadFile = async (filePath, mimeType, fileName) => {
+    const form = new FormData();
+    form.append("file", new Blob([readFileSync(filePath)], { type: mimeType }), fileName);
+    const response = await fetch(`${BASE}/api/agent/upload`, { method: "POST", body: form });
+    return { status: response.status, body: await response.json() };
+  };
+
+  const assertPlan = (label, payload) => {
+    const plan = payload?.data?.plan;
+    check(`${label}: destination detected`, /东京|Tokyo/i.test(plan?.destination ?? ""), plan?.destination);
+    check(`${label}: days detected`, plan?.days === 5, String(plan?.days));
+    check(`${label}: guests detected`, plan?.guests === 4, String(plan?.guests));
+    check(`${label}: nightly budget detected`, plan?.budgetPerNight === 800, String(plan?.budgetPerNight));
+    check(`${label}: places extracted`, (plan?.places ?? []).length >= 3, `got ${(plan?.places ?? []).length}`);
+  };
+
+  // --- text-layer PDF: should NOT need OCR
+  const textPdf = await uploadFile(TEXT_PDF, "application/pdf", "plan.pdf");
+  check("text-layer PDF uploads -> 200", textPdf.status === 200, `got ${textPdf.status}`);
+  check("text-layer PDF uses the text layer", textPdf.body?.data?.method === "pdf-text",
+    textPdf.body?.data?.method);
+  check("text-layer PDF reports its char count", textPdf.body?.data?.textLayerChars > 50,
+    String(textPdf.body?.data?.textLayerChars));
+  assertPlan("text PDF", textPdf.body);
+
+  // --- scanned PDF: no text layer, must fall back to OCR
+  const scanPdf = await uploadFile(SCAN_PDF, "application/pdf", "scan.pdf");
+  check("scanned PDF uploads -> 200", scanPdf.status === 200, `got ${scanPdf.status}`);
+  check("scanned PDF has no text layer", scanPdf.body?.data?.textLayerChars === 0,
+    String(scanPdf.body?.data?.textLayerChars));
+  check("scanned PDF falls back to OCR", scanPdf.body?.data?.method === "ocr",
+    scanPdf.body?.data?.method);
+  check("scanned PDF produced usable text", (scanPdf.body?.data?.textLength ?? 0) > 60,
+    String(scanPdf.body?.data?.textLength));
+  assertPlan("scanned PDF", scanPdf.body);
+
+  // --- plain image: the "photo of a plan" case
+  if (existsSync(SCAN_JPG)) {
+    const jpg = await uploadFile(SCAN_JPG, "image/jpeg", "plan.jpg");
+    check("image upload (JPG) -> 200", jpg.status === 200, `got ${jpg.status}`);
+    check("image upload uses OCR", jpg.body?.data?.method === "ocr", jpg.body?.data?.method);
+    assertPlan("image", jpg.body);
+  } else {
+    check("image fixture present", false, "run: node scripts/make-scanned-pdf.mjs");
+  }
+
+  // --- unsupported type is rejected clearly
+  const form = new FormData();
+  form.append("file", new Blob([Buffer.from("just some text")], { type: "text/plain" }), "notes.txt");
+  const rejected = await fetch(`${BASE}/api/agent/upload`, { method: "POST", body: form });
+  check("unsupported file type -> 400", rejected.status === 400, `got ${rejected.status}`);
+
+  // ------------------------------------------------------ 6. graceful failure
+  console.log("\n— 6. 未登录使用收藏类工具");
   const savedCookie = cookie;
   cookie = "";
   const anon = await runTurn("把东京的房源加入我的心愿单", `e2e-anon-${Date.now()}`);

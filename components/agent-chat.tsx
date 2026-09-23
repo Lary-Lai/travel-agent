@@ -50,12 +50,15 @@ export function AgentChat() {
   };
 
   const handleUpload = async (file: File) => {
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      toast.error("请上传 PDF 格式的旅行计划");
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/");
+
+    if (!isPdf && !isImage) {
+      toast.error("请上传 PDF 或图片（JPG / PNG / WebP）格式的旅行计划");
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      toast.error("文件过大，请上传 8MB 以内的 PDF");
+      toast.error("文件过大，请上传 8MB 以内的文件");
       return;
     }
 
@@ -232,7 +235,7 @@ export function AgentChat() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,image/*"
             className="hidden"
             onChange={(event) => {
               const file = event.target.files?.[0];
@@ -251,7 +254,7 @@ export function AgentChat() {
             ) : (
               <FileText className="size-3.5" />
             )}
-            {uploading ? "解析中…" : "上传旅行计划 PDF"}
+            {uploading ? "解析中…" : "上传旅行计划"}
           </Button>
 
           {error ? (

@@ -41,8 +41,17 @@ yarn-error.log*
 # generated Prisma client (recreate with `npm run db:generate`)
 /lib/generated/
 
-# generated PDF test fixture (recreate with: node scripts/make-test-pdf.mjs)
+# generated upload fixtures
+#   node scripts/make-test-pdf.mjs      -> sample-travel-plan.pdf
+#   node scripts/make-scanned-pdf.mjs   -> sample-scanned-plan.pdf / .jpg
 /scripts/sample-travel-plan.pdf
+/scripts/sample-scanned-plan.pdf
+/scripts/sample-scanned-plan.jpg
+
+# local commit-message helpers (ad-hoc files used when committing)
+*-msg.txt
+*-msg-*.txt
+msg-*.txt
 
 # vercel
 .vercel
@@ -50,7 +59,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-.git-commit-msg.txt
-commit-msg-refund.txt
-cc-msg.txt
-msg-gallery.txt

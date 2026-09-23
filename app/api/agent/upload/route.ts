@@ -1,11 +1,11 @@
 import { generateObject } from "ai";
 import type { NextRequest } from "next/server";
-import { extractText, getDocumentProxy } from "unpdf";
 import { z } from "zod";
 
 import { getAiConfig, createChatModel } from "@/agent/provider";
 import { CITIES, findCity } from "@/lib/cities";
 import { badRequest, errorResponse, ok } from "@/lib/http";
+import { extractPlanText } from "@/server/travel-plan.service";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,29 +95,33 @@ export async function POST(request: NextRequest) {
     if (!formData) throw badRequest("请求格式不正确，应为 multipart/form-data");
 
     const file = formData.get("file");
-    if (!(file instanceof File)) throw badRequest("请上传 PDF 文件");
+    if (!(file instanceof File)) throw badRequest("请上传旅行计划文件");
     if (file.size === 0) throw badRequest("上传的文件为空");
-    if (file.size > MAX_UPLOAD_BYTES) throw badRequest("文件过大，请上传 8MB 以内的 PDF");
-    if (file.type && file.type !== "application/pdf") {
-      throw badRequest("仅支持 PDF 格式的旅行计划");
+    if (file.size > MAX_UPLOAD_BYTES) throw badRequest("文件过大，请上传 8MB 以内的文件");
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const isImage = file.type.startsWith("image/");
+    if (!isPdf && !isImage) {
+      throw badRequest("仅支持 PDF 或图片（JPG / PNG / WebP）格式的旅行计划");
     }
 
-    // ------------------------------------------------------------ extract text
-    let text: string;
+    // ---------------------------------------------- extract text (layer or OCR)
+    let extracted;
     try {
-      const buffer = new Uint8Array(await file.arrayBuffer());
-      const pdf = await getDocumentProxy(buffer);
-      const extracted = await extractText(pdf, { mergePages: true });
-      text = (Array.isArray(extracted.text) ? extracted.text.join("\n") : extracted.text).trim();
+      extracted = await extractPlanText({
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mimeType: file.type,
+        fileName: file.name,
+      });
     } catch (error) {
-      console.error("[upload] pdf parse failed:", error);
-      throw badRequest("PDF 解析失败，请确认文件未加密且包含可提取的文字");
+      // Scanned PDFs and unreadable images fail here with a user-facing reason.
+      console.error("[upload] extraction failed:", error);
+      throw badRequest(
+        error instanceof Error ? error.message : "无法从文件中读取旅行计划内容",
+      );
     }
 
-    if (text.length < 10) {
-      throw badRequest("未能从 PDF 中提取到有效文字，可能是扫描件（图片型 PDF）");
-    }
-
+    const text = extracted.text;
     const clipped = text.slice(0, MAX_TEXT_CHARS);
 
     // ---------------------------------------------------- structure with LLM
@@ -166,6 +170,10 @@ ${clipped}
     return ok({
       plan,
       source,
+      /** "pdf-text" when the PDF had a text layer, "ocr" for scans/images. */
+      method: extracted.method,
+      pageCount: extracted.pageCount,
+      textLayerChars: extracted.textLayerChars,
       textLength: text.length,
       preview: clipped.slice(0, 400),
     });
