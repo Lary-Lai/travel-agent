@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import { AgentDrawer } from "./agent-drawer";
+import { AgentProvider } from "./agent-provider";
 import { SavedSync } from "./saved-sync";
 import { SessionProvider } from "./session-provider";
 
@@ -33,11 +35,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <SessionProvider>
-        <TooltipProvider delayDuration={200}>
-          <SavedSync />
-          {children}
-          <Toaster position="top-center" richColors closeButton />
-        </TooltipProvider>
+        {/* AgentProvider sits above the drawer so chat history survives closing it. */}
+        <AgentProvider>
+          <TooltipProvider delayDuration={200}>
+            <SavedSync />
+            {children}
+            <AgentDrawer />
+            <Toaster position="top-center" richColors closeButton />
+          </TooltipProvider>
+        </AgentProvider>
       </SessionProvider>
     </QueryClientProvider>
   );

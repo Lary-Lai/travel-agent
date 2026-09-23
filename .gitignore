@@ -41,6 +41,9 @@ yarn-error.log*
 # generated Prisma client (recreate with `npm run db:generate`)
 /lib/generated/
 
+# generated PDF test fixture (recreate with: node scripts/make-test-pdf.mjs)
+/scripts/sample-travel-plan.pdf
+
 # vercel
 .vercel
 
