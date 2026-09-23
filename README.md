@@ -238,15 +238,26 @@ npm run dev
 
 > 也可以一步完成第 2–4 步：`npm run setup`
 
-#### 数据库连不上或连接被重置？
-
-在受进程管理器（Job Object）约束的环境里（CI、某些 IDE/终端封装器），当 `npm run db:start` 这条命令**执行结束**时，它所在的 Job Object 会被回收，而 postmaster 虽然还活着（`pg_ctl status` 显示 running、端口也在监听），却**再也无法派生 backend 进程**，客户端连接会得到 `ECONNRESET`，日志里是：
+#### 一键启动（Windows）
 
 ```
-client backend (PID ...) was terminated by exception 0xC0000142   # STATUS_DLL_INIT_FAILED
+双击 start.cmd
 ```
 
-这种情况改用前台守护模式即可，它会保持一个长生命周期的父进程：
+它会先启动数据库，再前台运行 dev server，并打印访问地址与演示账号。
+
+#### ⚠️ 请在你自己的终端里启动服务
+
+**不要从"会回收子进程"的环境里启动**（CI、部分 IDE 的终端封装器、AI Agent 工具的后台任务等）。这类环境通常把命令放进 Windows **Job Object**，命令结束或环境清理时整个进程树被回收，于是：
+
+| 现象 | 原因 |
+| --- | --- |
+| `localhost:3001` 拒绝连接 | dev server 进程被一起回收 |
+| 能连上但每个查询都 `ECONNRESET` | postmaster 还活着（`pg_ctl status` 显示 running、端口也在监听），却已**无法派生 backend 进程**，日志里是 `client backend ... terminated by exception 0xC0000142`（STATUS_DLL_INIT_FAILED） |
+
+在你自己的 cmd / PowerShell 窗口里运行不会有这个问题（终端本身就是那个长生命周期父进程）。停止数据库：`npm run db:stop`。
+
+如果确实必须从受约束的环境启动，用前台守护模式，它让父进程常驻：
 
 ```bash
 npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
@@ -699,6 +710,23 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 顺带踩到两个小坑：给已有数据的表加唯一索引时 Prisma 会要求交互确认（CI 里跑不了），所以改用 `migrate deploy` + 手写迁移 SQL；而用 PowerShell 的 `Set-Content -Encoding UTF8` 生成的 SQL 文件**带 BOM**，PostgreSQL 直接报 `syntax error at or near ""` —— 迁移文件必须用无 BOM 的 UTF-8。
 
 现在验证方式是 `scripts/smoke-weather-profile.mjs` 里的一条断言：注册账号 → 改资料改密码 → **真的执行一次 `db:seed`** → 再用新密码登录，必须成功。
+
+**15. 从受进程管理器约束的环境启动服务，整个进程树会被回收**
+
+`localhost:3001` 报 `ERR_CONNECTION_REFUSED`，同时数据库也一起消失。原因是：在把命令放进 Windows **Job Object** 的环境里（CI、部分 IDE 终端封装器、AI Agent 工具的后台任务），当环境清理时，**整棵进程树都会被回收**——dev server 和 postmaster 一起没了。
+
+这和之前那个 `0xC0000142` 是同一套机制的两个表现：
+
+| 启动方式 | 结果 |
+| --- | --- |
+| 在受约束环境里跑 `db:start`（命令结束即回收 Job） | postmaster 残留但**无法派生 backend** → 连上就 `ECONNRESET` |
+| 整个 Job 被清理 | 服务直接消失 → `ERR_CONNECTION_REFUSED` |
+
+所以本项目加了三道保险：
+
+1. **`start.cmd`**：一键启动，并**检测 3001 端口是否已被占用**——因为端口是固定的，重复启动会以 `EADDRINUSE` 崩溃，提示清楚比抛异常好。
+2. **`npm run db:serve`**：父进程常驻的前台守护模式，供确实无法脱离 Job 的环境使用。
+3. README 里明确写了「请在你自己的终端里启动服务」——终端本身就是那个长生命周期父进程，不会有这个问题。
 
 ### 技术选择记录
 
