@@ -80,8 +80,8 @@ AUTH_TRUST_HOST=true
 
 # ===== AI（任意 OpenAI 兼容端点） =====
 AI_API_KEY="你的 API Key"
-AI_BASE_URL="https://apihub.agnes-ai.com/v1"
-AI_MODEL="agnes-2.5-flash"
+AI_BASE_URL="https://api.deepseek.com/v1"
+AI_MODEL="deepseek-chat"
 ```
 
 | 变量 | 说明 |
@@ -89,8 +89,10 @@ AI_MODEL="agnes-2.5-flash"
 | `DATABASE_URL` | PostgreSQL 连接串。默认指向项目自带的嵌入式实例（端口 55432） |
 | `AUTH_SECRET` | 会话 JWT 签名密钥，**必须**至少 16 字符，否则启动即报错 |
 | `AI_API_KEY` | 模型 API Key。留空时 Agent 会明确提示"未配置模型"，其余功能不受影响 |
-| `AI_BASE_URL` | OpenAI 兼容的 API 根地址 |
-| `AI_MODEL` | 模型名。默认 `agnes-2.5-flash` |
+| `AI_BASE_URL` | OpenAI 兼容的 API 根地址。默认 `https://api.deepseek.com/v1` |
+| `AI_MODEL` | 模型名。默认 `deepseek-chat`（**需支持 function calling**，`deepseek-reasoner` 不支持工具调用） |
+
+其他已验证可用的组合：OpenAI `gpt-4o-mini`、Agnes `agnes-2.5-flash`。只要端点兼容 OpenAI Chat Completions 且模型支持 function calling 即可。
 
 `AUTH_SECRET` 生成命令：
 
@@ -159,10 +161,21 @@ npm run dev
 npx tsx scripts/verify-db.ts     # 数据库：枚举、CRUD、唯一约束、级联删除
 node scripts/smoke-api.mjs       # API：63 项断言，含跨用户越权测试（需先 npm run dev）
 npx tsx scripts/verify-tools.ts  # Agent 工具：45 项断言，含真实写入校验
+node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function calling 能力
+node scripts/smoke-agent.mjs     # Agent 端到端：26 项断言，真实模型驱动（需先 npm run dev）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
+node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
 ```
 
-三个脚本当前均 **全部通过**（63/63、45/45）。
+当前实测结果（全部通过）：
+
+| 脚本 | 结果 |
+| --- | --- |
+| `verify-db.ts` | ✅ ALL CHECKS PASSED |
+| `smoke-api.mjs` | ✅ **63 / 63** |
+| `verify-tools.ts` | ✅ **45 / 45** |
+| `verify-ai.mjs` | ✅ chat + tool calling OK |
+| `smoke-agent.mjs` | ✅ **26 / 26** |
 
 ---
 
@@ -266,7 +279,7 @@ travel-agent/
 Next.js Route Handler  /api/agent        ← 从 HttpOnly Cookie 解析用户身份
      │
      ▼
-LLM (Agnes 2.5 Flash, OpenAI 兼容)       ← 决定调用哪个工具、传什么参数
+LLM (DeepSeek deepseek-chat, OpenAI 兼容)  ← 决定调用哪个工具、传什么参数
      │
      ▼
 Tool Calling  agent/tools/*.ts           ← zod 校验参数
@@ -421,6 +434,12 @@ LLM 生成中文回答 + 界面渲染房源卡片
 **11. 图片资源**
 先实测了 picsum（可用但 3.5s）与 loremflickr（超时），最终选用 Unsplash，并**逐个验证 45 个图片 id 返回 200** 后写入种子脚本，避免演示时出现裂图。
 
+**11. DeepSeek 的 `json_object` 模式要求提示词里出现 "json" 字样**
+`generateObject` 默认发送 `response_format: { type: "json_object" }`，DeepSeek 直接返回 400：
+`Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'.`
+（OpenAI 没有这个约束，所以很容易在换模型时踩到。）
+解决：在 PDF 结构化解析的提示词中显式写明"以 JSON 格式返回（只输出 JSON）"。由于该路径本来就有启发式兜底，这个失败最初表现为"PDF 能解析但结果是英文的"——兜底掩盖了真实错误，是靠阅读服务端日志才发现 `generateObject` 一直在抛异常。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -434,15 +453,16 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 ### Agent 调试过程
 
-1. **先验证模型端点，再写业务代码**。用 `curl` 直接打 `/v1/chat/completions` 确认鉴权头格式、模型名与工具调用支持。这一步发现提供的 API Key 返回 `401 Invalid token`（`Authorization: Bearer`、裸 key、`x-api-key` 三种方式都试过，排除了格式问题）。
-2. **把工具体系与 LLM 解耦验证**。`scripts/verify-tools.ts` 直接调用每个工具的 `execute`，因此**不依赖模型可用性**就能验证 Tool → Service → PostgreSQL 全链路，包括"真的往数据库写了一行又删掉"。
-3. **用序号而非 id 做指代**。模型在多轮中引用具体 id 容易出错，改为服务端维护有序 id 列表、模型只传 `position`，稳定性显著提升。
-4. **预算用区间而非精确值**。"800 左右"如果按精确匹配会几乎无结果；改成 ±30% 区间后，东京场景稳定返回 3 个候选，正好支撑"帮我选三个 → 比较这三个"的演示。
-5. **失败路径也要能演示**。故意在无 Key 状态下请求 `/api/agent`，确认返回的是可读的中文提示而不是 500。PDF 解析同理：LLM 不可用时退回正则启发式，仍能提取出目的地/天数/人数/预算。
+1. **先验证模型端点，再写业务代码**。用 `curl` 直接打 `/v1/chat/completions` 确认鉴权头格式、模型名与工具调用支持，而不是先写一堆 Agent 代码再调试。这个过程本身很有价值：第一版提供的 Key 被网关判定为 `401 Invalid token`（`Authorization: Bearer`、裸 key、`x-api-key` 三种方式都试过，从而排除了"请求格式写错"的可能，定位到是 Key 本身失效）。这也直接催生了 `scripts/verify-ai.mjs` —— 把"端点能不能用、模型会不会调工具"变成一条命令即可回答的问题。
+2. **把工具体系与 LLM 解耦验证**。`scripts/verify-tools.ts` 直接调用每个工具的 `execute`，因此**不依赖模型可用性**就能验证 Tool → Service → PostgreSQL 全链路，包括"真的往数据库写了一行又删掉"。模型不可用时项目依然可验证、可交付。
+3. **补齐端到端验证**。换成可用的 DeepSeek Key 后，新增 `scripts/smoke-agent.mjs`：用真实模型跑完整流程，断言模型**确实选择了正确的工具**、工具**返回了真实数据库行**、以及心愿单**确实写进了库**（通过独立的 API 查询复核，而不是相信工具的自我报告）。26 项断言全部通过，其中第 3 项验证了"搜索 → 比较"在**同一轮对话内**的多步工具循环。
+4. **用序号而非 id 做指代**。模型在多轮中引用具体 id 容易出错，改为服务端维护有序 id 列表、模型只传 `position`，稳定性显著提升。
+5. **预算用区间而非精确值**。"800 左右"如果按精确匹配会几乎无结果；改成 ±30% 区间后，东京场景稳定返回 3 个候选，正好支撑"帮我选三个 → 比较这三个"的演示。
+6. **失败路径也要能演示**。在无 Key 状态下请求 `/api/agent`，确认返回的是可读的中文提示而不是 500。PDF 解析同理：LLM 不可用时退回正则启发式，仍能提取出目的地/天数/人数/预算。
 
 ### 已知限制
 
-- **AI 模型需要有效的 API Key**。当前 `.env` 中的 Key 被网关判定为 `Invalid token`，因此 Agent 对话会返回"AI 服务鉴权失败"提示。工具层、Service 层、数据库写入均已通过测试独立验证（45/45）。换一个有效 Key 并重启即可完整演示。
+- **模型必须支持 function calling**。`deepseek-chat` 已验证可用；`deepseek-reasoner` 不支持工具调用，换成它 Agent 会退化。为此提供了 `node scripts/verify-ai.mjs`，改配置后先跑一次即可确认。
 - 会话记忆是**进程内**的，重启服务即清空；生产环境应换成 Redis。
 - 未接入真实支付（需求明确不要求）。
 - `@prisma/adapter-pg` 会打印一条 `pg` 的弃用警告（`client.query() when the client is already executing a query`），来自依赖内部，不影响功能。
@@ -477,6 +497,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Agent 必须调用真实 Tool | 使用 AI SDK `tool()` + `stopWhen`，真实工具循环 |
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
-| API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验，8 项越权测试通过 |
+| API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
+| 每完成一个模块立即测试 | 5 个可复现脚本共 **134 项断言**（63 + 45 + 26 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

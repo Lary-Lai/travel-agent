@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
           model: createChatModel(),
           schema: planSchema,
           temperature: 0.1,
-          prompt: `下面是一份旅行计划文本。请提取结构化的住宿需求信息。
+          prompt: `下面是一份旅行计划文本。请提取结构化的住宿需求信息，并以 JSON 格式返回（只输出 JSON，不要输出任何额外说明文字）。
 
 规则：
 - destination 请使用中文城市名（例如「东京」）。平台覆盖的城市有：${CITIES.map((c) => c.nameZh).join("、")}。
