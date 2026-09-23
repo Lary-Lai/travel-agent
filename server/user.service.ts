@@ -70,8 +70,15 @@ export async function verifyCredentials(
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) throw unauthorized("邮箱或密码不正确");
 
-  const { password: _password, ...safe } = user;
-  return toDto(safe);
+  // Project explicitly rather than destructuring the hash away, so the DTO can
+  // never accidentally carry a credential field.
+  return toDto({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatar: user.avatar,
+    createdAt: user.createdAt,
+  });
 }
 
 export async function getUserById(id: string): Promise<SessionUserDto | null> {

@@ -13,7 +13,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { api, ApiClientError } from "@/lib/api";
-import { formatCurrency, formatDate, formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
+import { formatCurrency, formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
 import { calculatePrice } from "@/lib/pricing";
 import type { ListingDetail } from "@/types";
 
@@ -54,10 +54,11 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
   const booking = useMutation({
     mutationFn: () => api.createBooking({ listingId: listing.id, checkIn, checkOut, guests }),
     onSuccess: (result) => {
-      toast.success("预订成功！已加入我的行程", {
-        description: `${formatDate(result.booking.checkIn)} – ${formatDate(result.booking.checkOut)} · ${formatCurrency(result.booking.totalPrice)}`,
+      toast.success("房源已为你保留，请完成支付", {
+        description: `${result.booking.nights} 晚 · 待支付 ${formatCurrency(result.booking.totalPrice)}`,
       });
-      router.push("/trips");
+      // Hand off to checkout; the booking stays PENDING until it is paid.
+      router.push(`/payment/${result.booking.id}`);
     },
     onError: (error) => {
       const message = error instanceof ApiClientError ? error.message : "预订失败，请稍后重试";

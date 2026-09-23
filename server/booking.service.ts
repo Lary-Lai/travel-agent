@@ -9,7 +9,14 @@ import { prisma } from "../lib/db";
 import { formatDate, parseDateOnly, todayUtc } from "../lib/format";
 import { badRequest, conflict, forbidden, notFound } from "../lib/http";
 import { MAX_GUESTS, MAX_NIGHTS, calculatePrice, nightsBetween } from "../lib/pricing";
-import { BOOKING_STATUS_LABELS, type BookingDto, type BookingStatusValue } from "../types";
+import {
+  BOOKING_STATUS_LABELS,
+  PAYMENT_METHODS,
+  PAYMENT_METHOD_LABELS,
+  type BookingDto,
+  type BookingStatusValue,
+  type PaymentMethodValue,
+} from "../types";
 import { Prisma } from "../lib/generated/prisma/client";
 import { LISTING_INCLUDE, mapListingRow } from "./listing.service";
 
@@ -23,6 +30,8 @@ const ACTIVE_STATUSES: BookingStatusValue[] = ["CONFIRMED", "PENDING"];
 
 function mapBooking(row: BookingRow): BookingDto {
   const status = row.status as BookingStatusValue;
+  const paymentMethod = (row.paymentMethod as PaymentMethodValue | null) ?? null;
+
   return {
     id: row.id,
     status,
@@ -36,6 +45,11 @@ function mapBooking(row: BookingRow): BookingDto {
     serviceFee: row.serviceFee,
     totalPrice: row.totalPrice,
     createdAt: row.createdAt.toISOString(),
+    paymentMethod,
+    paymentMethodLabel: paymentMethod ? (PAYMENT_METHOD_LABELS[paymentMethod] ?? paymentMethod) : null,
+    paidAt: row.paidAt?.toISOString() ?? null,
+    paymentTradeNo: row.paymentTradeNo,
+    isPaid: row.paidAt !== null,
     listing: mapListingRow(row.listing),
   };
 }
@@ -118,7 +132,8 @@ export async function createBooking(
       cleaningFee: price.cleaningFee,
       serviceFee: price.serviceFee,
       totalPrice: price.totalPrice,
-      status: "CONFIRMED",
+      // Held, not confirmed: the dates are blocked until checkout is paid.
+      status: "PENDING",
     },
     include: BOOKING_INCLUDE,
   });
@@ -163,6 +178,69 @@ export async function cancelBooking(userId: string, bookingId: string): Promise<
   return mapBooking(updated);
 }
 
+/**
+ * Simulated checkout.
+ *
+ * No real gateway is involved: this records which channel the user chose,
+ * stamps a trade number so the confirmation screen has something concrete to
+ * show, and moves the booking from PENDING to CONFIRMED.
+ *
+ * Ownership, cancellability and double-payment are all re-checked here, so the
+ * endpoint cannot be used to confirm someone else's order or pay twice.
+ */
+export async function payBooking(
+  userId: string,
+  bookingId: string,
+  method: PaymentMethodValue,
+): Promise<BookingDto> {
+  if (!PAYMENT_METHODS.includes(method)) {
+    throw badRequest("不支持的支付方式");
+  }
+
+  const row = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: BOOKING_INCLUDE,
+  });
+  if (!row) throw notFound("订单不存在");
+  if (row.userId !== userId) throw forbidden("无权操作该订单");
+  if (row.status === "CANCELLED") throw conflict("该订单已取消，无法支付");
+  if (row.paidAt) throw conflict("该订单已完成支付，请勿重复支付");
+
+  const paidAt = new Date();
+
+  const updated = await prisma.booking.update({
+    where: { id: bookingId },
+    data: {
+      status: "CONFIRMED",
+      paymentMethod: method,
+      paidAt,
+      paymentTradeNo: buildTradeNo(method, paidAt),
+    },
+    include: BOOKING_INCLUDE,
+  });
+
+  return mapBooking(updated);
+}
+
+/** Plausible-looking reference number per channel (purely cosmetic). */
+function buildTradeNo(method: PaymentMethodValue, at: Date): string {
+  const stamp = at.getTime().toString().slice(-9);
+  const random = Math.floor(Math.random() * 1_000_000)
+    .toString()
+    .padStart(6, "0");
+
+  switch (method) {
+    // WeChat transaction ids conventionally start with 42000.
+    case "WECHAT":
+      return `42000${stamp}${random}`;
+    case "ALIPAY":
+      return `${at.toISOString().slice(0, 10).replace(/-/g, "")}${stamp}${random}`;
+    case "CARD":
+    default:
+      return `CARD${stamp}${random}`;
+  }
+}
+
 /** Trip totals for the Trips page summary strip. */
 export async function getBookingStats(userId: string) {
   const bookings = await prisma.booking.findMany({
@@ -175,6 +253,8 @@ export async function getBookingStats(userId: string) {
 
   return {
     total: bookings.length,
+    /** Awaiting checkout — surfaced as a "去支付" call to action. */
+    pending: bookings.filter((b) => b.status === "PENDING").length,
     upcoming: active.filter((b) => b.checkIn.getTime() >= today.getTime()).length,
     completed: active.filter((b) => b.checkIn.getTime() < today.getTime()).length,
     totalSpend: active.reduce((sum, b) => sum + b.totalPrice, 0),

@@ -229,6 +229,10 @@ async function main() {
   // ---------------------------------------------------------------- bookings
   console.log("\n— bookings / trips");
 
+  // Every booking this suite creates is cancelled at the end, so repeated runs
+  // do not collide on the same dates (PENDING/CONFIRMED holds block them).
+  const createdBookingIds = [];
+
   const checkIn = addDays(40);
   const checkOut = addDays(45);
   const nights = 5;
@@ -240,6 +244,7 @@ async function main() {
   check("create booking -> 201", booking.status === 201, `got ${booking.status}: ${JSON.stringify(booking.body?.error)}`);
 
   const b = booking.body?.data?.booking;
+  if (b?.id) createdBookingIds.push(b.id);
   if (b) {
     check("nights computed from dates", b.nights === nights, `got ${b.nights}`);
     check(
@@ -253,6 +258,8 @@ async function main() {
       `${b.totalPrice} vs ${b.roomPrice + b.cleaningFee + b.serviceFee}`,
     );
     check("booking has a status label", typeof b.statusLabel === "string" && b.statusLabel.length > 0);
+    check("new booking starts PENDING (awaiting payment)", b.status === "PENDING", b.status);
+    check("new booking is not marked paid", b.isPaid === false);
   }
 
   const overlap = await alice.request("/api/bookings", {
@@ -266,6 +273,7 @@ async function main() {
     body: { listingId: items[0].id, checkIn: addDays(60), checkOut: addDays(62), guests: 2 },
   });
   check("non-overlapping dates -> 201", nonOverlap.status === 201, `got ${nonOverlap.status}`);
+  if (nonOverlap.body?.data?.booking?.id) createdBookingIds.push(nonOverlap.body.data.booking.id);
 
   const tooManyGuests = await alice.request("/api/bookings", {
     method: "POST",
@@ -295,6 +303,111 @@ async function main() {
 
   const cancelAgain = await alice.request(`/api/bookings/${b.id}`, { method: "DELETE" });
   check("cancelling twice -> 409", cancelAgain.status === 409, `got ${cancelAgain.status}`);
+
+  // ---------------------------------------------------------------- payments
+  console.log("\n— payments (simulated checkout)");
+
+  const payable = await alice.request("/api/bookings", {
+    method: "POST",
+    body: { listingId: items[0].id, checkIn: addDays(100), checkOut: addDays(103), guests: 3 },
+  });
+  check("checkout booking created -> 201", payable.status === 201, `got ${payable.status}`);
+  const payableId = payable.body?.data?.booking?.id;
+  if (payableId) createdBookingIds.push(payableId);
+  const payableTotal = payable.body?.data?.booking?.totalPrice;
+  check("checkout booking is PENDING", payable.body?.data?.booking?.status === "PENDING");
+  check("checkout booking has no trade number yet", !payable.body?.data?.booking?.paymentTradeNo);
+
+  const paymentPage = await alice.request(`/payment/${payableId}`, {});
+  // The page is a browser route; a non-HTML fetch returns 200 for signed-in owners.
+  check("payment page is reachable for the owner", paymentPage.status === 200, `got ${paymentPage.status}`);
+
+  const badMethod = await alice.request(`/api/bookings/${payableId}/pay`, {
+    method: "POST",
+    body: { method: "BITCOIN" },
+  });
+  check("unsupported payment method -> 400", badMethod.status === 400, `got ${badMethod.status}`);
+
+  const anonPay = await createClient().request(`/api/bookings/${payableId}/pay`, {
+    method: "POST",
+    body: { method: "WECHAT" },
+  });
+  check("paying without a session -> 401", anonPay.status === 401, `got ${anonPay.status}`);
+
+  const unknownPay = await alice.request("/api/bookings/does-not-exist/pay", {
+    method: "POST",
+    body: { method: "WECHAT" },
+  });
+  check("paying an unknown booking -> 404", unknownPay.status === 404, `got ${unknownPay.status}`);
+
+  const wechatPay = await alice.request(`/api/bookings/${payableId}/pay`, {
+    method: "POST",
+    body: { method: "WECHAT" },
+  });
+  check("pay with WeChat -> 200", wechatPay.status === 200, `got ${wechatPay.status}`);
+
+  const paidBooking = wechatPay.body?.data?.booking;
+  check("booking becomes CONFIRMED after payment", paidBooking?.status === "CONFIRMED", paidBooking?.status);
+  check("booking records isPaid", paidBooking?.isPaid === true);
+  check("booking records the payment method", paidBooking?.paymentMethod === "WECHAT");
+  check("payment method has a Chinese label", paidBooking?.paymentMethodLabel === "微信支付",
+    paidBooking?.paymentMethodLabel);
+  check("booking records a trade number", typeof paidBooking?.paymentTradeNo === "string" &&
+    payableId !== null && (paidBooking?.paymentTradeNo ?? "").length >= 10,
+    paidBooking?.paymentTradeNo);
+  check("booking records paidAt", Boolean(paidBooking?.paidAt));
+  check("amount is unchanged by payment", paidBooking?.totalPrice === payableTotal,
+    `${paidBooking?.totalPrice} vs ${payableTotal}`);
+
+  const payTwice = await alice.request(`/api/bookings/${payableId}/pay`, {
+    method: "POST",
+    body: { method: "ALIPAY" },
+  });
+  check("paying twice -> 409", payTwice.status === 409, `got ${payTwice.status}`);
+
+  const paidCancel = await alice.request(`/api/bookings/${payableId}`, { method: "DELETE" });
+  check("a paid booking can still be cancelled", paidCancel.status === 200, `got ${paidCancel.status}`);
+
+  const payCancelled = await alice.request(`/api/bookings/${payableId}/pay`, {
+    method: "POST",
+    body: { method: "CARD" },
+  });
+  check("paying a cancelled booking -> 409", payCancelled.status === 409, `got ${payCancelled.status}`);
+
+  // Alipay + card paths on a fresh order.
+  const secondOrder = await alice.request("/api/bookings", {
+    method: "POST",
+    body: { listingId: items[0].id, checkIn: addDays(120), checkOut: addDays(122), guests: 2 },
+  });
+  const secondId = secondOrder.body?.data?.booking?.id;
+  if (secondId) createdBookingIds.push(secondId);
+  const alipayPay = await alice.request(`/api/bookings/${secondId}/pay`, {
+    method: "POST",
+    body: { method: "ALIPAY" },
+  });
+  check("pay with Alipay -> 200", alipayPay.status === 200, `got ${alipayPay.status}`);
+  check("Alipay label recorded", alipayPay.body?.data?.booking?.paymentMethodLabel === "支付宝");
+
+  const thirdOrder = await alice.request("/api/bookings", {
+    method: "POST",
+    body: { listingId: items[0].id, checkIn: addDays(140), checkOut: addDays(141), guests: 2 },
+  });
+  const thirdId = thirdOrder.body?.data?.booking?.id;
+  if (thirdId) createdBookingIds.push(thirdId);
+  const cardPay = await alice.request(`/api/bookings/${thirdId}/pay`, {
+    method: "POST",
+    body: { method: "CARD" },
+  });
+  check("pay with bank card -> 200", cardPay.status === 200, `got ${cardPay.status}`);
+  check("card label recorded", cardPay.body?.data?.booking?.paymentMethodLabel === "银行卡");
+  check("card trade number is prefixed", String(cardPay.body?.data?.booking?.paymentTradeNo ?? "").startsWith("CARD"),
+    cardPay.body?.data?.booking?.paymentTradeNo);
+
+  const tripsAfterPay = await alice.request("/api/bookings");
+  const paidInList = (tripsAfterPay.body?.data?.bookings ?? []).find((x) => x.id === payableId);
+  check("paid order is reflected in the trips list", paidInList?.isPaid === true);
+  check("stats expose a pending counter", typeof tripsAfterPay.body?.data?.stats?.pending === "number",
+    String(tripsAfterPay.body?.data?.stats?.pending));
 
   // ------------------------------------------------- cross-user isolation
   console.log("\n— cross-user isolation (the security-critical part)");
@@ -334,11 +447,39 @@ async function main() {
   check("user B cannot cancel user A's booking", bobCancelsAliceBooking.status === 403,
     `got ${bobCancelsAliceBooking.status}`);
 
+  const bobPaysAliceBooking = await bob.request(`/api/bookings/${aliceBookingId}/pay`, {
+    method: "POST",
+    body: { method: "WECHAT" },
+  });
+  check("user B cannot pay user A's booking", bobPaysAliceBooking.status === 403,
+    `got ${bobPaysAliceBooking.status}`);
+
+  const bobPaymentPage = await bob.request(`/payment/${aliceBookingId}`, {});
+  check("user B cannot open user A's checkout page", bobPaymentPage.status === 404,
+    `got ${bobPaymentPage.status}`);
+
   const bobTrips = await bob.request("/api/bookings");
   check("user B sees no bookings", (bobTrips.body?.data?.bookings ?? []).length === 0);
 
   // cleanup
   await alice.request(`/api/wishlists/${testWishlistId}`, { method: "DELETE" });
+
+  // ---------------------------------------------------------------- cleanup
+  console.log("\n— cleanup (release the dates this suite held)");
+
+  for (const id of createdBookingIds) {
+    await alice.request(`/api/bookings/${id}`, { method: "DELETE" });
+  }
+
+  const afterCleanup = await alice.request("/api/bookings");
+  const stillHolding = (afterCleanup.body?.data?.bookings ?? []).filter(
+    (booking) => createdBookingIds.includes(booking.id) && booking.status !== "CANCELLED",
+  );
+  check(
+    "every booking created by this suite was released",
+    stillHolding.length === 0,
+    stillHolding.map((booking) => booking.status).join(","),
+  );
 
   // ---------------------------------------------------------------- logout
   console.log("\n— logout");

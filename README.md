@@ -19,8 +19,22 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 | 业务链 | 流程 |
 | --- | --- |
 | **住宿平台** | 首页 → 搜索 → 房源列表 → 房源详情 → 收藏 → 心愿单 |
-| **预订系统** | 房源 → 日期/人数 → 价格计算 → 确认预订 → 生成订单 → Trips |
+| **预订系统** | 房源 → 日期/人数 → 价格计算 → 确认预订 → 生成订单 → **收银台支付** → Trips |
 | **AI Agent** | 自然语言需求 → LLM → Tool Calling → Service → PostgreSQL → 返回真实数据 → UI 展示/执行操作 |
+
+### 收银台（模拟支付）
+
+订单创建后状态为**待支付（PENDING）**，并自动跳转到 `/payment/[bookingId]` 收银台，提供三种支付方式：
+
+| 支付方式 | 页面内容 |
+| --- | --- |
+| **微信支付** | 品牌绿配色、演示二维码、15 分钟倒计时与「已失效」刷新 |
+| **支付宝** | 品牌蓝配色、演示二维码、同样的倒计时逻辑 |
+| **银行卡** | 卡片预览（随卡号实时切换卡种与配色）+ 卡号 / 有效期 / 安全码 / 持卡人表单，卡号用 **Luhn 算法**做前端校验 |
+
+支付成功后订单转为**已确认（CONFIRMED）**，并记录支付方式、支付时间与模拟交易号，成功页会完整展示这些信息；Trips 页面则显示「待支付」标签与「去支付」入口。
+
+> **不接入真实支付网关**：二维码是**不可扫描的装饰图案**（既然没有网关，生成一个真码反而会误导用户）；卡号仅在前端做格式校验，**不会被发送或存储**。页面上明确标注"演示环境，不产生真实扣款"。
 
 ### AI Agent 特色
 
@@ -172,7 +186,7 @@ node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
 | 脚本 | 结果 |
 | --- | --- |
 | `verify-db.ts` | ✅ ALL CHECKS PASSED |
-| `smoke-api.mjs` | ✅ **63 / 63** |
+| `smoke-api.mjs` | ✅ **93 / 93** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `smoke-agent.mjs` | ✅ **26 / 26** |
@@ -194,7 +208,7 @@ travel-agent/
 │   └── api/                      # Route Handlers
 │       ├── listings/             #   GET 搜索 / GET 详情
 │       ├── wishlists/            #   心愿单 CRUD + items 增删
-│       ├── bookings/             #   订单创建 / 列表 / 取消
+│       ├── bookings/             #   订单创建 / 列表 / 取消 / [id]/pay 模拟支付
 │       ├── auth/                 #   register / login / logout / session
 │       ├── saved/                #   当前用户已收藏的房源 id
 │       ├── meta/                 #   目的地、设施字典、价格区间
@@ -205,6 +219,8 @@ travel-agent/
 │   ├── search-bar.tsx            #   目的地 + 日期区间 + 人数
 │   ├── filter-panel.tsx          #   价格滑块 / 类型 / 设施 / 人数
 │   ├── booking-widget.tsx        #   预订面板 + 价格明细
+│   ├── payment-panel.tsx         #   收银台：三种支付方式 + 订单摘要 + 成功页
+│   ├── qr-placeholder.tsx        #   确定性伪二维码 SVG（不可扫描，仅装饰）
 │   ├── listing-gallery.tsx       #   图片画廊 + 灯箱
 │   ├── agent-drawer.tsx          #   悬浮按钮 + 侧边抽屉
 │   ├── agent-chat.tsx            #   对话窗口（流式、Tool 状态、上传）
@@ -336,7 +352,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 ## 七、数据库设计
 
-8 张表，含枚举、外键、唯一约束与索引：
+8 张表，含枚举、外键、唯一约束与索引。原生枚举三个：`PropertyType`、`BookingStatus`（PENDING / CONFIRMED / CANCELLED）、`PaymentMethod`（WECHAT / ALIPAY / CARD）。
 
 | 表 | 关键字段 | 约束 / 索引 |
 | --- | --- | --- |
@@ -347,9 +363,20 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | `ListingAmenity` | listingId, amenityId | 复合主键（多对多） |
 | `Wishlist` | name, userId | `(userId, name)` 唯一 —— 同一用户不能有同名心愿单 |
 | `WishlistItem` | wishlistId, listingId | `(wishlistId, listingId)` 唯一 —— 同一房源不能重复收藏 |
-| `Booking` | userId, listingId, checkIn, checkOut, guests, nights, roomPrice, cleaningFee, serviceFee, totalPrice, status | `(listingId, checkIn, checkOut)` 索引用于可用性查询 |
+| `Booking` | userId, listingId, checkIn, checkOut, guests, nights, roomPrice, cleaningFee, serviceFee, totalPrice, status, **paymentMethod, paidAt, paymentTradeNo** | `(listingId, checkIn, checkOut)` 索引用于可用性查询 |
 
 关系：`User 1—N Listing`（房东）、`User 1—N Wishlist`、`Wishlist N—M Listing`（经 `WishlistItem`）、`Listing N—M Amenity`（经 `ListingAmenity`）、`User 1—N Booking`。
+
+### 订单状态流转
+
+```
+创建订单 ──► PENDING（待支付，锁定日期）
+                │
+        支付成功 ├──► CONFIRMED（已确认）
+        取消订单 └──► CANCELLED（已取消，日期释放）
+```
+
+可用性查询会把 **PENDING 与 CONFIRMED 都视为占用**，所以下单即锁房，避免两个人同时支付同一段日期。`payBooking` 会重新校验归属、是否已取消、是否已支付，因此重复支付返回 409、支付他人订单返回 403。
 
 ### 价格计算
 
@@ -444,6 +471,10 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 | 决策 | 理由 |
 | --- | --- |
+| 支付走"模拟但真实落库" | 需求明确不接入真实支付。但把**状态机**（PENDING → CONFIRMED）与支付方式、支付时间、交易号真正写进数据库，业务链路依然完整，演示时也能看到订单状态确实变了——比一个纯静态页面更有说服力 |
+| 二维码用装饰图案而非真码 | 既然没有网关，生成一个**可扫描**的二维码会让用户以为真能付款，属于误导。所以画的是不可扫描的装饰图案，并在旁边明确标注"演示用，不可真实支付" |
+| 银行卡号只在前端校验 | 用 Luhn 算法做前端格式校验，卡号**不发送、不存储**，演示项目不承担任何卡数据责任 |
+| 下单即锁房（PENDING 也占用日期） | 否则两人可同时支付同一段日期。可用性查询同时排除 PENDING 与 CONFIRMED |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
 | 价格计算抽成共享模块 | 避免"前端显示一个数、后端存另一个数"这类经典 bug |
@@ -463,6 +494,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 ### 已知限制
 
 - **模型必须支持 function calling**。`deepseek-chat` 已验证可用；`deepseek-reasoner` 不支持工具调用，换成它 Agent 会退化。为此提供了 `node scripts/verify-ai.mjs`，改配置后先跑一次即可确认。
+- **待支付订单不会自动过期**。PENDING 会一直占用日期；生产环境应加超时释放（例如 15 分钟后自动取消）。收银台上的倒计时只是前端提示，不改变后端状态。
 - 会话记忆是**进程内**的，重启服务即清空；生产环境应换成 Redis。
 - 未接入真实支付（需求明确不要求）。
 - `@prisma/adapter-pg` 会打印一条 `pg` 的弃用警告（`client.query() when the client is already executing a query`），来自依赖内部，不影响功能。
@@ -478,7 +510,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | ③ | 进入房源详情 | 图片画廊 + 灯箱、设施、房东、**价格明细（房费+清洁费+服务费）** |
 | ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234` |
 | ⑤ | 收藏房源 | 爱心 → 选择/新建心愿单 → Toast 反馈 |
-| ⑥ | 完成一次预订 | 选日期人数 → 价格实时计算 → 确认 → 跳转 Trips |
+| ⑥ | 完成一次预订并支付 | 选日期人数 → 价格实时计算 → 确认 → **跳转收银台** → 依次展示微信 / 支付宝 / 银行卡 → 模拟支付成功 |
 | ⑦ | 打开 AI 助手，输入自然语言需求 | 流式输出 + **"正在搜索房源…"→"✓ 找到 N 个房源"** 工具执行状态 + 房源卡片 |
 | ⑧ | "帮我选三个" | 调用 `recommendListings`，返回带推荐理由的 3 张卡片 |
 | ⑨ | "比较刚才这三个" | 调用 `compareListings`，输出结构化对比与结论 |
@@ -498,6 +530,6 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 5 个可复现脚本共 **134 项断言**（63 + 45 + 26 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 5 个可复现脚本共 **164 项断言**（93 + 45 + 26 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

@@ -1,7 +1,6 @@
 "use client";
 
 import { Compass, Heart, Loader2, LogOut, Menu, Route, Search, Sparkles, User } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";

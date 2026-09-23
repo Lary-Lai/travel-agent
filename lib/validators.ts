@@ -162,6 +162,13 @@ export const createBookingSchema = z.object({
   guests: z.coerce.number().int().min(1, "入住人数至少 1 人").max(MAX_GUESTS),
 });
 
+/** Simulated checkout: which channel the user picked. */
+export const paymentMethodSchema = z.enum(["WECHAT", "ALIPAY", "CARD"]);
+
+export const payBookingSchema = z.object({
+  method: paymentMethodSchema,
+});
+
 export const createWishlistItemSchema = z.object({
   wishlistId: z.string().trim().min(1).optional(),
   wishlistName: z.string().trim().min(1).max(60).optional(),

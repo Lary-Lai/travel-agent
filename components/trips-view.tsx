@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, LogIn, MapPin, Route, Users } from "lucide-react";
+import { CalendarDays, CreditCard, LogIn, MapPin, Route, Users } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
@@ -91,9 +91,10 @@ export function TripsView() {
 
       {/* stats */}
       {stats && stats.total > 0 ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {[
             { label: "全部订单", value: String(stats.total) },
+            { label: "待支付", value: String(stats.pending) },
             { label: "即将出行", value: String(stats.upcoming) },
             { label: "累计晚数", value: `${stats.totalNights} 晚` },
             { label: "总支出", value: formatCurrency(stats.totalSpend) },
@@ -132,6 +133,7 @@ export function TripsView() {
         <div className="space-y-5">
           {bookings.map((booking) => {
             const isCancelled = booking.status === "CANCELLED";
+            const isPending = booking.status === "PENDING";
             const isPast = new Date(booking.checkIn) < todayUtc();
 
             return (
@@ -170,10 +172,26 @@ export function TripsView() {
                       </p>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge variant={isCancelled ? "outline" : isPast ? "secondary" : "default"}>
-                        {isCancelled ? "已取消" : isPast ? "已完成" : booking.statusLabel}
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <Badge
+                        variant={isCancelled ? "outline" : isPending || isPast ? "secondary" : "default"}
+                        className={cn(
+                          isPending && "border-amber-500/30 bg-amber-500/15 text-amber-700",
+                        )}
+                      >
+                        {isCancelled
+                          ? "已取消"
+                          : isPending
+                            ? "待支付"
+                            : isPast
+                              ? "已完成"
+                              : booking.statusLabel}
                       </Badge>
+                      {booking.isPaid && booking.paymentMethodLabel ? (
+                        <span className="text-muted-foreground text-[11px]">
+                          已通过 {booking.paymentMethodLabel} 支付
+                        </span>
+                      ) : null}
                     </div>
                   </div>
 
@@ -218,17 +236,28 @@ export function TripsView() {
                       </div>
                     </dl>
 
-                    {!isCancelled ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setPendingCancel({ id: booking.id, title: booking.listing.title })
-                        }
-                      >
-                        取消订单
-                      </Button>
-                    ) : null}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isPending ? (
+                        <Button size="sm" asChild className="gap-1.5">
+                          <Link href={`/payment/${booking.id}`}>
+                            <CreditCard className="size-3.5" />
+                            去支付
+                          </Link>
+                        </Button>
+                      ) : null}
+
+                      {!isCancelled ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setPendingCancel({ id: booking.id, title: booking.listing.title })
+                          }
+                        >
+                          取消订单
+                        </Button>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </article>

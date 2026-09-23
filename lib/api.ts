@@ -10,6 +10,7 @@ import type {
   ListingDetail,
   ListingSearchInput,
   ListingSearchResult,
+  PaymentMethodValue,
   SessionUserDto,
   WishlistDto,
 } from "@/types";
@@ -152,6 +153,7 @@ export const api = {
       bookings: BookingDto[];
       stats: {
         total: number;
+        pending: number;
         upcoming: number;
         completed: number;
         totalSpend: number;
@@ -159,10 +161,20 @@ export const api = {
       };
     }>("/api/bookings"),
 
+  getBooking: (id: string) =>
+    request<{ booking: BookingDto }>(`/api/bookings/${encodeURIComponent(id)}`),
+
   createBooking: (input: { listingId: string; checkIn: string; checkOut: string; guests: number }) =>
     request<{ booking: BookingDto }>("/api/bookings", {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+
+  /** Simulated checkout — no real gateway. */
+  payBooking: (id: string, method: PaymentMethodValue) =>
+    request<{ booking: BookingDto }>(`/api/bookings/${encodeURIComponent(id)}/pay`, {
+      method: "POST",
+      body: JSON.stringify({ method }),
     }),
 
   cancelBooking: (id: string) =>

@@ -41,7 +41,7 @@ const EXEC_OPTIONS = { toolCallId: "verify", messages: [] };
 async function main() {
   const { prisma } = await import("../lib/db");
   const { createAgentTools } = await import("../agent/tools");
-  const { getSession, rememberListings } = await import("../agent/session");
+  const { getSession } = await import("../agent/session");
 
   const demo = await prisma.user.findUniqueOrThrow({
     where: { email: "demo@travel-agent.dev" },

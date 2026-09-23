@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { useQuery } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 
 import { useAgentStore } from "@/lib/store";
 
@@ -32,20 +32,22 @@ const AgentContext = createContext<AgentContextValue | null>(null);
  * the user closes the panel to browse the wishlist and reopens it.
  */
 export function AgentProvider({ children }: { children: React.ReactNode }) {
-  // Stable per-conversation id so the server can keep referential memory
-  // ("the first one you recommended").
-  const sessionId = useMemo(
-    () => `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    [],
-  );
-
+  // Conversation id lives in the store, created lazily on first send: it must
+  // not be generated during render (Date.now/Math.random are impure), and useId()
+  // would be wrong because it derives from tree position, which would make two
+  // different visitors collide in the server's per-conversation memory.
   const consumePrompt = useAgentStore((state) => state.consumePrompt);
   const open = useAgentStore((state) => state.open);
   const autoSentRef = useRef(false);
 
   const transport = useMemo(
-    () => new DefaultChatTransport({ api: "/api/agent", body: { sessionId } }),
-    [sessionId],
+    () =>
+      new DefaultChatTransport({
+        api: "/api/agent",
+        // Resolved per request, outside render, once the id is needed.
+        body: () => ({ sessionId: useAgentStore.getState().ensureSessionId() }),
+      }),
+    [],
   );
 
   const { messages, sendMessage, status, error, stop, setMessages } = useChat({ transport });

@@ -35,9 +35,26 @@ export const PROPERTY_TYPE_ICONS: Record<PropertyTypeValue, string> = {
 };
 
 export const BOOKING_STATUS_LABELS: Record<BookingStatusValue, string> = {
-  PENDING: "待确认",
+  PENDING: "待支付",
   CONFIRMED: "已确认",
   CANCELLED: "已取消",
+};
+
+/** Checkout channels shown on the payment page. */
+export type PaymentMethodValue = "WECHAT" | "ALIPAY" | "CARD";
+
+export const PAYMENT_METHODS: PaymentMethodValue[] = ["WECHAT", "ALIPAY", "CARD"];
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethodValue, string> = {
+  WECHAT: "微信支付",
+  ALIPAY: "支付宝",
+  CARD: "银行卡",
+};
+
+export const PAYMENT_METHOD_HINTS: Record<PaymentMethodValue, string> = {
+  WECHAT: "打开微信扫一扫，扫描二维码完成支付",
+  ALIPAY: "打开支付宝扫一扫，扫描二维码完成支付",
+  CARD: "支持 Visa / Mastercard / 银联借记卡与信用卡",
 };
 
 export const SORT_OPTIONS = ["recommended", "price_asc", "price_desc", "rating_desc"] as const;
@@ -145,6 +162,12 @@ export type BookingDto = {
   serviceFee: number;
   totalPrice: number;
   createdAt: string;
+  /** Simulated payment state (no real gateway is integrated). */
+  paymentMethod: PaymentMethodValue | null;
+  paymentMethodLabel: string | null;
+  paidAt: string | null;
+  paymentTradeNo: string | null;
+  isPaid: boolean;
   listing: ListingSummary;
 };
 

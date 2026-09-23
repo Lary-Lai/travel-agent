@@ -13,6 +13,14 @@ type AgentState = {
   open: boolean;
   /** A prompt the Agent should auto-send when it next opens (used by CTA buttons). */
   pendingPrompt: string | null;
+  /**
+   * Conversation id, created lazily on first send. Kept here (rather than in a
+   * ref during render) because Date.now/Math.random are impure and must not run
+   * during render. Living in the store also means closing and reopening the
+   * drawer continues the same conversation.
+   */
+  sessionId: string | null;
+  ensureSessionId: () => string;
   setOpen: (open: boolean) => void;
   toggle: () => void;
   openWithPrompt: (prompt: string) => void;
@@ -22,6 +30,14 @@ type AgentState = {
 export const useAgentStore = create<AgentState>((set, get) => ({
   open: false,
   pendingPrompt: null,
+  sessionId: null,
+  ensureSessionId: () => {
+    const existing = get().sessionId;
+    if (existing) return existing;
+    const created = `agent-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    set({ sessionId: created });
+    return created;
+  },
   setOpen: (open) => set({ open }),
   toggle: () => set((state) => ({ open: !state.open })),
   openWithPrompt: (prompt) => set({ open: true, pendingPrompt: prompt }),

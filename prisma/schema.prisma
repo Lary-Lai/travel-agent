@@ -31,6 +31,14 @@ enum BookingStatus {
   CANCELLED
 }
 
+/// Payment channels offered at checkout. No real gateway is integrated — the
+/// demo marks a booking as paid through `payBooking`.
+enum PaymentMethod {
+  WECHAT
+  ALIPAY
+  CARD
+}
+
 // ---------------------------------------------------------------- models
 
 model User {
@@ -159,8 +167,15 @@ model Booking {
   cleaningFee Int
   serviceFee  Int
   totalPrice  Int
-  status      BookingStatus @default(CONFIRMED)
+  /// New bookings start PENDING and become CONFIRMED once checkout is paid.
+  status      BookingStatus @default(PENDING)
   createdAt   DateTime      @default(now())
+
+  // ---- simulated payment (no real gateway) ----
+  paymentMethod  PaymentMethod?
+  paidAt         DateTime?
+  /// Simulated transaction reference, shown on the confirmation screen.
+  paymentTradeNo String?
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
