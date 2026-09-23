@@ -129,3 +129,81 @@
     @apply font-sans;
   }
 }
+
+/**
+ * Layered gradient surfaces.
+ *
+ * Depth here comes from stacking a few very soft radial washes over a base
+ * gradient, plus a hairline highlight along the top edge — not from heavy
+ * drop shadows or decorative blobs. Everything stays low-contrast so the page
+ * still reads as flat, minimal UI; the gradients are felt more than seen.
+ *
+ * Colors are mixed from the theme tokens (`--primary`, `--foreground`) with
+ * `color-mix`, so both themes get a correctly-tuned wash without duplicating
+ * every rule for dark mode.
+ */
+@layer utilities {
+  /* Hero: brand warmth bleeding in from the corners, fading to the page. */
+  .surface-hero {
+    background-image:
+      radial-gradient(
+        62rem 34rem at 6% -14%,
+        color-mix(in oklab, var(--primary) 22%, transparent),
+        transparent 62%
+      ),
+      radial-gradient(
+        48rem 28rem at 94% 0%,
+        color-mix(in oklab, var(--primary) 13%, transparent),
+        transparent 64%
+      ),
+      radial-gradient(
+        46rem 26rem at 50% 122%,
+        color-mix(in oklab, var(--primary) 9%, transparent),
+        transparent 62%
+      );
+  }
+
+  /* A faint vertical wash that reads as a light source above a card. */
+  .surface-sheen {
+    background-image: linear-gradient(
+      to bottom,
+      color-mix(in oklab, var(--foreground) 5%, transparent),
+      transparent 45%
+    );
+  }
+
+  /* Hairline top highlight — the cheapest way to lift a flat card. */
+  .edge-light {
+    box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 60%, transparent);
+  }
+  .dark .edge-light {
+    box-shadow: inset 0 1px 0 0 color-mix(in oklab, white 9%, transparent);
+  }
+
+  /* Faint grid, faded out with a mask — adds plane without adding noise. */
+  .grid-fade {
+    background-image:
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--foreground) 7%, transparent) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        to bottom,
+        color-mix(in oklab, var(--foreground) 7%, transparent) 1px,
+        transparent 1px
+      );
+    background-size: 2.75rem 2.75rem;
+    mask-image: radial-gradient(70% 65% at 50% 25%, black, transparent 78%);
+  }
+
+  /* Soft brand glow used sparingly behind focal elements. */
+  .glow-primary {
+    background-image: radial-gradient(
+      60% 60% at 50% 50%,
+      color-mix(in oklab, var(--primary) 30%, transparent),
+      transparent 70%
+    );
+    filter: blur(3rem);
+  }
+}

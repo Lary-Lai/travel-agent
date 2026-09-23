@@ -89,8 +89,15 @@ export function SearchBar({
         submit();
       }}
       className={cn(
-        "bg-background border-border flex w-full flex-col gap-2 border p-2 shadow-lg shadow-black/5 md:flex-row md:items-center md:gap-0 md:rounded-full",
-        isHero ? "rounded-3xl" : "rounded-2xl",
+        "bg-background border-border flex w-full flex-col gap-2 border p-2 md:flex-row md:items-center md:gap-0 md:rounded-full",
+        // The hero variant sits on a gradient, so it needs its own lift. In dark
+        // mode the hero's warm glow makes the backdrop behind the card *lighter*
+        // than the neutral background, so stepping only to `card` left the two
+        // nearly equal. `secondary` (0.269) clears the glow's tinted backdrop,
+        // and the ring gives the edge a defined line.
+        isHero
+          ? "edge-light rounded-3xl shadow-xl shadow-black/10 ring-1 ring-black/5 dark:bg-secondary dark:shadow-black/50 dark:ring-white/20"
+          : "rounded-2xl shadow-lg shadow-black/5",
         className,
       )}
     >

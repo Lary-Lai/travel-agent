@@ -80,7 +80,33 @@ async function main() {
 
   const meta = await anon.request("/api/meta");
   check("GET /api/meta returns 200", meta.status === 200);
-  check("meta has 6 destinations", meta.body?.data?.cities?.length === 6, `got ${meta.body?.data?.cities?.length}`);
+  check("meta has 10 destinations", meta.body?.data?.cities?.length === 10, `got ${meta.body?.data?.cities?.length}`);
+
+  // A city query must not widen to its country: findCity("Kyoto") resolves to a
+  // city whose country is Japan, and the country match used to be added
+  // unconditionally, so "Kyoto" also returned every Tokyo listing.
+  const kyoto = await anon.request("/api/listings?location=Kyoto&pageSize=100");
+  check(
+    "a city query returns only that city",
+    (kyoto.body?.data?.items ?? []).every((i) => i.city === "Kyoto"),
+    [...new Set((kyoto.body?.data?.items ?? []).map((i) => i.city))].join("/"),
+  );
+  const japan = await anon.request("/api/listings?location=Japan&pageSize=100");
+  const japanCities = [...new Set((japan.body?.data?.items ?? []).map((i) => i.city))].sort();
+  check(
+    "a country query still spans the country",
+    japanCities.join("/") === "Kyoto/Tokyo",
+    japanCities.join("/"),
+  );
+  check(
+    "the Chinese country name behaves the same",
+    (await anon.request("/api/listings?location=日本&pageSize=100")).body?.data?.total ===
+      japan.body?.data?.total,
+  );
+  check(
+    "the new cities are searchable",
+    (await anon.request("/api/listings?location=Barcelona&pageSize=1")).body?.data?.total === 18,
+  );
   check("meta has amenity groups", (meta.body?.data?.amenities?.length ?? 0) > 0);
   check(
     "meta price bounds are sane",
@@ -196,10 +222,36 @@ async function main() {
     new Set(gallery.map((g) => g.caption)).size === gallery.length,
     `unique=${new Set(gallery.map((g) => g.caption)).size} of ${gallery.length}`,
   );
+  // Images are bundled under /listings/ (see scripts/fetch-listing-images.mjs)
+  // with a remote URL as the fallback, so both forms are valid references.
   check(
-    "every gallery image has a url",
-    gallery.every((g) => typeof g.url === "string" && g.url.startsWith("http")),
+    "every gallery image has a usable url",
+    gallery.every(
+      (g) =>
+        typeof g.url === "string" &&
+        (g.url.startsWith("/listings/") || g.url.startsWith("http")),
+    ),
+    JSON.stringify(gallery.map((g) => g.url)),
   );
+  check(
+    "gallery images are bundled locally (not fetched from a third party)",
+    gallery.length > 0 && gallery.every((g) => g.url.startsWith("/listings/")),
+    `${gallery.filter((g) => g.url.startsWith("/listings/")).length}/${gallery.length} local`,
+  );
+
+  // The regression this suite exists to catch: a URL that is well-formed but
+  // 404s, which renders as a placeholder card. Actually request one.
+  const firstImage = gallery[0]?.url;
+  if (firstImage) {
+    const imageStatus = await fetch(`${BASE}${firstImage}`)
+      .then((r) => r.status)
+      .catch(() => 0);
+    check(
+      "a gallery image really loads over HTTP",
+      imageStatus === 200,
+      `${firstImage} -> ${imageStatus}`,
+    );
+  }
   check(
     "every amenity explains itself",
     detailAmenities.length > 0 &&

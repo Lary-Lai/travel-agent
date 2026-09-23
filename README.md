@@ -12,7 +12,7 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 面向中文用户的短租/住宿预订平台。用户搜索房源、查看详情、计算价格、完成预订、按主题收藏；AI Agent 则用自然语言接管这些操作。
 
-平台内置 **6 座城市 · 72 套真实结构化房源**（东京、巴黎、伦敦、纽约、新加坡、首尔），数据全部来自数据库，前端没有任何硬编码的房源数据。
+平台内置 **10 座城市 · 180 套真实结构化房源**（东京、巴黎、伦敦、纽约、新加坡、首尔、京都、曼谷、巴塞罗那、悉尼），数据全部来自数据库，前端没有任何硬编码的房源数据。
 
 ### 三条核心业务链
 
@@ -80,6 +80,32 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 > 演示使用图库图片，因此角度标签描述的是「这张图代表的视角」，而不是对真实房源的核验拍摄。
 
+### 房源图片：本地打包，不再依赖图库 CDN
+
+**结论先行：图片从「经常加载不出来」变成了中位数 3–6 毫秒。**
+
+原来的做法是让每个 `<Image>` 去 `images.unsplash.com` 取图，再经过 Next 的图片优化器。问题出在优化器给上游的超时只有约 **7 秒**，而这台机器到 `images.unsplash.com` 的连接极不稳定——实测**单张 148KB 的图花了 114 秒**，并且大约**三分之一的请求在 10 秒左右直接失败**。超时的结果是优化器返回 **504**，卡片于是退化成占位块，页面看起来就像"一直转不出来"。
+
+修法不是在 Next 上调超时（7 秒之后再等 100 秒也没有意义），而是**把图从运行时依赖变成仓库里的静态资源**：
+
+- 种子里其实只有 **45 张不重复的照片**（在 180 套房源之间复用），所以只要下载一次
+- `npm run images:fetch` 把这 45 张图抓进 `public/listings/`，并写出 `manifest.json`
+- 种子读取 manifest：**本地有就用 `/listings/xxx.jpg`，没有才回退到远程 URL**——所以克隆下来不跑这一步也能用，只是慢
+- `next/image` 依旧按断点裁切，但读的是本地文件，**不再有上游请求**
+
+下载脚本是**可续跑**的（已有文件跳过）、带 4 次重试与退避、并发 3，并且**从 `prisma/seed.ts` 里解析 `PHOTO_IDS`**，所以照片清单只有一个来源，不会和种子脱节。
+
+实测对比（`node scripts/bench-images.mjs`，同一台机器）：
+
+| | 修复前 | 修复后 |
+| --- | --- | --- |
+| 成功返回 200 | 约 2/3，其余 **504** | **12 / 12** |
+| 单张耗时中位数 | 超时（约 7 秒后被中断） | **w=640 约 4ms；w=1080 约 3ms** |
+| 最慢一张 | 100 秒级 | **6 ms** |
+| 首次下载 45 张 | —— | 约 40 秒（共 7.1 MB） |
+
+`scripts/diagnose-images.mjs` 保留了当初的归因过程：它同时请求**上游原图**与 **`/_next/image`** 并给出三种互斥结论（上游 4xx/5xx、上游可达但超过 7 秒、上游正常而优化器失败），输出里明确写着 `The optimizer is fine. The failures are the upstream network path`。
+
 ### 界面与交互细节
 
 **夜间模式** —— 顶栏提供主题切换（浅色 / 深色 / 跟随系统），默认跟随系统，选择会持久化。基于 `next-themes` 切换 `<html>` 上的 `.dark` 类，与 `app/globals.css` 中的深色 token 对应。
@@ -93,6 +119,17 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 新注册的账号会用 `presetAvatarFor(seed)` 按邮箱做 FNV 哈希**确定性地**分配一个预设头像——同一个账号每次登录拿到的都是同一张，而不是每次随机变。种子脚本也会把历史遗留的 `pravatar` 头像一次性迁移到本地预设。
 
 **图片加载失败时居中显示说明文字** —— `components/safe-image.tsx` 统一接管了所有房源图片：`onError` 或 `src` 为空时，渲染一个占位块——居中的图标 + **居中的 alt 文字**（`absolute inset-0 flex flex-col items-center justify-center`）。此前是浏览器原生的裂图图标加一段左上角溢出的小字。已应用到房源卡片、详情页相册（4 处）、Agent 结果卡片、收银台、行程页与首页。
+
+### 首页的层次感：分层的渐变，而不是装饰
+
+首页做了「有层次、有立体感，但依然简约」的改造。做法是**叠加几层极低对比度的渐变**，而不是加大阴影或堆装饰元素——渐变是被"感觉到"的，不是被"看到"的：
+
+- **Hero** —— 三层柔和径向渐变从角落渗入品牌色，叠在一层被遮罩淡出的细网格之上，底部再有一道从搜索框背后向上渗出的光晕（`.glow-primary`，`blur(3rem)`）。此外只在顶部加了一道 1px 内高光（`.edge-light`）作为"受光面"。
+- **搜索框** —— 因为浮在渐变之上，单独给了一层更高的阴影 + 1px ring 来托起。**深色模式下特意抬到 `--secondary` 而不是 `--card`**：Hero 的暖色光晕会让它背后的区域比中性背景更亮，只抬到 `card`（0.205）时卡片和背景几乎等亮，实测对比度只有 1.07；抬到 `secondary`（0.269）后实测达到 **1.255**，边缘才真正立起来。
+- **房源类型卡片** —— 六个图标各配一组渐变色底（蓝 / 绿 / 橙 / 粉 / 紫 / 黄绿），加 `.surface-sheen` 的顶部受光与 hover 位移，用很小的成本做出"卡片是凸起的"。
+- **城市卡片** —— 图片上叠三段式黑色渐变遮罩，加 ring 与阴影。
+
+所有渐变都由主题 token 经 `color-mix()` 混出（`app/globals.css` 里的 `.surface-hero` / `.surface-sheen` / `.edge-light` / `.grid-fade` / `.glow-primary`），因此**浅色与深色模式自动各自成立**，不需要为深色再写一份规则。
 
 **价格区间的双输入框** —— 滑块两端新增了可手动输入的最小/最大价格输入框：
 
@@ -117,7 +154,7 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 ```
 GET /api/weather?city=Tokyo      → 单个城市
-GET /api/weather?all=1           → 全部 6 座城市
+GET /api/weather?all=1           → 全部 10 座城市
 ```
 
 ### 个人主页
@@ -264,13 +301,17 @@ npm run db:start
 # 3. 应用数据库迁移
 npx prisma migrate dev
 
-# 4. 生成演示数据（72 套房源 / 6 座城市 / 26 项设施）
+# 4. 生成演示数据（180 套房源 / 10 座城市 / 26 项设施）
 npx prisma db seed
 
 # 5. 生成 Prisma Client（迁移时通常已自动执行）
 npm run db:generate
 
-# 6. 启动开发服务器
+# 6. 下载房源图片到 public/listings/（约 7MB / 45 张，可续跑）
+#    不做这一步也能跑，但图片会走远程 CDN，可能很慢或加载失败
+npm run images:fetch
+
+# 7. 启动开发服务器
 npm run dev
 ```
 
@@ -279,6 +320,8 @@ npm run dev
 > **端口固定为 3001**（`next dev -p 3001`）。本机 3000 端口被另一个项目（`D:\project\expense reimbursement`）的 dev server 占用，固定端口可以避免两个项目互相抢占、URL 也不再来回变化。要改用其他端口，编辑 `package.json` 里的 `dev` / `start` 脚本即可。
 
 > 也可以一步完成第 2–4 步：`npm run setup`
+>
+> 第 6 步是可选的，但**强烈建议执行**：不下载的话每张房源图都要现场去 Unsplash 取，在这台机器上实测约三分之一的请求会超时（详见「房源图片：本地打包」一节）。图片已随仓库提交，所以 `git clone` 之后通常不需要再跑。
 
 #### 一键启动（Windows）
 
@@ -333,13 +376,15 @@ npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
 | `npm run db:psql -- "select 1"` | 执行一条 SQL（注意：该发行包不含 psql.exe，此命令走 `pg` 驱动） |
 | `npm run db:reset` | **删除**全部本地数据 |
 | `npm run db:seed` | 重新生成演示数据 |
+| `npm run images:fetch` | 下载房源图片到 `public/listings/`（可续跑；已有文件会跳过） |
+| `npm run avatars:make` | 重新生成 12 个内置预设头像 SVG |
 | `npm run db:studio` | 打开 Prisma Studio |
 
 ### 回归测试
 
 ```bash
 npx tsx scripts/verify-db.ts     # 数据库：枚举、CRUD、唯一约束、级联删除
-node scripts/smoke-api.mjs       # API：149 项断言，含跨用户越权测试（需先 npm run dev）
+node scripts/smoke-api.mjs       # API：155 项断言，含跨用户越权测试（需先 npm run dev）
 npx tsx scripts/verify-tools.ts  # Agent 工具：45 项断言，含真实写入校验
 node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function calling 能力
 node scripts/test-vision.mjs     # AI 端点：★是否支持图片输入（扫描件 OCR 的前提）
@@ -350,6 +395,7 @@ npx tsx scripts/verify-guests.ts        # 入住人数步进：17 项断言（�
 npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
 node scripts/diagnose-images.mjs # 诊断房源图片：区分"上游挂了 / 上游太慢 / 优化器坏了"
+node scripts/bench-images.mjs    # 实测图片加载耗时（中位数 / 最慢 / 失败数）
 node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
 node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试文件
 ```
@@ -359,7 +405,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | 脚本 | 结果 |
 | --- | --- |
 | `verify-db.ts` | ✅ ALL CHECKS PASSED |
-| `smoke-api.mjs` | ✅ **149 / 149** |
+| `smoke-api.mjs` | ✅ **155 / 155** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `test-vision.mjs` | ✅ 支持图片输入（远程 URL 与 data URI） |
@@ -368,6 +414,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `smoke-profile-fields.mjs` | ✅ **26 / 26** |
 | `verify-guests.ts` | ✅ **17 / 17** |
 | `verify-markdown.ts` | ✅ **21 / 21** |
+| `bench-images.mjs` | ✅ **12 / 12 张加载成功**，中位数 4ms |
 
 ---
 
@@ -464,7 +511,7 @@ travel-agent/
 │   ├── pricing.ts                # 价格计算（前后端共用同一模块）
 │   ├── refund.ts                 # 取消政策与退款金额计算（前后端共用同一模块）
 │   ├── format.ts                 # 货币 / 日期格式化
-│   ├── cities.ts                 # 城市元数据 + 中英文归一
+│   ├── cities.ts                 # 10 座城市元数据 + 中英文归一
 │   ├── amenities.ts              # 设施字典
 │   ├── avatars.ts                # 12 个内置预设头像 + 确定性分配 + 预设白名单
 │   ├── profile-options.ts        # 主页背景预设 + 芯片建议词 + 清洗与上限
@@ -474,7 +521,11 @@ travel-agent/
 │
 ├── types/index.ts                # 共享 DTO
 ├── scripts/                      # db.mjs / verify-db.ts / smoke-api.mjs / verify-tools.ts
-│                                 # smoke-agent.mjs / verify-ai.mjs / test-vision.mjs / inspect.ts …
+│                                 # smoke-agent.mjs / verify-ai.mjs / test-vision.mjs / inspect.ts
+│                                 # fetch-listing-images.mjs / diagnose-images.mjs / bench-images.mjs
+├── public/
+│   ├── avatars/                  # 12 个内置预设头像 SVG（由 make-avatars.mjs 生成）
+│   └── listings/                 # 45 张房源照片 + manifest.json（images:fetch 下载）
 ├── prisma.config.ts              # Prisma 7 配置（数据源 URL、迁移、seed）
 └── data/                         # 嵌入式 PostgreSQL 数据目录（已 gitignore）
 ```
@@ -929,6 +980,61 @@ Available options are marked with ?.
 
 和之前那个 Turbopack 假 500 是同一类问题的两面：**改了 Prisma schema 之后，光跑迁移不够，还要重启开发服务器**。以后遇到"字段明明加了却说不存在"，先重启再怀疑代码。
 
+**25. 房源图片"经常长时间加载不出来"（上游 CDN 不稳，不是代码）**
+
+用户的反馈是"页面经常长时间加载不出图片"。先用 `scripts/diagnose-images.mjs` 把三种互斥成因分开，结论很干净：
+
+```
+upstream 200 时优化器 100% 正常（0 例优化器失败）
+失败的几张是到 images.unsplash.com 的连接本身中断（约 10.7s 后报错）
+单独测一张 148KB 的图，用了 114 秒
+```
+
+Next 的图片优化器给上游只有约 **7 秒**，超时就回 **504**——所以"优化器优化不动"和"页面一直转"是同一件事的两种说法。
+
+修法不是在 Next 上调超时（再等 100 秒也没有意义），而是**把运行时依赖变成静态资源**。关键观察是：种子里其实只有 **45 张不重复的照片**，在 180 套房源之间复用。所以只要下载 45 次就够了：
+
+- `npm run images:fetch` 把 45 张抓进 `public/listings/`，写出 `manifest.json`；脚本**可续跑**、带重试与退避、并发 3，并且**从 `prisma/seed.ts` 里解析 `PHOTO_IDS`**，保证照片清单只有一个来源
+- 种子读 manifest：本地有就用 `/listings/xxx.jpg`，没有才回退远程 URL（所以不跑这步也能用，只是慢）
+- `next/image` 照旧按断点裁切，但读的是本地文件，**不再有上游请求**
+
+实测（`node scripts/bench-images.mjs`）：
+
+| | 修复前 | 修复后 |
+| --- | --- | --- |
+| 成功返回 200 | 约 2/3，其余 504 | **12 / 12** |
+| 单张耗时中位数 | 超时（约 7 秒后中断） | **约 4 ms** |
+| 最慢一张 | 100 秒级 | **6 ms** |
+
+顺带发现一个更值得记的点：**45 张图的首次下载总共只花了约 40 秒**（并发 3），说明这条链路不是"带宽慢"而是**间歇性卡死**——同一张图上次 114 秒、这次 1.2 秒。这类故障用"优化超时"是救不回来的，只有把资源搬到本地才彻底消失。
+
+还有一条测试层面的教训：这条断言原来写的是 `g.url.startsWith("http")`，它把"图片必须是远程 URL"当成了不变量——而这恰恰是我这次改掉的东西。断言随实现更新为"要么是 `/listings/` 本地路径、要么是 http(s)"，并**新增了一条真的去请求图片、要求返回 200 的断言**：格式正确但 404 的 URL 正是最初那个 bug 的形态，只看字符串前缀是抓不到的。
+
+**26. 城市查询会连带返回整个国家的房源**
+
+加城市时发现的既有 bug：在京都查询返回了 36 套，而其他城市都是 18 套。
+
+根因在 `buildListingWhere()`：
+
+```ts
+if (city) {
+  matches.push({ city: { equals: city.name } });
+  matches.push({ country: { equals: city.country } }); // ← 无条件加上
+}
+```
+
+`findCity("Kyoto")` 解析出的城市其 `country` 是 Japan，于是"按国家匹配"这条也被加了进去，把东京的房源一起捞了出来。**城市名不是国家请求**——写这段时的本意是让「日本 / Japan」能查到该国全部房源，但没区分用户输入的是城市还是国家。
+
+修法是只在**输入确实指向国家时**才放宽到国家：`country` 的英文名或 `countryZh` 与输入完全相等才算。修完的实测：
+
+```
+Kyoto    → 18  cities: Kyoto          Japan → 36  cities: Kyoto/Tokyo
+京都      → 18  cities: Kyoto          日本  → 36  cities: Kyoto/Tokyo
+Barcelona→ 18  cities: Barcelona      Spain → 18  cities: Barcelona
+```
+
+这个 bug 在只有 6 座城市、且每国只有一座城市时**完全看不出来**（伦敦、巴黎、纽约、首尔、新加坡各自独占一个国家，只有东京+京都同属日本才暴露）——是"增加数据量"这个动作把它逼出来的。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -955,6 +1061,12 @@ Available options are marked with ?.
 | 未出现的字段视为"不要动"，而不是"清空" | 编辑器按区块保存，若把"没传"当成"清空"，改一次爱好就会把背景、标签、去过的地方全部抹掉。支持分区块保存的前提就是这条语义 |
 | 芯片清洗在服务端再做一遍 | 前端已限制长度与数量，但 API 是公开入口，去重/截断/上限必须由服务端保证；前端只负责体验，不负责正确性 |
 | 头像校验按"精确清单"而不是路径前缀 | 只接受我们打包的 12 个文件，避免把头像指到任意同源路径（例如 `/etc/passwd` 这类会被当作 URL 的输入） |
+| 房源图片下载进仓库，而不是运行时取 | 上游 CDN 实测单张 114 秒、约 1/3 请求失败，而 Next 给上游只有约 7 秒，于是表现为"图片一直加载不出来"。45 张图共 7.1MB，一次下载换掉全部运行时不确定性，也让 demo 能离线跑 |
+| 图片下载脚本从 `prisma/seed.ts` 解析 `PHOTO_IDS` | 照片清单若在种子和下载脚本里各写一份，加图时必然漏掉一边；解析同一个来源可以保证两者不脱节 |
+| 种子优先本地图片、缺失才回退远程 | `git clone` 后不跑 `images:fetch` 也能启动（只是慢），不会因为少了一步就出现裂图或报错 |
+| 首页层次感用分层低对比渐变，而不是重阴影 | 用 `color-mix()` 从主题 token 混出渐变，浅色/深色自动各自成立、不必写两份规则；对比度刻意压低，做到"感觉得到但看不出来"，仍然是简约风 |
+| 深色模式的搜索框抬到 `--secondary` 而非 `--card` | Hero 的暖色光晕让卡片背后的区域比中性背景更亮，只抬一档实测对比度仅 1.07（几乎看不见），抬两档后达到 1.255 |
+| 城市名与国家名分开处理 | 按城市查询时不应连带返回同国其他城市；只有输入确实指向国家（`Japan` / `日本`）时才放宽到全国 |
 | 头像用普通 `<img>` 而非 `next/image` | 用户可填任意图片 URL，走 `next/image` 需要把每个域名加进 `remotePatterns`，对用户自定义地址不现实 |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
@@ -1018,6 +1130,6 @@ Available options are marked with ?.
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 7 个可复现脚本共 **348 项断言**（149 + 45 + 51 + 39 + 26 + 17 + 21 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 8 个可复现脚本共 **354 项断言**（155 + 45 + 51 + 39 + 26 + 17 + 21 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

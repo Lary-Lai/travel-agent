@@ -99,11 +99,26 @@ export function buildListingWhere(input: ListingSearchInput): Prisma.ListingWher
       { location: { contains: raw, mode: "insensitive" } },
       { country: { contains: raw, mode: "insensitive" } },
     ];
-    // "东京" / "Japan" / "Tokyo" all resolve to the canonical stored name.
+
     if (city) {
+      // "东京" / "Tokyo" resolve to the canonical stored city name.
       matches.push({ city: { equals: city.name, mode: "insensitive" } });
-      matches.push({ country: { equals: city.country, mode: "insensitive" } });
+
+      // Widen to the whole country ONLY when the query actually names the
+      // country ("Japan" / "日本" / "英国"). Adding it unconditionally made a
+      // city query return that city's entire country: searching "Kyoto" also
+      // matched every Tokyo listing, because findCity("Kyoto") resolves to a
+      // city whose country is Japan. A city name is not a country request.
+      const namesCountry =
+        city.country.toLowerCase() === raw.toLowerCase() ||
+        city.countryZh === raw ||
+        raw.toLowerCase() === city.countryZh.toLowerCase();
+
+      if (namesCountry) {
+        matches.push({ country: { equals: city.country, mode: "insensitive" } });
+      }
     }
+
     filters.push({ OR: matches });
   }
 

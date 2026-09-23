@@ -20,18 +20,24 @@ import { SearchBar } from "@/components/search-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { getCityStats, getRecommendedListings, type CityStat } from "@/server/listing.service";
 import type { ListingSummary, PropertyTypeValue } from "@/types";
 import { PROPERTY_TYPE_LABELS } from "@/types";
 
 /** Category chips double as a fast filter entry point into /search. */
-const CATEGORIES: Array<{ type: PropertyTypeValue; icon: typeof Building2 }> = [
-  { type: "APARTMENT", icon: Building2 },
-  { type: "HOUSE", icon: HomeIcon },
-  { type: "HOTEL", icon: Hotel },
-  { type: "VILLA", icon: Palmtree },
-  { type: "LOFT", icon: Warehouse },
-  { type: "GUESTHOUSE", icon: Tent },
+const CATEGORIES: Array<{
+  type: PropertyTypeValue;
+  icon: typeof Building2;
+  /** Soft gradient behind the icon, one hue per category. */
+  tint: string;
+}> = [
+  { type: "APARTMENT", icon: Building2, tint: "from-sky-500/20 to-blue-500/5 text-sky-600 dark:text-sky-400" },
+  { type: "HOUSE", icon: HomeIcon, tint: "from-emerald-500/20 to-teal-500/5 text-emerald-600 dark:text-emerald-400" },
+  { type: "HOTEL", icon: Hotel, tint: "from-amber-500/20 to-orange-500/5 text-amber-600 dark:text-amber-400" },
+  { type: "VILLA", icon: Palmtree, tint: "from-rose-500/20 to-pink-500/5 text-rose-600 dark:text-rose-400" },
+  { type: "LOFT", icon: Warehouse, tint: "from-violet-500/20 to-purple-500/5 text-violet-600 dark:text-violet-400" },
+  { type: "GUESTHOUSE", icon: Tent, tint: "from-lime-500/20 to-green-500/5 text-lime-600 dark:text-lime-400" },
 ];
 
 export default async function HomePage() {
@@ -54,39 +60,56 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-7xl space-y-16 px-4 py-8 sm:px-6 lg:px-8">
       {/* ---------------------------------------------------------------- hero */}
-      <section className="from-primary/10 via-background to-background relative overflow-hidden rounded-3xl border bg-gradient-to-br px-6 py-12 sm:px-10 sm:py-16">
-        <div className="relative z-10 mx-auto max-w-3xl text-center">
-          <Badge variant="secondary" className="bg-background/80 mb-4 backdrop-blur">
-            <Sparkles className="size-3.5" />
-            AI Travel Agent 已上线
-          </Badge>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-            让 AI 帮你找到
-            <span className="text-primary"> 旅途中的家</span>
-          </h1>
-          <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
-            {cities.length > 0 ? `${cities.length} 座城市 · ${totalListings} 套真实房源。` : ""}
-            搜索、收藏、预订，或者直接用一句话描述需求，让 Agent 帮你搞定。
-          </p>
+      {/* Depth is three stacked layers: a masked grid, soft brand washes, and a
+          glow bleeding up from behind the search bar. */}
+      <section className="surface-hero edge-light relative overflow-hidden rounded-3xl border shadow-sm">
+        <div className="grid-fade pointer-events-none absolute inset-0" aria-hidden />
+        <div
+          className="from-primary/12 pointer-events-none absolute inset-x-0 -bottom-24 h-56 bg-gradient-to-t to-transparent"
+          aria-hidden
+        />
 
-          <div className="mt-8">
-            <SearchBar
-              variant="hero"
-              destinations={cities.map((city) => ({ city: city.city, cityLabel: city.cityLabel }))}
-            />
-          </div>
+        <div className="relative z-10 px-6 py-12 sm:px-10 sm:py-16">
+          <div className="mx-auto max-w-3xl text-center">
+            <Badge
+              variant="secondary"
+              className="edge-light bg-background/70 mb-4 border-transparent backdrop-blur"
+            >
+              <Sparkles className="size-3.5" />
+              AI Travel Agent 已上线
+            </Badge>
+            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
+              让 AI 帮你找到
+              <span className="from-primary bg-gradient-to-r to-rose-500 bg-clip-text text-transparent">
+                {" "}
+                旅途中的家
+              </span>
+            </h1>
+            <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
+              {cities.length > 0 ? `${cities.length} 座城市 · ${totalListings} 套真实房源。` : ""}
+              搜索、收藏、预订，或者直接用一句话描述需求，让 Agent 帮你搞定。
+            </p>
 
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
-            {CATEGORIES.slice(0, 4).map((category) => (
-              <Link
-                key={category.type}
-                href={`/search?propertyType=${category.type}`}
-                className="bg-background/70 hover:border-primary/40 flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur transition-colors"
-              >
-                <category.icon className="size-3.5" />
-                {PROPERTY_TYPE_LABELS[category.type]}
-              </Link>
-            ))}
+            <div className="relative mt-8">
+              <div className="glow-primary pointer-events-none absolute inset-x-8 -inset-y-4 -z-10" aria-hidden />
+              <SearchBar
+                variant="hero"
+                destinations={cities.map((city) => ({ city: city.city, cityLabel: city.cityLabel }))}
+              />
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+              {CATEGORIES.slice(0, 4).map((category) => (
+                <Link
+                  key={category.type}
+                  href={`/search?propertyType=${category.type}`}
+                  className="edge-light bg-background/70 hover:border-primary/40 hover:bg-background flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur transition-all hover:-translate-y-px"
+                >
+                  <category.icon className="size-3.5" />
+                  {PROPERTY_TYPE_LABELS[category.type]}
+                </Link>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -111,9 +134,14 @@ export default async function HomePage() {
                 <Link
                   key={category.type}
                   href={`/search?propertyType=${category.type}`}
-                  className="hover:border-primary/40 group flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-colors"
+                  className="surface-sheen edge-light hover:border-primary/40 group flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5 hover:shadow-md"
                 >
-                  <span className="bg-muted text-foreground group-hover:bg-primary/10 group-hover:text-primary flex size-10 items-center justify-center rounded-xl transition-colors">
+                  <span
+                    className={cn(
+                      "flex size-10 items-center justify-center rounded-xl bg-gradient-to-br transition-transform group-hover:scale-105",
+                      category.tint,
+                    )}
+                  >
                     <category.icon className="size-5" />
                   </span>
                   <span className="text-xs font-medium">
@@ -132,12 +160,29 @@ export default async function HomePage() {
                   <TrendingUp className="size-5" />
                   热门目的地
                 </h2>
-                <p className="text-muted-foreground mt-1 text-sm">点击城市，直接查看当地全部房源</p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  {cities.length} 座城市，点击直接查看当地全部房源
+                </p>
               </div>
               <Button variant="ghost" size="sm" asChild>
                 <Link href="/search">查看全部</Link>
               </Button>
             </div>
+
+            {/* Quick city selector — one click, no need to open the search form. */}
+            {cities.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {cities.map((city) => (
+                  <Link
+                    key={city.city}
+                    href={`/search?location=${encodeURIComponent(city.city)}`}
+                    className="edge-light bg-secondary/60 hover:border-primary/40 hover:bg-secondary rounded-full border border-transparent px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-px"
+                  >
+                    {city.cityLabel}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
 
             {cities.length === 0 ? (
               <EmptyState
@@ -145,21 +190,21 @@ export default async function HomePage() {
                 description="运行 npm run db:seed 生成演示房源后刷新本页。"
               />
             ) : (
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
                 {cities.map((city) => (
                   <Link
                     key={city.city}
                     href={`/search?location=${encodeURIComponent(city.city)}`}
-                    className="group relative overflow-hidden rounded-2xl border"
+                    className="group edge-light relative overflow-hidden rounded-2xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
                   >
                     <div className="relative aspect-4/5">
                       <SafeImage
                         src={city.image}
                         alt={city.cityLabel}
-                        sizes="(max-width: 768px) 50vw, 16vw"
+                        sizes="(max-width: 768px) 50vw, 20vw"
                         className="transition-transform duration-500 group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
                     </div>
                     <div className="absolute inset-x-0 bottom-0 p-3 text-white">
                       <p className="text-sm font-semibold">{city.cityLabel}</p>

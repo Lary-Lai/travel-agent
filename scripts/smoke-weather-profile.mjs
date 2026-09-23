@@ -135,7 +135,7 @@ check(
   cities.length > 0 && cities.every((c) => c.city && typeof c.current?.temperature === "number" && c.current.icon),
   `${cities.length} entr${cities.length === 1 ? "y" : "ies"}`,
 );
-liveCheck("GET /api/weather?all=1 covers every city", cities.length === 6, `got ${cities.length}`);
+liveCheck("GET /api/weather?all=1 covers every city", cities.length === 10, `got ${cities.length}`);
 
 // Deterministic regardless of the provider.
 const missing = await api("/api/weather");

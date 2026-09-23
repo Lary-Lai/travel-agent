@@ -1,14 +1,17 @@
 /**
  * Database seed.
  *
- * Generates a realistic dataset: 6 cities x 12 listings = 72 listings, each with
- * a gallery, amenities, a host, ratings and room details — plus one demo account
- * with two pre-populated wishlists so the UI is never empty on first run.
+ * Generates a realistic dataset: one listing per shape per city (18 shapes x 10
+ * cities = 180 listings), each with a gallery, amenities, a host, ratings and
+ * room details — plus one demo account with two pre-populated wishlists so the
+ * UI is never empty on first run.
  *
  * Deterministic: a fixed-seed PRNG means re-seeding yields identical data.
  *
  * Run with: npm run db:seed
  */
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { loadEnvFile } from "node:process";
 
 try {
@@ -26,7 +29,7 @@ import { presetAvatarFor } from "../lib/avatars";
 import { CITIES, type CityMeta } from "../lib/cities";
 import { PrismaClient } from "../lib/generated/prisma/client";
 
-// 45 Unsplash photo ids, each verified to return HTTP 200.
+// 45 photo ids, each verified to return HTTP 200.
 const PHOTO_IDS = [
   "photo-1522708323590-d24dbb6b0267",
   "photo-1502672260266-1c1ef2d93688",
@@ -75,8 +78,39 @@ const PHOTO_IDS = [
   "photo-1590490360182-c33d57733427",
 ];
 
-const photoUrl = (id: string, width = 1200) =>
-  `https://images.unsplash.com/${id}?w=${width}&q=75&auto=format&fit=crop`;
+/**
+ * Photos bundled under `public/listings/` by `npm run images:fetch`.
+ *
+ * Serving these from disk removes the upstream fetch completely. Measured on
+ * this machine, `images.unsplash.com` took up to **114 seconds** for a single
+ * 148KB photo and failed outright on roughly a third of requests; Next's image
+ * optimizer gives the upstream ~7s and then answers 504, so cards fell back to a
+ * placeholder while the page looked like it had hung. Local files are instant,
+ * work offline, and still get resized per breakpoint by `next/image`.
+ *
+ * Anything not downloaded yet falls back to the original remote URL, so a fresh
+ * clone still works (just more slowly).
+ */
+function loadBundledPhotos(): Set<string> {
+  try {
+    const manifest = JSON.parse(
+      readFileSync(path.join(process.cwd(), "public", "listings", "manifest.json"), "utf8"),
+    ) as { photos?: Array<{ id: string }> };
+    return new Set((manifest.photos ?? []).map((photo) => photo.id));
+  } catch {
+    return new Set();
+  }
+}
+
+const BUNDLED_PHOTOS = loadBundledPhotos();
+
+const REMOTE_WIDTH = 1080;
+const REMOTE_QUALITY = 72;
+
+const photoUrl = (id: string) =>
+  BUNDLED_PHOTOS.has(id)
+    ? `/listings/${id}.jpg`
+    : `https://images.unsplash.com/${id}?w=${REMOTE_WIDTH}&q=${REMOTE_QUALITY}&auto=format&fit=crop`;
 
 /** Fixed-seed PRNG so every seed run produces the same dataset. */
 function mulberry32(seed: number) {
@@ -96,7 +130,7 @@ const intBetween = (min: number, max: number) => Math.floor(between(min, max + 1
 const chance = (probability: number) => rand() < probability;
 const roundTo = (value: number, step: number) => Math.round(value / step) * step;
 
-/** The 12 listing shapes built for every city. */
+/** The listing shapes built for every city (one listing each). */
 type Shape = {
   propertyType: "APARTMENT" | "HOUSE" | "HOTEL" | "VILLA" | "LOFT" | "GUESTHOUSE";
   bedrooms: number;
@@ -106,6 +140,11 @@ type Shape = {
   priceMultiplier: number;
 };
 
+/**
+ * Appended to over time: the seed key is `city-type-index`, so adding a shape at
+ * the END only ever creates new listings — it never re-points an existing one
+ * (which would break wishlist items and bookings that reference it).
+ */
 const SHAPES: Shape[] = [
   { propertyType: "APARTMENT", bedrooms: 1, beds: 1, bathrooms: 1, maxGuests: 2, priceMultiplier: 1.0 },
   { propertyType: "APARTMENT", bedrooms: 1, beds: 2, bathrooms: 1, maxGuests: 3, priceMultiplier: 1.0 },
@@ -119,6 +158,13 @@ const SHAPES: Shape[] = [
   { propertyType: "LOFT", bedrooms: 2, beds: 3, bathrooms: 1, maxGuests: 4, priceMultiplier: 1.15 },
   { propertyType: "VILLA", bedrooms: 4, beds: 6, bathrooms: 3, maxGuests: 8, priceMultiplier: 2.0 },
   { propertyType: "GUESTHOUSE", bedrooms: 1, beds: 2, bathrooms: 1, maxGuests: 3, priceMultiplier: 0.7 },
+  // ---- second wave: more inventory per city, and wider team/family sizes ----
+  { propertyType: "APARTMENT", bedrooms: 3, beds: 5, bathrooms: 2, maxGuests: 6, priceMultiplier: 1.3 },
+  { propertyType: "HOUSE", bedrooms: 2, beds: 4, bathrooms: 1, maxGuests: 5, priceMultiplier: 1.35 },
+  { propertyType: "VILLA", bedrooms: 3, beds: 5, bathrooms: 2, maxGuests: 6, priceMultiplier: 1.75 },
+  { propertyType: "LOFT", bedrooms: 1, beds: 2, bathrooms: 1, maxGuests: 2, priceMultiplier: 1.05 },
+  { propertyType: "GUESTHOUSE", bedrooms: 2, beds: 3, bathrooms: 1, maxGuests: 4, priceMultiplier: 0.85 },
+  { propertyType: "HOTEL", bedrooms: 1, beds: 2, bathrooms: 1, maxGuests: 2, priceMultiplier: 1.2 },
 ];
 
 const ADJECTIVES = ["温馨", "现代", "明亮", "静谧", "复古", "简约", "精致", "舒适", "通透", "雅致"];
@@ -145,6 +191,8 @@ function buildTitle(city: CityMeta, neighborhood: string, shape: Shape, used: Se
   const adj = pick(ADJECTIVES);
   const walk = intBetween(2, 9);
 
+  // Enough candidates per type that a city's listings rarely fall through to the
+  // generic numbered fallback below.
   const candidates: Record<Shape["propertyType"], string[]> = {
     APARTMENT: [
       `${neighborhood}站步行${walk}分钟 · ${adj}公寓`,
@@ -152,23 +200,42 @@ function buildTitle(city: CityMeta, neighborhood: string, shape: Shape, used: Se
       `${neighborhood}核心区 · ${adj}两居公寓`,
       `${neighborhood}设计师公寓 · 近地铁`,
       `${neighborhood}高层公寓 · 城市景观`,
+      `${neighborhood}${adj}三居 · 家庭出行`,
+      `${neighborhood}阳台公寓 · 采光充足`,
+      `${neighborhood}新装修公寓 · 可住${shape.maxGuests}人`,
     ],
     HOUSE: [
       `${neighborhood}独栋小院 · 可住${shape.maxGuests}人`,
       `${neighborhood}${adj}独栋 · 带花园`,
       `${neighborhood}家庭独栋 · ${shape.maxGuests}人入住`,
+      `${neighborhood}${adj}两层小楼 · 独立入口`,
+      `${neighborhood}近公园独栋 · 亲子友好`,
     ],
     HOTEL: [
       `${neighborhood}${adj}精品酒店 · 含早餐`,
       `${neighborhood}设计酒店 · 地铁旁`,
       `${neighborhood}${adj}酒店套房`,
+      `${neighborhood}商务酒店 · 24 小时前台`,
+      `${neighborhood}精品酒店 · 双床房`,
     ],
     VILLA: [
       `${neighborhood}带泳池别墅 · 私享庭院`,
       `${neighborhood}${adj}别墅 · 可住${shape.maxGuests}人`,
+      `${neighborhood}山景别墅 · 露台烧烤`,
+      `${neighborhood}${adj}独栋别墅 · 管家服务`,
     ],
-    LOFT: [`${neighborhood}工业风LOFT · 挑高空间`, `${neighborhood}复式LOFT · 采光极佳`],
-    GUESTHOUSE: [`${neighborhood}温馨民宿 · 本地生活圈`, `${neighborhood}家庭式民宿 · 独立卫浴`],
+    LOFT: [
+      `${neighborhood}工业风LOFT · 挑高空间`,
+      `${neighborhood}复式LOFT · 采光极佳`,
+      `${neighborhood}${adj}LOFT · 开放厨房`,
+      `${neighborhood}艺术家LOFT · 近创意园区`,
+    ],
+    GUESTHOUSE: [
+      `${neighborhood}温馨民宿 · 本地生活圈`,
+      `${neighborhood}家庭式民宿 · 独立卫浴`,
+      `${neighborhood}${adj}民宿 · 含手作早餐`,
+      `${neighborhood}老宅民宿 · 庭院天井`,
+    ],
   };
 
   for (const base of candidates[shape.propertyType]) {
