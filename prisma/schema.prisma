@@ -1,0 +1,172 @@
+// AI Travel Agent — Prisma schema
+// Datasource: real PostgreSQL (embedded cluster, see scripts/db.mjs)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  // Prisma 7: the connection URL lives in prisma.config.ts (for the CLI) and in
+  // lib/db.ts via the pg driver adapter (for the client). It is no longer
+  // allowed inside schema files.
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------- enums
+
+enum PropertyType {
+  APARTMENT
+  HOUSE
+  HOTEL
+  VILLA
+  CABIN
+  LOFT
+  GUESTHOUSE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------- models
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  avatar    String?
+  createdAt DateTime @default(now())
+
+  hostedListings Listing[]     @relation("HostListings")
+  wishlists      Wishlist[]
+  bookings       Booking[]
+
+  @@index([email])
+}
+
+model Listing {
+  id            String       @id @default(cuid())
+  title         String
+  description   String
+  location      String
+  city          String
+  country       String
+  latitude      Float
+  longitude     Float
+  pricePerNight Int
+  propertyType  PropertyType
+  rating        Float        @default(0)
+  reviewCount   Int          @default(0)
+  maxGuests     Int
+  bedrooms      Int
+  beds          Int
+  bathrooms     Int
+  hostId        String
+  createdAt     DateTime     @default(now())
+
+  host          User             @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
+  images        ListingImage[]
+  amenities     ListingAmenity[]
+  wishlistItems WishlistItem[]
+  bookings      Booking[]
+
+  @@index([city])
+  @@index([propertyType])
+  @@index([pricePerNight])
+  @@index([hostId])
+  @@index([city, pricePerNight])
+  @@index([city, propertyType, pricePerNight])
+}
+
+model ListingImage {
+  id        String @id @default(cuid())
+  listingId String
+  url       String
+  position  Int    @default(0)
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+}
+
+/// Canonical amenity dictionary, shared across listings (many-to-many).
+model Amenity {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  icon     String?
+  category String?
+
+  listings ListingAmenity[]
+
+  @@index([category])
+}
+
+/// Explicit join table so the m-n relation carries its own identity + FKs.
+model ListingAmenity {
+  listingId String
+  amenityId String
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  amenity Amenity @relation(fields: [amenityId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, amenityId])
+  @@index([amenityId])
+}
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  name      String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+
+  /// One user cannot own two wishlists with the same name.
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model WishlistItem {
+  id         String   @id @default(cuid())
+  wishlistId String
+  listingId  String
+  createdAt  DateTime @default(now())
+
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  listing  Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  /// A listing can only appear once per wishlist.
+  @@unique([wishlistId, listingId])
+  @@index([wishlistId])
+  @@index([listingId])
+}
+
+model Booking {
+  id          String        @id @default(cuid())
+  userId      String
+  listingId   String
+  checkIn     DateTime      @db.Date
+  checkOut    DateTime      @db.Date
+  guests      Int
+  /// Derived from checkIn/checkOut, stored so the order stays auditable.
+  nights      Int
+  roomPrice   Int
+  cleaningFee Int
+  serviceFee  Int
+  totalPrice  Int
+  status      BookingStatus @default(CONFIRMED)
+  createdAt   DateTime      @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([listingId])
+  @@index([userId, status])
+  @@index([listingId, checkIn, checkOut])
+}
