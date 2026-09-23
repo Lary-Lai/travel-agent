@@ -52,3 +52,4 @@ yarn-error.log*
 next-env.d.ts
 .git-commit-msg.txt
 commit-msg-refund.txt
+cc-msg.txt
