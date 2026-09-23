@@ -104,10 +104,13 @@ model Listing {
 }
 
 model ListingImage {
-  id        String @id @default(cuid())
+  id        String  @id @default(cuid())
   listingId String
   url       String
-  position  Int    @default(0)
+  position  Int     @default(0)
+  /// Which part of the property this angle shows (客厅 / 主卧 / 厨房 ...).
+  /// Drives the gallery captions so guests can tell the angles apart.
+  caption   String?
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
@@ -120,6 +123,8 @@ model Amenity {
   name     String  @unique
   icon     String?
   category String?
+  /// Plain-language explanation, shown when a guest taps the amenity.
+  description String?
 
   listings ListingAmenity[]
 

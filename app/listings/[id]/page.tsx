@@ -13,7 +13,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 
-import { AmenityIcon } from "@/components/amenity-icon";
+import { AmenityList } from "@/components/amenity-list";
 import { BookingWidget } from "@/components/booking-widget";
 import { FavoriteButton } from "@/components/favorite-button";
 import { ListingGallery } from "@/components/listing-gallery";
@@ -105,7 +105,7 @@ export default async function ListingDetailPage({ params }: Props) {
       </div>
 
       {/* ------------------------------------------------------------ gallery */}
-      <ListingGallery images={listing.images} title={listing.title} />
+      <ListingGallery gallery={listing.gallery} title={listing.title} />
 
       {/* -------------------------------------------------------------- body */}
       <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_380px]">
@@ -157,14 +157,11 @@ export default async function ListingDetailPage({ params }: Props) {
           {/* amenities */}
           <section className="space-y-4">
             <h2 className="text-base font-semibold">房源设施</h2>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {listing.amenities.map((amenity) => (
-                <div key={amenity.name} className="flex items-center gap-3">
-                  <AmenityIcon name={amenity.icon} className="text-muted-foreground size-4 shrink-0" />
-                  <span className="text-sm">{amenity.name}</span>
-                </div>
-              ))}
-            </div>
+            <AmenityList
+              amenities={listing.amenities}
+              cityLabel={listing.cityLabel}
+              cityListingCount={listing.cityListingCount}
+            />
           </section>
 
           <Separator />

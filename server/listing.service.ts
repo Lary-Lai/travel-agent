@@ -184,7 +184,21 @@ export async function getListingDetail(id: string): Promise<ListingDetail> {
   });
   if (!row) throw notFound("房源不存在或已下架");
 
-  const hostListingCount = await prisma.listing.count({ where: { hostId: row.host.id } });
+  // "How common is this amenity here?" is answered from real data, so the
+  // amenity dialog can say something concrete rather than a marketing line.
+  const [hostListingCount, cityListingCount, cityAmenityUsage] = await Promise.all([
+    prisma.listing.count({ where: { hostId: row.host.id } }),
+    prisma.listing.count({ where: { city: row.city } }),
+    prisma.listingAmenity.groupBy({
+      by: ["amenityId"],
+      where: { listing: { city: row.city } },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const usageByAmenityId = new Map(
+    cityAmenityUsage.map((group) => [group.amenityId, group._count._all]),
+  );
 
   return {
     ...mapListingRow(row),
@@ -197,10 +211,14 @@ export async function getListingDetail(id: string): Promise<ListingDetail> {
       joinedAt: row.host.createdAt.toISOString(),
       listingCount: hostListingCount,
     },
+    gallery: row.images.map((image) => ({ url: image.url, caption: image.caption })),
+    cityListingCount,
     amenities: row.amenities.map((a) => ({
       name: a.amenity.name,
       icon: a.amenity.icon,
       category: a.amenity.category,
+      description: a.amenity.description,
+      cityUsage: usageByAmenityId.get(a.amenityId) ?? 0,
     })),
   };
 }

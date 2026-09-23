@@ -61,6 +61,25 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 > 演示环境提供「模拟退款到账」按钮来推进 `PROCESSING → SUCCEEDED`，否则永远看不到退款完成。真实的退款是异步的，这一点在状态机里如实保留。
 
+### 房源详情：多视角照片与可点击设施
+
+**多视角画廊** —— 每套房源 6 张照片，每张都带角度标签：
+
+```
+公寓/别墅/民宿: 客厅 · 主卧 · 厨房 · 卫生间 · 次卧 · 阳台与周边
+酒店:          客房 · 卫浴 · 公共区域 · 早餐区 · 建筑外观 · 周边环境
+```
+
+桌面端是「1 张大图 + 4 张小图」的宫格（Airbnb 布局），点击任意一张进入灯箱：支持 `←/→` 方向键、底部缩略图条直接跳转、并显示当前角度名称与「3 / 6」进度。移动端只显示主图，其余角度收进「查看全部」弹窗，避免长页面堆叠。
+
+**可点击的设施** —— 点击任意设施弹出说明卡片，包含：
+
+- 这个设施到底意味着什么（例如「地铁附近」= 步行可达地铁或轨道交通站）
+- 所属分类（基础 / 卫浴 / 出行 / 政策 / 安全 …）
+- **当地普及度**：真实统计出来的「伦敦 12 套房源中 9 套提供」，配进度条
+
+> 演示使用图库图片，因此角度标签描述的是「这张图代表的视角」，而不是对真实房源的核验拍摄。
+
 ### AI Agent 特色
 
 - **真实 Tool Calling**：LLM 通过 AI SDK 的 `tool()` 机制决定调用哪个工具、传什么参数，而不是关键词匹配。
@@ -232,7 +251,7 @@ node scripts/make-test-pdf.mjs   # 生成用于测试 PDF 解析的示例文件
 | 脚本 | 结果 |
 | --- | --- |
 | `verify-db.ts` | ✅ ALL CHECKS PASSED |
-| `smoke-api.mjs` | ✅ **134 / 134** |
+| `smoke-api.mjs` | ✅ **140 / 140** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `smoke-agent.mjs` | ✅ **26 / 26** |
@@ -269,8 +288,9 @@ travel-agent/
 │   ├── booking-widget.tsx        #   预订面板 + 价格明细
 │   ├── payment-panel.tsx         #   收银台：三种支付方式 + 订单摘要 + 成功页
 │   ├── cancel-booking-dialog.tsx #   取消确认：退款报价 + 逐项明细 + 取消政策表
+│   ├── amenity-list.tsx          #   可点击的设施列表 + 设施说明弹窗
+│   ├── listing-gallery.tsx       #   多视角画廊 + 灯箱 + 缩略图条
 │   ├── qr-placeholder.tsx        #   确定性伪二维码 SVG（不可扫描，仅装饰）
-│   ├── listing-gallery.tsx       #   图片画廊 + 灯箱
 │   ├── agent-drawer.tsx          #   悬浮按钮 + 侧边抽屉
 │   ├── agent-chat.tsx            #   对话窗口（流式、Tool 状态、上传）
 │   ├── agent-message.tsx         #   工具执行状态渲染
@@ -409,8 +429,8 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | --- | --- | --- |
 | `User` | id, email, password, name, avatar, createdAt | `email` 唯一 |
 | `Listing` | title, description, location, city, country, lat/lng, pricePerNight, propertyType, rating, reviewCount, maxGuests, bedrooms, beds, bathrooms, hostId | `city` / `propertyType` / `pricePerNight` 索引，`(city, propertyType, pricePerNight)` 复合索引 |
-| `ListingImage` | listingId, url, position | 级联删除 |
-| `Amenity` | name, icon, category | `name` 唯一 |
+| `ListingImage` | listingId, url, position, **caption（拍摄角度/房间）** | 级联删除 |
+| `Amenity` | name, icon, category, **description** | `name` 唯一 |
 | `ListingAmenity` | listingId, amenityId | 复合主键（多对多） |
 | `Wishlist` | name, userId | `(userId, name)` 唯一 —— 同一用户不能有同名心愿单 |
 | `WishlistItem` | wishlistId, listingId | `(wishlistId, listingId)` 唯一 —— 同一房源不能重复收藏 |
@@ -530,6 +550,13 @@ LLM 生成中文回答 + 界面渲染房源卡片
 （OpenAI 没有这个约束，所以很容易在换模型时踩到。）
 解决：在 PDF 结构化解析的提示词中显式写明"以 JSON 格式返回（只输出 JSON）"。由于该路径本来就有启发式兜底，这个失败最初表现为"PDF 能解析但结果是英文的"——兜底掩盖了真实错误，是靠阅读服务端日志才发现 `generateObject` 一直在抛异常。
 
+**12. 桌面端房源画廊整块塌陷（但图片其实是好的）**
+症状：详情页本该放图片的位置一片空白，只留一条灰色分隔线；**移动端却正常**。
+排查：先验证资源本身 —— 直接请求原始图片 URL 和 `/_next/image` 优化后的地址，都返回 `200 image/jpeg`（148KB / 71KB），SSR HTML 里也确实有图片标签。所以**不是加载问题，是布局问题**。
+根因：桌面端容器写了 `md:grid-cols-4 md:grid-rows-2`，而 `grid-rows-2` 展开是 `repeat(2, minmax(0, 1fr))` —— **`fr` 必须有确定的高度才能解析**。容器没有高度，同时每个格子又写了 `md:aspect-auto md:h-full`（关掉移动端的 `aspect-4/3`，改成"占满行高"），于是行高 = 内容高度 = 0，整个画廊塌成一条线。移动端因为保留了 `aspect-4/3` 所以看不出问题。
+解决：给容器一个确定高度（`md:h-[26rem] lg:h-[30rem]`），格子去掉 `h-full` 交给网格拉伸；移动端只显示主图，其余角度收进「查看全部」弹窗。
+教训：**先确认资源能不能加载，再怀疑布局**。如果一上来就去换图片地址或改 `next.config` 的 `images` 配置，方向会完全跑偏。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -574,7 +601,7 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | --- | --- | --- |
 | ① | 打开首页 | Hero、搜索组件、房源类型分类、热门目的地、推荐房源、Agent 入口 |
 | ② | 搜索东京，4 人 | 筛选面板、URL 同步（刷新后状态保持）、房源卡片信息完整 |
-| ③ | 进入房源详情 | 图片画廊 + 灯箱、设施、房东、**价格明细（房费+清洁费+服务费）** |
+| ③ | 进入房源详情 | **多视角图片画廊（带 客厅/主卧/厨房… 角度标签 + 灯箱缩略图）**、房东、**点开任一设施查看说明与当地普及度**、价格明细 |
 | ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234` |
 | ⑤ | 收藏房源 | 爱心 → 选择/新建心愿单 → Toast 反馈 |
 | ⑥ | 完成一次预订并支付 | 选日期人数 → 价格实时计算 → 确认 → **跳转收银台** → 依次展示微信 / 支付宝 / 银行卡 → 模拟支付成功 |
@@ -598,6 +625,6 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 5 个可复现脚本共 **205 项断言**（134 + 45 + 26 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 5 个可复现脚本共 **211 项断言**（140 + 45 + 26 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

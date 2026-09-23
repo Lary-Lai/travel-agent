@@ -130,12 +130,32 @@ export type ListingHost = {
   listingCount: number;
 };
 
+/** One photo plus the viewing angle it represents. */
+export type ListingGalleryImage = {
+  url: string;
+  caption: string | null;
+};
+
+export type ListingAmenityDetail = {
+  name: string;
+  icon: string | null;
+  category: string | null;
+  /** Plain-language explanation shown when the guest taps the amenity. */
+  description: string | null;
+  /** How many listings in the same city also offer this amenity. */
+  cityUsage: number;
+};
+
 /** Full listing payload for the detail page. */
 export type ListingDetail = ListingSummary & {
   description: string;
   createdAt: string;
   host: ListingHost;
-  amenities: Array<{ name: string; icon: string | null; category: string | null }>;
+  /** Ordered gallery with captions (客厅 / 主卧 / 厨房 …). */
+  gallery: ListingGalleryImage[];
+  amenities: ListingAmenityDetail[];
+  /** Denominator for `cityUsage` — total listings in this city. */
+  cityListingCount: number;
 };
 
 /** Normalised search input; every field is optional. */

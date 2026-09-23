@@ -131,6 +131,39 @@ async function main() {
   check("detail includes host with listing count", detail.body?.data?.host?.listingCount >= 1);
   check("detail gallery has images", (detail.body?.data?.images?.length ?? 0) > 0);
 
+  // Multi-angle gallery: every photo must carry the view it represents, and the
+  // listing must have enough angles for the desktop 2x2 grid to fill.
+  const gallery = detail.body?.data?.gallery ?? [];
+  const detailAmenities = detail.body?.data?.amenities ?? [];
+  const cityListingCount = detail.body?.data?.cityListingCount ?? 0;
+
+  check("gallery is exposed with at least 5 angles", gallery.length >= 5, `got ${gallery.length}`);
+  check(
+    "every gallery image has a caption",
+    gallery.length > 0 && gallery.every((g) => typeof g.caption === "string" && g.caption.length > 0),
+    JSON.stringify(gallery.map((g) => g.caption)),
+  );
+  check(
+    "gallery captions are distinct angles",
+    new Set(gallery.map((g) => g.caption)).size === gallery.length,
+    `unique=${new Set(gallery.map((g) => g.caption)).size} of ${gallery.length}`,
+  );
+  check(
+    "every gallery image has a url",
+    gallery.every((g) => typeof g.url === "string" && g.url.startsWith("http")),
+  );
+  check(
+    "every amenity explains itself",
+    detailAmenities.length > 0 &&
+      detailAmenities.every((a) => typeof a.description === "string" && a.description.length > 5),
+  );
+  check(
+    "amenity usage is measured against the city total",
+    cityListingCount > 0 &&
+      detailAmenities.every((a) => a.cityUsage >= 1 && a.cityUsage <= cityListingCount),
+    `cityListingCount=${cityListingCount}`,
+  );
+
   // ---------------------------------------------------------------- auth
   console.log("\n— authentication");
 

@@ -338,16 +338,18 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
         <div className="space-y-4 rounded-2xl border p-5 lg:sticky lg:top-24">
           <h2 className="text-sm font-semibold">订单详情</h2>
 
+          {/* Property photo, full width so the guest can confirm what they booked. */}
+          <div className="relative aspect-16/9 w-full overflow-hidden rounded-xl bg-muted">
+            <Image
+              src={booking.listing.image}
+              alt={booking.listing.title}
+              fill
+              sizes="(max-width: 1024px) 100vw, 380px"
+              className="object-cover"
+            />
+          </div>
+
           <div className="flex gap-3">
-            <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted">
-              <Image
-                src={booking.listing.image}
-                alt={booking.listing.title}
-                fill
-                sizes="80px"
-                className="object-cover"
-              />
-            </div>
             <div className="min-w-0">
               <p className="line-clamp-2 text-sm font-medium">{booking.listing.title}</p>
               <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">

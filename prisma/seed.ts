@@ -21,7 +21,7 @@ import bcrypt from "bcryptjs";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 
-import { AMENITY_CATALOG } from "../lib/amenities";
+import { AMENITY_CATALOG, galleryAnglesFor } from "../lib/amenities";
 import { CITIES, type CityMeta } from "../lib/cities";
 import { PrismaClient } from "../lib/generated/prisma/client";
 
@@ -261,14 +261,17 @@ function buildAmenities(shape: Shape): string[] {
   return [...set];
 }
 
-/** Five distinct photos, deterministic per listing. */
-function buildImages(index: number) {
-  const images: Array<{ url: string; position: number }> = [];
-  for (let i = 0; i < 5; i++) {
-    const id = PHOTO_IDS[(index * 5 + i * 7) % PHOTO_IDS.length];
-    images.push({ url: photoUrl(id), position: i });
-  }
-  return images;
+/**
+ * One photo per viewing angle, each carrying its caption.
+ * The stride keeps every image inside a listing distinct (gcd(11, 45) = 1).
+ */
+function buildImages(index: number, propertyType: string) {
+  const angles = galleryAnglesFor(propertyType);
+
+  return angles.map((caption, i) => {
+    const id = PHOTO_IDS[(index * 7 + i * 11) % PHOTO_IDS.length];
+    return { url: photoUrl(id), position: i, caption };
+  });
 }
 
 async function main() {
@@ -356,7 +359,7 @@ async function main() {
           beds: shape.beds,
           bathrooms: shape.bathrooms,
           hostId: hosts[index % hosts.length].id,
-          images: { create: buildImages(index) },
+          images: { create: buildImages(index, shape.propertyType) },
           amenities: {
             create: amenityNames
               .map((name) => amenityIdByName.get(name))
