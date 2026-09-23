@@ -13,12 +13,12 @@ import {
   ShieldCheck,
   Wallet,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { QrPlaceholder } from "@/components/qr-placeholder";
+import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -340,12 +340,10 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
 
           {/* Property photo, full width so the guest can confirm what they booked. */}
           <div className="relative aspect-16/9 w-full overflow-hidden rounded-xl bg-muted">
-            <Image
+            <SafeImage
               src={booking.listing.image}
               alt={booking.listing.title}
-              fill
               sizes="(max-width: 1024px) 100vw, 380px"
-              className="object-cover"
             />
           </div>
 

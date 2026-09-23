@@ -1,9 +1,9 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, Grid2x2, X } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 
+import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -73,15 +73,14 @@ export function ListingGallery({
                     "hidden md:block md:aspect-auto",
               )}
             >
-              <Image
+              <SafeImage
                 src={image.url}
                 alt={`${title} — ${image.caption ?? `图片 ${index + 1}`}`}
-                fill
                 sizes={
                   index === 0 ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 50vw, 25vw"
                 }
                 priority={index === 0}
-                className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                className="transition-transform duration-500 group-hover:scale-[1.04]"
               />
 
               {image.caption ? (
@@ -118,10 +117,9 @@ export function ListingGallery({
           <div className="relative">
             <div className="relative aspect-3/2 w-full overflow-hidden rounded-2xl bg-black/60">
               {lightboxIndex !== null ? (
-                <Image
+                <SafeImage
                   src={images[lightboxIndex].url}
                   alt={`${title} — ${images[lightboxIndex].caption ?? `图片 ${lightboxIndex + 1}`}`}
-                  fill
                   sizes="90vw"
                   className="object-contain"
                   priority
@@ -187,7 +185,7 @@ export function ListingGallery({
                     : "border-transparent opacity-55 hover:opacity-90",
                 )}
               >
-                <Image src={image.url} alt="" fill sizes="64px" className="object-cover" />
+                <SafeImage src={image.url} alt="" sizes="64px" />
               </button>
             ))}
           </div>
@@ -211,12 +209,11 @@ export function ListingGallery({
                 }}
                 className="group relative aspect-4/3 overflow-hidden rounded-xl bg-muted"
               >
-                <Image
+                <SafeImage
                   src={image.url}
                   alt={`${title} — ${image.caption ?? `图片 ${index + 1}`}`}
-                  fill
                   sizes="(max-width: 640px) 100vw, 50vw"
-                  className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                  className="transition-transform duration-500 group-hover:scale-[1.04]"
                 />
                 {image.caption ? (
                   <span className="absolute bottom-2.5 left-2.5 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">

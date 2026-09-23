@@ -55,17 +55,44 @@ const liveCheck = (name, ok, detail = "") => {
   console.log(`  SKIP  ${name}${detail ? ` — ${detail}` : ""}`);
 };
 
+/**
+ * The provider can also drop out *mid-suite*: Open-Meteo is intermittent, and a
+ * call that succeeds proves nothing about the next one. Whenever a live response
+ * comes back empty, record it here so the remaining live assertions skip instead
+ * of failing — otherwise a blip halfway through turns into a red suite. The
+ * deterministic assertions elsewhere still run.
+ */
+const noteProvider = (weather) => {
+  if (!weather) providerUp = false;
+  return weather;
+};
+
 const one = await api("/api/weather?city=Tokyo");
-check("GET /api/weather?city=Tokyo -> 200", one.status === 200, `got ${one.status}`);
 
 const w = one.body?.data?.weather;
-const providerUp = Boolean(w);
+let providerUp = Boolean(w);
+
+// East-first: the provider state is only knowable from this very response, so
+// the endpoint-level assertion has to accept both shapes. A known city answers
+// 200 + data when Open-Meteo responds; when the provider is unreachable *and*
+// nothing is cached, getCityWeather() returns null and the route reports 404
+// "weather unavailable" (by design — the card hides itself). A third-party
+// outage must not read as a broken endpoint, so 404 is tolerated here and the
+// strict shape is asserted via liveCheck() below. Anything else (400, 500) is
+// still a failure: Tokyo is a supported city, so those would be real bugs.
+check(
+  "GET /api/weather?city=Tokyo -> handled (200 with data, or 404 while the provider is down)",
+  one.status === 200 || one.status === 404,
+  `got ${one.status}`,
+);
 
 if (!providerUp) {
   console.log("  [!] Open-Meteo is not returning data right now — live weather assertions skipped.");
   console.log("      (The service caches for 15 minutes and hides the card when it has nothing.");
   console.log("       Check `node scripts/smoke-weather-profile.mjs` again once the provider responds.)");
 }
+
+liveCheck("known city answers 200 when the provider is up", one.status === 200, `got ${one.status}`);
 
 liveCheck("returns current temperature", typeof w?.current?.temperature === "number", String(w?.current?.temperature));
 liveCheck("returns a Chinese description", typeof w?.current?.description === "string" && w.current.description.length > 0, w?.current?.description);
@@ -81,18 +108,34 @@ liveCheck("returns an advice line", typeof w?.advice === "string" && w.advice.le
 liveCheck("attribution names the provider", w?.provider === "Open-Meteo", w?.provider);
 liveCheck("city label is localised", w?.cityLabel === "东京", w?.cityLabel);
 
-// Chinese city name should resolve too
-const cn = await api(`/api/weather?city=${encodeURIComponent("巴黎")}`);
+// Chinese city name should resolve too. This is a second, independent provider
+// round-trip (geocoding + forecast), so one retry absorbs a one-off blip.
+let cn = await api(`/api/weather?city=${encodeURIComponent("巴黎")}`);
+if (!cn.body?.data?.weather) {
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  cn = await api(`/api/weather?city=${encodeURIComponent("巴黎")}`);
+}
+noteProvider(cn.body?.data?.weather);
 liveCheck("accepts a Chinese city name", cn.body?.data?.weather?.city === "Paris", cn.body?.data?.weather?.city);
 
 // cache: a second call should be served from cache
 const again = await api("/api/weather?city=Tokyo");
+noteProvider(again.body?.data?.weather);
 liveCheck("second call is served from cache", again.body?.data?.weather?.cached === true,
   String(again.body?.data?.weather?.cached));
 
+// getAllCityWeather() fans out to six provider calls and drops the ones that
+// fail (`results.filter(entry => entry !== null)`), so a partial outage
+// legitimately yields fewer than six. What is deterministic is that every entry
+// it does return is complete; the exact count needs a healthy provider.
 const all = await api("/api/weather?all=1");
-liveCheck("GET /api/weather?all=1 covers every city", (all.body?.data?.cities ?? []).length === 6,
-  `got ${(all.body?.data?.cities ?? []).length}`);
+const cities = all.body?.data?.cities ?? [];
+check(
+  "GET /api/weather?all=1 returns only complete entries",
+  cities.length > 0 && cities.every((c) => c.city && typeof c.current?.temperature === "number" && c.current.icon),
+  `${cities.length} entr${cities.length === 1 ? "y" : "ies"}`,
+);
+liveCheck("GET /api/weather?all=1 covers every city", cities.length === 6, `got ${cities.length}`);
 
 // Deterministic regardless of the provider.
 const missing = await api("/api/weather");

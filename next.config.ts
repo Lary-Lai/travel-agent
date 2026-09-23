@@ -2,11 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   images: {
-    // Remote photography + placeholder avatars come from these two hosts.
-    remotePatterns: [
-      { protocol: "https", hostname: "images.unsplash.com" },
-      { protocol: "https", hostname: "i.pravatar.cc" },
-    ],
+    // Remote listing photography. Avatars are bundled in /public/avatars now
+    // (i.pravatar.cc started returning 403 for every request).
+    remotePatterns: [{ protocol: "https", hostname: "images.unsplash.com" }],
     // Next 16 defaults `qualities` to [75]; the seed builds URLs with q=75.
     qualities: [75],
   },

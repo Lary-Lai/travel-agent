@@ -11,12 +11,12 @@ import {
   Users,
   Wallet,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { CancelBookingDialog } from "@/components/cancel-booking-dialog";
+import { SafeImage } from "@/components/safe-image";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { useSession } from "@/components/session-provider";
@@ -170,12 +170,11 @@ export function TripsView() {
                   href={`/listings/${booking.listing.id}`}
                   className="relative aspect-4/3 overflow-hidden rounded-xl bg-muted sm:aspect-square"
                 >
-                  <Image
+                  <SafeImage
                     src={booking.listing.image}
                     alt={booking.listing.title}
-                    fill
                     sizes="220px"
-                    className={cn("object-cover", isCancelled && "opacity-70 grayscale")}
+                    className={cn(isCancelled && "opacity-70 grayscale")}
                   />
                 </Link>
 

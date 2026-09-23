@@ -22,6 +22,7 @@ import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { AMENITY_CATALOG, galleryAnglesFor } from "../lib/amenities";
+import { presetAvatarFor } from "../lib/avatars";
 import { CITIES, type CityMeta } from "../lib/cities";
 import { PrismaClient } from "../lib/generated/prisma/client";
 
@@ -318,7 +319,7 @@ async function main() {
 
   console.log("[seed] hosts + demo account (upsert) ...");
   const hosts: Array<{ id: string }> = [];
-  for (const [i, host] of HOSTS.entries()) {
+  for (const host of HOSTS) {
     hosts.push(
       await prisma.user.upsert({
         where: { email: host.email },
@@ -326,10 +327,10 @@ async function main() {
           email: host.email,
           name: host.name,
           password: passwordHash,
-          avatar: `https://i.pravatar.cc/160?img=${(i % 60) + 1}`,
+          avatar: presetAvatarFor(host.email),
         },
         // Keep the password as-is so a changed demo password is not reset.
-        update: { name: host.name, avatar: `https://i.pravatar.cc/160?img=${(i % 60) + 1}` },
+        update: { name: host.name, avatar: presetAvatarFor(host.email) },
       }),
     );
   }
@@ -340,10 +341,29 @@ async function main() {
       email: DEMO_EMAIL,
       name: "演示用户",
       password: passwordHash,
-      avatar: "https://i.pravatar.cc/160?img=68",
+      avatar: presetAvatarFor(DEMO_EMAIL),
     },
+    // Deliberately empty: this must not overwrite anything the user changed.
     update: {},
   });
+
+  // One-time migration: avatars used to come from i.pravatar.cc, which now
+  // answers 403 to every request, so those accounts show a broken image. Point
+  // them at the bundled presets — but only where the URL is still the legacy
+  // one, so a deliberately chosen avatar is never replaced.
+  const legacyAvatars = await prisma.user.findMany({
+    where: { avatar: { contains: "pravatar" } },
+    select: { id: true, email: true },
+  });
+  for (const user of legacyAvatars) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { avatar: presetAvatarFor(user.email) },
+    });
+  }
+  if (legacyAvatars.length > 0) {
+    console.log(`[seed] migrated ${legacyAvatars.length} legacy avatar(s) to bundled presets`);
+  }
 
   // One-time transition: rows created by the previous destructive seed have no
   // seedKey. They cannot be matched by upsert, so remove them once. Users cannot

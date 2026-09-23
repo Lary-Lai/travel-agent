@@ -2,9 +2,11 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Minus, Plus, RotateCcw } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,6 +62,34 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
   const min = value.priceMin ?? bounds.min;
   const max = value.priceMax ?? bounds.max;
 
+  /**
+   * In-flight price range.
+   *
+   * Slider drags and manual entries land here first; the committed props take
+   * over once the URL catches up. Deriving this during render (instead of
+   * syncing it in an effect) keeps it pure and avoids the slider snapping back
+   * to the previous value for a frame.
+   */
+  const [pending, setPending] = useState<[number, number] | null>(null);
+  const catchingUp = pending !== null && (pending[0] !== min || pending[1] !== max);
+  const priceRange: [number, number] = catchingUp && pending ? pending : [min, max];
+
+  /** Clamp, keep the pair ordered, and treat the extremes as "no filter". */
+  const commitPrice = (nextMin: number, nextMax: number) => {
+    if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax)) return;
+
+    const clamp = (v: number) => Math.max(bounds.min, Math.min(Math.round(v), bounds.max));
+    let lo = clamp(nextMin);
+    let hi = clamp(nextMax);
+    if (lo > hi) [lo, hi] = [hi, lo];
+
+    setPending([lo, hi]);
+    onChange({
+      priceMin: lo <= bounds.min ? undefined : lo,
+      priceMax: hi >= bounds.max ? undefined : hi,
+    });
+  };
+
   const toggleAmenity = (name: string) => {
     const current = value.amenities ?? [];
     const next = current.includes(name)
@@ -85,8 +115,8 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
         <div className="flex items-center justify-between">
           <Label className="text-sm font-medium">每晚价格</Label>
           <span className="text-muted-foreground text-xs tabular-nums">
-            {formatPrice(min)} – {formatPrice(max)}
-            {max >= bounds.max ? "+" : ""}
+            {formatPrice(priceRange[0])} – {formatPrice(priceRange[1])}
+            {priceRange[1] >= bounds.max ? "+" : ""}
           </span>
         </div>
 
@@ -97,16 +127,38 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
             min={bounds.min}
             max={bounds.max}
             step={10}
-            value={[min, max]}
-            onValueChange={([nextMin, nextMax]) =>
-              onChange({
-                priceMin: nextMin <= bounds.min ? undefined : nextMin,
-                priceMax: nextMax >= bounds.max ? undefined : nextMax,
-              })
-            }
+            value={priceRange}
+            // Track locally while dragging and only commit on release. Committing
+            // on every tick pushed a new URL (and a refetch) per frame, which is
+            // what made the thumb lag behind the cursor.
+            onValueChange={([nextMin, nextMax]) => setPending([nextMin, nextMax])}
+            onValueCommit={([nextMin, nextMax]) => commitPrice(nextMin, nextMax)}
             className="py-2"
           />
         )}
+
+        {/* Manual entry, for when the user knows the numbers they want. */}
+        <div className="flex items-center gap-2">
+          <PriceInput
+            key={`price-min-${priceRange[0]}`}
+            id="price-min"
+            label="最低价"
+            value={priceRange[0]}
+            lower={bounds.min}
+            upper={priceRange[1]}
+            onCommit={(next) => commitPrice(next, priceRange[1])}
+          />
+          <span className="text-muted-foreground text-xs">–</span>
+          <PriceInput
+            key={`price-max-${priceRange[1]}`}
+            id="price-max"
+            label="最高价"
+            value={priceRange[1]}
+            lower={priceRange[0]}
+            upper={bounds.max}
+            onCommit={(next) => commitPrice(priceRange[0], next)}
+          />
+        </div>
 
         <div className="text-muted-foreground flex justify-between text-[11px] tabular-nums">
           <span>{formatPrice(bounds.min)}</span>
@@ -210,6 +262,71 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+/**
+ * Numeric price field.
+ *
+ * Uncontrolled on purpose: the parent re-keys it whenever the committed value
+ * changes, which resets the field without a state-syncing effect. Invalid or
+ * empty input is rejected and the field is restored, so a half-typed number
+ * never becomes a filter.
+ */
+function PriceInput({
+  id,
+  label,
+  value,
+  lower,
+  upper,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  value: number;
+  lower: number;
+  upper: number;
+  onCommit: (next: number) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+
+  const submit = () => {
+    const raw = ref.current?.value ?? "";
+    const parsed = Number(raw);
+
+    if (raw.trim() === "" || !Number.isFinite(parsed)) {
+      if (ref.current) ref.current.value = String(value);
+      return;
+    }
+
+    onCommit(parsed);
+  };
+
+  return (
+    <div className="min-w-0 flex-1">
+      <Label htmlFor={id} className="sr-only">
+        {label}
+      </Label>
+      <Input
+        ref={ref}
+        id={id}
+        type="number"
+        inputMode="numeric"
+        defaultValue={value}
+        min={lower}
+        max={upper}
+        step={10}
+        placeholder={label}
+        onBlur={submit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+        }}
+        className="h-8 text-sm tabular-nums"
+      />
     </div>
   );
 }

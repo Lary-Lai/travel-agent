@@ -86,7 +86,20 @@ AI 不是一个单独的聊天机器人：它会调用真实的工具，工具�
 
 **AI 回复按 Markdown 渲染** —— 模型输出里的 `**加粗**`、`- 列表`、`1. 编号`、`` `代码` ``、`[链接](url)` 都会被正确渲染，而不是把星号原样显示给用户。列表用主题色圆点、编号列表用圆形序号徽标、小标题带左侧强调条。解析逻辑在 `lib/agent-markdown.ts`（纯函数、可单测），渲染在 `components/agent-markdown.tsx`，**不使用 `dangerouslySetInnerHTML`**，模型输出无法注入标记。
 
-**头像预设** —— 个人主页提供 24 个预设头像（间距取样，避免看起来都差不多），也可粘贴任意图片链接。
+**头像预设（12 个，全部内置）** —— 个人主页提供 12 个预设头像，也可粘贴任意图片链接。
+
+它们**不再来自外部头像服务，而是打包在 `public/avatars/` 里的本地 SVG**（由 `scripts/make-avatars.mjs` 生成，每个不到 1KB）。这是一次被迫但结果更好的改动：原来的 `i.pravatar.cc` 开始**对每个请求都返回 403**，24 个预设里有 22 个显示成裂图。本地文件永远能加载、离线可用，也不再依赖第三方可用性。12 个由 6 组配色 × 3 种剪影组合而成，构图差异足够明显。
+
+新注册的账号会用 `presetAvatarFor(seed)` 按邮箱做 FNV 哈希**确定性地**分配一个预设头像——同一个账号每次登录拿到的都是同一张，而不是每次随机变。种子脚本也会把历史遗留的 `pravatar` 头像一次性迁移到本地预设。
+
+**图片加载失败时居中显示说明文字** —— `components/safe-image.tsx` 统一接管了所有房源图片：`onError` 或 `src` 为空时，渲染一个占位块——居中的图标 + **居中的 alt 文字**（`absolute inset-0 flex flex-col items-center justify-center`）。此前是浏览器原生的裂图图标加一段左上角溢出的小字。已应用到房源卡片、详情页相册（4 处）、Agent 结果卡片、收银台、行程页与首页。
+
+**价格区间的双输入框** —— 滑块两端新增了可手动输入的最小/最大价格输入框：
+
+- 输入框是**非受控**的，只有失去焦点或按回车才提交，所以输入过程中不会被过滤结果打断，也不会因为输入到一半（比如刚敲下"1"）就触发一次查询
+- 输入非法或留空时**恢复成当前生效的值**，不会把筛选条件写坏
+- 拖动滑块时价格是**即时跟手**的：拖动过程只更新本地状态，`onValueCommit`（松手）才真正写入筛选条件与 URL，因此既不会卡顿，也不会往历史记录里塞进几十条中间状态
+- 输入框的 `key` 会跟随生效值变化，外部重置筛选后输入框能同步刷新
 
 **助手面板头部** —— 「清空」与「关闭」并排在同一行，不再重叠。
 
@@ -112,7 +125,7 @@ GET /api/weather?all=1           → 全部 6 座城市
 | 区块 | 内容 |
 | --- | --- |
 | 账号概览 | 心愿单 / 收藏房源 / 行程订单数量、注册时间 |
-| 公开资料 | 昵称、24 个预设头像 + 自定义头像 URL、实时预览、未保存时可撤销 |
+| 公开资料 | 昵称、12 个内置预设头像 + 自定义头像 URL、实时预览、未保存时可撤销 |
 | 账号安全 | 修改密码（需验证当前密码） |
 
 两个刻意的设计：
@@ -307,12 +320,12 @@ npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
 
 ```bash
 npx tsx scripts/verify-db.ts     # 数据库：枚举、CRUD、唯一约束、级联删除
-node scripts/smoke-api.mjs       # API：140 项断言，含跨用户越权测试（需先 npm run dev）
+node scripts/smoke-api.mjs       # API：142 项断言，含跨用户越权测试（需先 npm run dev）
 npx tsx scripts/verify-tools.ts  # Agent 工具：45 项断言，含真实写入校验
 node scripts/verify-ai.mjs       # AI 端点：连通性 + 流式 + ★function calling 能力
 node scripts/test-vision.mjs     # AI 端点：★是否支持图片输入（扫描件 OCR 的前提）
 node scripts/smoke-agent.mjs     # Agent 端到端：51 项断言，含 PDF / 扫描件 / 图片解析
-node scripts/smoke-weather-profile.mjs  # 天气 + 个人主页 + ★账号跨播种保留：37 项断言
+node scripts/smoke-weather-profile.mjs  # 天气 + 个人主页 + ★账号跨播种保留：39 项断言
 npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
 node scripts/make-test-pdf.mjs      # 生成"有文字层"的 PDF 测试文件
@@ -324,12 +337,12 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | 脚本 | 结果 |
 | --- | --- |
 | `verify-db.ts` | ✅ ALL CHECKS PASSED |
-| `smoke-api.mjs` | ✅ **140 / 140** |
+| `smoke-api.mjs` | ✅ **142 / 142** |
 | `verify-tools.ts` | ✅ **45 / 45** |
 | `verify-ai.mjs` | ✅ chat + tool calling OK |
 | `test-vision.mjs` | ✅ 支持图片输入（远程 URL 与 data URI） |
 | `smoke-agent.mjs` | ✅ **51 / 51** |
-| `smoke-weather-profile.mjs` | ✅ **37 / 37** |
+| `smoke-weather-profile.mjs` | ✅ **39 / 39** |
 | `verify-markdown.ts` | ✅ **21 / 21** |
 
 ---
@@ -661,20 +674,20 @@ LLM 生成中文回答 + 界面渲染房源卡片
 **11. 图片资源**
 先实测了 picsum（可用但 3.5s）与 loremflickr（超时），最终选用 Unsplash，并**逐个验证 45 个图片 id 返回 200** 后写入种子脚本，避免演示时出现裂图。
 
-**11. DeepSeek 的 `json_object` 模式要求提示词里出现 "json" 字样**
+**12. DeepSeek 的 `json_object` 模式要求提示词里出现 "json" 字样**
 `generateObject` 默认发送 `response_format: { type: "json_object" }`，DeepSeek 直接返回 400：
 `Prompt must contain the word 'json' in some form to use 'response_format' of type 'json_object'.`
 （OpenAI 没有这个约束，所以很容易在换模型时踩到。）
 解决：在 PDF 结构化解析的提示词中显式写明"以 JSON 格式返回（只输出 JSON）"。由于该路径本来就有启发式兜底，这个失败最初表现为"PDF 能解析但结果是英文的"——兜底掩盖了真实错误，是靠阅读服务端日志才发现 `generateObject` 一直在抛异常。
 
-**12. 桌面端房源画廊整块塌陷（但图片其实是好的）**
+**13. 桌面端房源画廊整块塌陷（但图片其实是好的）**
 症状：详情页本该放图片的位置一片空白，只留一条灰色分隔线；**移动端却正常**。
 排查：先验证资源本身 —— 直接请求原始图片 URL 和 `/_next/image` 优化后的地址，都返回 `200 image/jpeg`（148KB / 71KB），SSR HTML 里也确实有图片标签。所以**不是加载问题，是布局问题**。
 根因：桌面端容器写了 `md:grid-cols-4 md:grid-rows-2`，而 `grid-rows-2` 展开是 `repeat(2, minmax(0, 1fr))` —— **`fr` 必须有确定的高度才能解析**。容器没有高度，同时每个格子又写了 `md:aspect-auto md:h-full`（关掉移动端的 `aspect-4/3`，改成"占满行高"），于是行高 = 内容高度 = 0，整个画廊塌成一条线。移动端因为保留了 `aspect-4/3` 所以看不出问题。
 解决：给容器一个确定高度（`md:h-[26rem] lg:h-[30rem]`），格子去掉 `h-full` 交给网格拉伸；移动端只显示主图，其余角度收进「查看全部」弹窗。
 教训：**先确认资源能不能加载，再怀疑布局**。如果一上来就去换图片地址或改 `next.config` 的 `images` 配置，方向会完全跑偏。
 
-**13. 扫描版 PDF 无法识别 → 接入视觉模型 OCR 时踩到两个 pdf.js 的坑**
+**14. 扫描版 PDF 无法识别 → 接入视觉模型 OCR 时踩到两个 pdf.js 的坑**
 
 需求是"图片型 PDF 也要能识别"。动手前先做了一件省事的事：**验证当前端点到底支不支持图片输入**（`scripts/test-vision.mjs`）—— 结果 `deepseek-chat` 远程 URL 与 data URI 两种方式都能正确描述图片，所以 OCR 可行，不需要换provider。随后踩到两个坑：
 
@@ -702,7 +715,7 @@ unpdf 内部是 `await interopDefault(canvasImport())` —— 它自己会调用
 
 验证方式：用 `@napi-rs/canvas` 画一页行程 → 编码成 JPEG → 包进一个只含图片 XObject 的 PDF（**故意不放文字对象**），生成的 fixture 文字层确实是 0 字符，正好用来证明走的是 OCR 而不是文字层。
 
-**14. 重新生成演示数据会把注册过的账号一起删掉（"下次登录又要重新注册"）**
+**15. 重新生成演示数据会把注册过的账号一起删掉（"下次登录又要重新注册"）**
 
 用户反馈"下次登录还要重新注册"。查下来不是会话或登录的问题，而是**种子脚本自己的锅**：
 
@@ -723,7 +736,7 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 
 现在验证方式是 `scripts/smoke-weather-profile.mjs` 里的一条断言：注册账号 → 改资料改密码 → **真的执行一次 `db:seed`** → 再用新密码登录，必须成功。
 
-**15. 从受进程管理器约束的环境启动服务，整个进程树会被回收**
+**16. 从受进程管理器约束的环境启动服务，整个进程树会被回收**
 
 `localhost:3001` 报 `ERR_CONNECTION_REFUSED`，同时数据库也一起消失。原因是：在把命令放进 Windows **Job Object** 的环境里（CI、部分 IDE 终端封装器、AI Agent 工具的后台任务），当环境清理时，**整棵进程树都会被回收**——dev server 和 postmaster 一起没了。
 
@@ -740,7 +753,7 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 2. **`npm run db:serve`**：父进程常驻的前台守护模式，供确实无法脱离 Job 的环境使用。
 3. README 里明确写了「请在你自己的终端里启动服务」——终端本身就是那个长生命周期父进程，不会有这个问题。
 
-**16. AI 回复里的 `**` 直接显示给用户 + 助手面板按钮重叠**
+**17. AI 回复里的 `**` 直接显示给用户 + 助手面板按钮重叠**
 
 两个纯 UI 问题，但都直接影响观感：
 
@@ -753,6 +766,58 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 - 助手面板关闭内置关闭按钮（`showCloseButton={false}`），改由对话头部自己渲染「清空 + 关闭」两个按钮，放在同一行自然就不会重叠。
 
 另外做了一个小重构：Markdown 解析最初写在 React 组件里，导致**无法测试**——而这恰恰是用户报的问题。把它抽成纯模块后，才会发现"加粗整行不会被误判为列表项"这类边界，也才有测试守住。
+
+**18. 24 个预设头像里有 22 个是裂图（头像服务对每个请求都返回 403）**
+
+症状：个人主页的预设头像几乎全是裂图，只有零星几个能显示。
+
+排查：没有先怀疑自己的组件，而是直接请求头像服务本身的地址 —— `i.pravatar.cc` **对每一个 URL 都返回 403**。所以这是第三方服务单方面失效，与代码无关。这类"看起来像前端 bug 的第三方故障"很容易被误判成组件写错了。
+
+修法：**不再依赖任何外部头像服务**，改为把 12 个预设头像作为本地 SVG 打包进 `public/avatars/`，由 `scripts/make-avatars.mjs` 脚本生成（6 组配色 × 3 种剪影，每个不到 1KB）。种子脚本会把历史遗留的 `pravatar` 头像一次性迁移到本地预设（实测迁移了 4 个账号）。
+
+两个顺带得到的改进：
+
+- 新账号用 `presetAvatarFor(seed)` 按邮箱哈希**确定性**分配头像，而不是每次登录随机变一个。
+- 生成的图形**用视觉模型逐张看过**。第一版的"长发"剪影渲染出来像个钥匙孔（头发画在头之前，被后画的头盖住了大半），肉眼在小尺寸下根本没看出来；调整绘制顺序（肩 → 发 → 头）并区分实心/半透明填充后才正常。
+
+教训：**依赖外部免费资源就要准备好它随时失效**。图片这类资源体积很小，内置进仓库是最稳的选择。
+
+**19. `next dev` 长时间运行后 Turbopack 内部状态损坏，表现为一个假的 500**
+
+症状：回归测试里"支付页本人可打开"这条突然变成 `got 500`，而此前一直是 200。
+
+排查：第一反应是刚做的改动把支付页改坏了（这一轮确实动了 `payment-panel.tsx`）。但去看 `data/dev.log` 才发现，整个日志被构建工具的崩溃刷屏了：
+
+```
+FATAL: An unexpected Turbopack error occurred
+  Cell CellId { type_id: ValueTypeId { id: 550,
+    name: ValueType { name: "turbopack_ecmascript::hmr::version::EcmascriptMergedChunkVersion" } },
+    index: 0 } no longer exists in task TaskId { id: 583719 }
+[Server HMR] Subscription error, resubscribing: Error [TurbopackInternalError]
+```
+
+也就是**开发服务器的增量编译状态已经损坏**（这一轮连续改了很多文件，还动过 `next.config.ts`），并不是应用代码抛异常。
+
+修法：停掉开发服务器、删掉 `.next/dev` 缓存后重启。重启后 `Ready in 309ms`，同一条断言恢复 200，整个 API 套件 **142 / 142** 通过 —— 确认了这个 500 是假警报。
+
+教训：**测试失败时先读服务端日志，再改代码**。如果直接去翻支付页的代码，会在一个不存在的问题上耗很久。另外记住一条硬约束：**`next dev` 还活着的时候绝不能跑 `next build`**，两者会争抢 `.next` 目录并把开发服务器直接杀掉（退出码 `1073807364`）。
+
+**20. 依赖第三方实时数据的断言，会把服务抖动误报成构建失败**
+
+天气来自 Open-Meteo，这一套断言因此在一次运行里出现了两个假失败：
+
+- `GET /api/weather?city=Tokyo -> 200` 变成 404。但 `getCityWeather()` 在"城市不支持"和"服务不可用且无缓存"两种情况下都返回 `null`，路由因此统一报 404（这是刻意的设计——没数据就不渲染卡片）。所以供应商抖动会让"已知城市"也返回 404，而这条断言写成了 `=== 200`。
+- `GET /api/weather?all=1` 断言恰好 6 座城市。但 `getAllCityWeather()` 会 `filter(entry => entry !== null)` **丢掉取不到的城市**，所以供应商部分失败时返回 5 个或更少是符合契约的，不是 bug。
+
+修法：
+
+- 端点级断言改为接受"200 带数据"或"404 且供应商不可用"两种形态，把严格的 200 判断交给 `liveCheck`。
+- `all=1` 拆成两条：**确定性**的一条只断言"返回的每一条都是完整的"，**数量为 6** 交给 `liveCheck`。
+- 供应商状态从"开头拍一次快照"改成**每次实时响应都刷新**（`noteProvider`），中途抖动时后续断言转为 SKIP 而不是 FAIL；对"巴黎"这种多余的独立请求加一次重试。
+
+改完后连续跑 3 次都是 **39 / 39**。
+
+教训：**测试第三方依赖时，要把"确定性"和"依赖外部"的断言分开**。前者永不免除，后者该跳过就跳过。让供应商的一次超时显示成红色的失败，会让人逐渐不再相信这套测试 —— 那比没有测试更糟。
 
 ### 技术选择记录
 
@@ -770,6 +835,11 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 | 主题切换用 CSS 而非读取 `resolvedTheme` | 服务端不知道主题，读它需要 mounted 守卫，而在 effect 里 setState 正是 React lint 规则禁止的。用 `dark:hidden` / `dark:block` 两个图标由 CSS 决定，既无水合不一致也不需要守卫 |
 | `Listing.seedKey` 唯一键 | 让种子脚本能 upsert 而不是先删后建，房源 id 稳定 → 真实用户的心愿单与订单不会被级联删除 |
 | 改密码必须验证当前密码 | 只凭会话 Cookie 不能改密码，避免 Cookie 泄露后被永久夺号 |
+| 预设头像内置为本地 SVG，不引外部头像服务 | 原来用的 `i.pravatar.cc` 已对每个请求返回 403（24 个里坏了 22 个）。本地文件永远能加载、离线可用、每个不到 1KB；代价是预设从 24 个变成 12 个，但 12 个都是确定可用的 |
+| 头像按邮箱哈希确定性分配 | 同一个账号每次登录拿到同一张头像；若用随机数，用户每次进来看到的自己都不一样，会以为账号串了 |
+| 图片统一走 `SafeImage` 组件 | 浏览器原生的裂图占位无法控制、alt 文字会溢出。统一接管后任何房源图失效都优雅降级为居中图标 + 居中说明文字，且 6 处调用点行为一致 |
+| 价格滑块拖动中只更新本地状态，`onValueCommit` 才提交 | 拖动过程不触发查询、不写 URL：既保证跟手不卡顿，也不会把几十条中间状态塞进浏览器历史，让"后退"变得不可用 |
+| 价格输入框非受控 + 失焦/回车才提交 | 受控输入会在用户刚敲下"1"时就触发一次全量查询并打断输入；非受控加显式提交既避免了抖动，也便于在输入非法时恢复成当前生效值 |
 | 头像用普通 `<img>` 而非 `next/image` | 用户可填任意图片 URL，走 `next/image` 需要把每个域名加进 `remotePatterns`，对用户自定义地址不现实 |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
@@ -830,6 +900,6 @@ await prisma.user.deleteMany();   // ← 把所有账号删光，包括真实注
 | Tool 必须连接真实业务逻辑 | 8 个工具全部调用 `server/` Service 层 |
 | Agent 不得绕过业务层改数据库 | 工具内不出现任何 Prisma 调用 |
 | API 必须鉴权与权限控制 | 私人接口 `requireUser()` + 逐次归属校验；跨用户越权测试覆盖读取/写入/删除/取消订单 |
-| 每完成一个模块立即测试 | 6 个可复现脚本共 **294 项断言**（140 + 45 + 51 + 37 + 21 + DB + AI），全部通过 |
+| 每完成一个模块立即测试 | 6 个可复现脚本共 **298 项断言**（142 + 45 + 51 + 39 + 21 + DB + AI），全部通过 |
 | 不把业务数据写死在前端 | 城市/设施/价格区间均来自 `/api/meta` 与数据库 |
 | 每完成一个模块立即测试 | 4 次阶段性提交，每个阶段都有可复现的验证脚本 |

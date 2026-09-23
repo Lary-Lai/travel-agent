@@ -1,6 +1,7 @@
 /** User + credential service (registration, login, profile). */
 import bcrypt from "bcryptjs";
 
+import { presetAvatarFor } from "../lib/avatars";
 import { prisma } from "../lib/db";
 import { badRequest, conflict, unauthorized } from "../lib/http";
 import type { SessionUserDto } from "../types";
@@ -40,8 +41,8 @@ export async function registerUser(input: {
       email,
       name,
       password: await bcrypt.hash(input.password, BCRYPT_ROUNDS),
-      // Deterministic avatar so new accounts look finished immediately.
-      avatar: `https://i.pravatar.cc/160?u=${encodeURIComponent(email)}`,
+      // Deterministic bundled avatar so new accounts look finished immediately.
+      avatar: presetAvatarFor(email),
     },
     select: { id: true, email: true, name: true, avatar: true, createdAt: true },
   });

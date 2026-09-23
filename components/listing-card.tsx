@@ -1,8 +1,8 @@
 import { MapPin, Star } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
+import { SafeImage } from "@/components/safe-image";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCount, formatPrice, formatRating } from "@/lib/format";
@@ -28,13 +28,12 @@ export function ListingCard({
     <article className={cn("group relative", className)}>
       <Link href={`/listings/${listing.id}`} className="block focus:outline-none">
         <div className="bg-muted relative aspect-square overflow-hidden rounded-xl">
-          <Image
+          <SafeImage
             src={listing.image}
             alt={listing.title}
-            fill
             sizes={SIZES}
             priority={priority}
-            className="object-cover transition-transform duration-500 will-change-transform group-hover:scale-[1.06]"
+            className="transition-transform duration-500 will-change-transform group-hover:scale-[1.06]"
           />
           <div className="absolute top-3 left-3">
             <Badge

@@ -116,6 +116,23 @@ async function main() {
   const badRange = await anon.request("/api/listings?priceMin=900&priceMax=100");
   check("contradictory price range -> 400", badRange.status === 400, `got ${badRange.status}`);
 
+  // Both ends of the price filter, since the UI slider commits either end.
+  const floored = await anon.request("/api/listings?priceMin=1000&pageSize=24");
+  const flooredPrices = (floored.body?.data?.items ?? []).map((i) => i.pricePerNight);
+  check(
+    "priceMin filters out cheaper listings",
+    flooredPrices.length > 0 && flooredPrices.every((p) => p >= 1000),
+    `min=${Math.min(...flooredPrices)}`,
+  );
+
+  const banded = await anon.request("/api/listings?priceMin=600&priceMax=900&pageSize=48");
+  const bandedPrices = (banded.body?.data?.items ?? []).map((i) => i.pricePerNight);
+  check(
+    "price band keeps only listings inside it",
+    bandedPrices.length > 0 && bandedPrices.every((p) => p >= 600 && p <= 900),
+    `range=${Math.min(...bandedPrices)}-${Math.max(...bandedPrices)}`,
+  );
+
   const badDate = await anon.request("/api/listings?checkIn=2026-10-05&checkOut=2026-10-01");
   check("checkOut before checkIn -> 400", badDate.status === 400, `got ${badDate.status}`);
 

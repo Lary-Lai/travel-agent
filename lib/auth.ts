@@ -15,6 +15,7 @@
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 
+import { presetAvatarFor } from "./avatars";
 import { prisma } from "./db";
 import { unauthorized } from "./http";
 import type { SessionUserDto } from "../types";
@@ -105,7 +106,7 @@ export async function requireUser(): Promise<SessionUserDto> {
   return user;
 }
 
-/** A stable, non-guessable placeholder avatar derived from the user id. */
+/** A stable placeholder avatar derived from the user id (bundled preset). */
 export function avatarFor(user: { id: string; name: string }): string {
-  return `https://i.pravatar.cc/160?u=${encodeURIComponent(user.id)}`;
+  return presetAvatarFor(user.id);
 }

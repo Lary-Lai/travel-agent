@@ -1,10 +1,10 @@
 "use client";
 
 import { ArrowUpRight, Star } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
+import { SafeImage } from "@/components/safe-image";
 import { formatPrice, formatRating } from "@/lib/format";
 
 /** Loose shape: tool outputs vary slightly between tools. */
@@ -40,15 +40,12 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
         href={`/listings/${listing.id}`}
         className="relative size-20 shrink-0 overflow-hidden rounded-lg bg-muted"
       >
-        {image ? (
-          <Image
-            src={image}
-            alt={listing.title}
-            fill
-            sizes="80px"
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-        ) : null}
+        <SafeImage
+          src={image ?? ""}
+          alt={listing.title}
+          sizes="80px"
+          className="transition-transform duration-300 group-hover:scale-105"
+        />
       </Link>
 
       <div className="min-w-0 flex-1">

@@ -15,21 +15,17 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiClientError } from "@/lib/api";
+import { PRESET_AVATARS } from "@/lib/avatars";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { SessionUserDto } from "@/types";
 
 /**
- * Preset avatars.
- *
- * A spread of pravatar ids rather than a consecutive block, so the choices look
- * genuinely varied instead of like near-duplicates of each other.
+ * Preset avatars, bundled locally (see lib/avatars.ts). They used to come from
+ * i.pravatar.cc, which now 403s every request — most of the grid showed as
+ * broken images.
  */
-const AVATAR_PRESET_IDS = [
-  1, 3, 5, 8, 11, 12, 14, 18, 20, 23, 26, 28, 32, 35, 38, 41, 45, 47, 51, 54, 57, 60, 63, 68,
-];
-
-const AVATAR_PRESETS = AVATAR_PRESET_IDS.map((n) => `https://i.pravatar.cc/160?img=${n}`);
+const AVATAR_PRESETS = PRESET_AVATARS;
 
 /**
  * Profile page.
