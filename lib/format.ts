@@ -1,5 +1,7 @@
 /** Display formatting helpers. Currency is CNY throughout the app. */
 
+import type { Locale } from "@/lib/i18n/locales";
+
 const CNY = new Intl.NumberFormat("zh-CN", {
   style: "currency",
   currency: "CNY",
@@ -45,26 +47,55 @@ export function toDateOnlyString(value: Date | string): string {
   return `${year}-${month}-${day}`;
 }
 
-/** `2026-10-01` -> `2026年10月1日` */
-export function formatDate(value: string | Date): string {
-  const d = parseDateOnly(value);
-  return `${d.getUTCFullYear()}年${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+/**
+ * Date formatting goes through `Intl`, per locale.
+ *
+ * These used to be string templates that hardcoded `2026年10月1日` for every
+ * language, so an English or Spanish page showed Chinese dates while every word
+ * around them was translated. `timeZone: "UTC"` is load-bearing: a stay from
+ * `2026-10-01` is a calendar date, not an instant, and without it anyone west of
+ * Greenwich would see their check-in rendered as 9月30日.
+ *
+ * Formatters are cached because constructing one is the expensive part and these
+ * run once per row in long lists.
+ */
+const DATE_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(locale: Locale, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${options.year ?? ""}|${options.month ?? ""}|${options.day ?? ""}`;
+  let formatter = DATE_FORMATTERS.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" });
+    DATE_FORMATTERS.set(key, formatter);
+  }
+  return formatter;
 }
 
-/** `10月1日` — the short form used inside date-range chips. */
-export function formatDateShort(value: string | Date): string {
-  const d = parseDateOnly(value);
-  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+const LONG_DATE: Intl.DateTimeFormatOptions = { year: "numeric", month: "long", day: "numeric" };
+const SHORT_DATE: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+
+/** `2026-10-01` -> `2026年10月1日` (zh), `October 1, 2026` (en), `1 de octubre de 2026` (es) */
+export function formatDate(value: string | Date, locale: Locale): string {
+  return dateFormatter(locale, LONG_DATE).format(parseDateOnly(value));
 }
 
-/** `2026年10月1日 – 10月5日` */
-export function formatDateRange(checkIn: string | Date, checkOut: string | Date): string {
+/** `10月1日` / `Oct 1` — the short form used inside date-range chips. */
+export function formatDateShort(value: string | Date, locale: Locale): string {
+  return dateFormatter(locale, SHORT_DATE).format(parseDateOnly(value));
+}
+
+/** `2026年10月1日 – 10月5日`, or the full form when the years differ. */
+export function formatDateRange(
+  checkIn: string | Date,
+  checkOut: string | Date,
+  locale: Locale,
+): string {
   const a = parseDateOnly(checkIn);
   const b = parseDateOnly(checkOut);
   if (a.getUTCFullYear() === b.getUTCFullYear()) {
-    return `${formatDate(a)} – ${formatDateShort(b)}`;
+    return `${formatDate(a, locale)} – ${formatDateShort(b, locale)}`;
   }
-  return `${formatDate(a)} – ${formatDate(b)}`;
+  return `${formatDate(a, locale)} – ${formatDate(b, locale)}`;
 }
 
 /** Today at UTC midnight — the baseline for date validation. */

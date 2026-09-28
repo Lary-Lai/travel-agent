@@ -28,7 +28,8 @@ import { formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
 import { getTranslator } from "@/lib/i18n/server";
 import { propertyTypeLabel } from "@/lib/i18n/labels";
-import { localizedTitle } from "@/lib/i18n/listing-text";
+import { localizedLocation, localizedTitle } from "@/lib/i18n/listing-text";
+import { cityName, countryName } from "@/lib/i18n/cities";
 import { getListingDetail } from "@/server/listing.service";
 import { getCityWeather } from "@/server/weather.service";
 
@@ -98,7 +99,7 @@ export default async function ListingDetailPage({ params }: Props) {
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="size-3.5" />
-              {listing.location} · {listing.countryLabel}
+              {localizedLocation(locale, listing)} · {countryName(locale, listing.country)}
             </span>
             <Badge variant="secondary">{propertyTypeLabel(t, listing.propertyType)}</Badge>
           </div>
@@ -141,7 +142,7 @@ export default async function ListingDetailPage({ params }: Props) {
                 <p className="text-muted-foreground text-xs">
                   {t("listing.hostStats", {
                     count: listing.host.listingCount,
-                    date: formatDate(listing.host.joinedAt),
+                    date: formatDate(listing.host.joinedAt, locale),
                   })}
                 </p>
               </div>
@@ -168,7 +169,7 @@ export default async function ListingDetailPage({ params }: Props) {
             <p className="text-muted-foreground text-sm leading-relaxed">{listing.description}</p>
             <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <CalendarDays className="size-3.5" />
-              {t("listing.published", { date: formatDate(listing.createdAt) })}
+              {t("listing.published", { date: formatDate(listing.createdAt, locale) })}
             </p>
           </section>
 
@@ -179,7 +180,7 @@ export default async function ListingDetailPage({ params }: Props) {
             <h2 className="text-base font-semibold">{t("listing.amenities")}</h2>
             <AmenityList
               amenities={listing.amenities}
-              cityLabel={listing.cityLabel}
+              cityLabel={cityName(locale, listing.city)}
               cityListingCount={listing.cityListingCount}
             />
           </section>
@@ -191,13 +192,13 @@ export default async function ListingDetailPage({ params }: Props) {
             <h2 className="text-base font-semibold">{t("listing.location")}</h2>
             <div className="text-muted-foreground space-y-1 text-sm">
               <p>
-                {listing.cityLabel} · {listing.location}
+                {cityName(locale, listing.city)} · {localizedLocation(locale, listing)}
               </p>
             </div>
             <ListingMap
               latitude={listing.latitude}
               longitude={listing.longitude}
-              label={listing.location}
+              label={localizedLocation(locale, listing)}
             />
             <p className="text-muted-foreground text-xs tabular-nums">
               {t("listing.coordinates", {

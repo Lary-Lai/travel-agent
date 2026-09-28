@@ -10,7 +10,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
+import { cityName } from "@/lib/i18n/cities";
 import { formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useSearchDraftStore, type SearchDraft } from "@/lib/store";
@@ -50,7 +51,7 @@ export function SearchBar({
   onChange,
 }: Props) {
   const router = useRouter();
-  const t = useT();
+  const { locale, t } = useLocale();
   const setDraft = useSearchDraftStore((state) => state.setDraft);
 
   const [localDestination, setDestination] = useState(initial?.destination ?? "");
@@ -202,7 +203,7 @@ export function SearchBar({
                     }}
                     className="hover:bg-accent rounded-lg px-3 py-2 text-left text-sm transition-colors"
                   >
-                    {item.cityLabel}
+                    {cityName(locale, item.city)}
                   </button>
                 ))}
               </div>
@@ -223,7 +224,7 @@ export function SearchBar({
             <span className={labelClass}>{t("searchBar.dates")}</span>
             <span className={cn(valueClass, !checkIn && "text-muted-foreground")}>
               {checkIn
-                ? `${formatDateShort(checkIn)}${checkOut ? ` – ${formatDateShort(checkOut)}` : ` – ${t("searchBar.selectCheckout")}`}`
+                ? `${formatDateShort(checkIn, locale)}${checkOut ? ` – ${formatDateShort(checkOut, locale)}` : ` – ${t("searchBar.selectCheckout")}`}`
                 : t("searchBar.datesPlaceholder")}
             </span>
           </button>
@@ -246,7 +247,7 @@ export function SearchBar({
           <div className="flex items-center justify-between gap-2 border-t p-3">
             <span className="text-muted-foreground text-xs">
               {checkIn && checkOut
-                ? `${formatDateShort(checkIn)} – ${formatDateShort(checkOut)}`
+                ? `${formatDateShort(checkIn, locale)} – ${formatDateShort(checkOut, locale)}`
                 : t("searchBar.datePrompt")}
             </span>
             <div className="flex gap-2">

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Info, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiClientError } from "@/lib/api";
 import { formatCurrency, formatDateRange } from "@/lib/format";
+import { localizedTitle } from "@/lib/i18n/listing-text";
 import type { TranslationKey } from "@/lib/i18n";
 import { POLICY_TABLE } from "@/lib/refund";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ export function CancelBookingDialog({
   booking: BookingDto | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const t = useT();
+  const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const open = Boolean(booking);
 
@@ -97,8 +98,8 @@ export function CancelBookingDialog({
         <DialogHeader>
           <DialogTitle>{t("trips.cancelTitle")}</DialogTitle>
           <DialogDescription className="line-clamp-2">
-            {booking?.listing.title}
-            {booking ? ` · ${formatDateRange(booking.checkIn, booking.checkOut)}` : null}
+            {booking ? localizedTitle(locale, booking.listing) : null}
+            {booking ? ` · ${formatDateRange(booking.checkIn, booking.checkOut, locale)}` : null}
           </DialogDescription>
         </DialogHeader>
 

@@ -4,21 +4,24 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BadgeCheck,
   Check,
+  Clock,
   CreditCard,
   Loader2,
   Lock,
   MessageCircle,
   QrCode,
-  RefreshCw,
   ShieldCheck,
   Wallet,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { useT } from "@/components/locale-provider";
+import { useLocale, useT } from "@/components/locale-provider";
 import { propertyTypeLabel } from "@/lib/i18n/labels";
+import { localizedLocation, localizedTitle } from "@/lib/i18n/listing-text";
+import { PAYMENT_WINDOW_MINUTES } from "@/lib/payment";
 import { QrPlaceholder } from "@/components/qr-placeholder";
 import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
@@ -31,9 +34,6 @@ import type { Translate, TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { BookingDto, PaymentMethodValue } from "@/types";
 import { PAYMENT_METHODS } from "@/types";
-
-/** Checkout window shown on the QR screens. Cosmetic — it does not block payment. */
-const COUNTDOWN_SECONDS = 15 * 60;
 
 /**
  * Per-channel presentation. Styling and icons stay at module scope; the label
@@ -136,13 +136,62 @@ function formatCountdown(totalSeconds: number): string {
 
 export function PaymentPanel({ booking }: { booking: BookingDto }) {
   const queryClient = useQueryClient();
-  const t = useT();
+  const router = useRouter();
+  const { locale, t } = useLocale();
 
   const [method, setMethod] = useState<PaymentMethodValue>("WECHAT");
-  const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
   const [card, setCard] = useState({ number: "", expiry: "", cvc: "", holder: "" });
   const [cardError, setCardError] = useState<string | null>(null);
   const [paid, setPaid] = useState<BookingDto | null>(booking.isPaid ? booking : null);
+
+  /**
+   * Seconds until the server's deadline, not a local constant.
+   *
+   * Counting down from a fixed number in the component only *looked* like a
+   * deadline: the server ignored it, so a payment could still succeed after the
+   * timer hit zero, and the hold blocked its dates indefinitely. This reads the
+   * deadline stored on the booking, so the timer and the enforcement agree.
+   */
+  const deadline = booking.paymentDueAt ? new Date(booking.paymentDueAt).getTime() : null;
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (paid || deadline === null) return;
+    // Ticking `now` rather than decrementing a counter keeps the display correct
+    // across a background tab, where interval callbacks are throttled.
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [paid, deadline]);
+
+  const secondsLeft = deadline === null ? null : Math.max(0, Math.ceil((deadline - now) / 1000));
+  const timedOut = secondsLeft !== null && secondsLeft <= 0;
+  const expired = paid === null && (booking.paymentExpired || timedOut);
+
+  /**
+   * When the local countdown hits zero, ask the server to agree.
+   *
+   * The sweep runs on read, so the row is still PENDING in the database at the
+   * moment the browser's timer stops. A router refresh re-runs the server
+   * component, which reads the booking and therefore cancels the hold — so the
+   * record, not just the display, reflects the deadline. (`router.refresh`, not
+   * a query invalidation: this page is server-rendered and has no booking query
+   * to invalidate.) Guarded on `paymentExpired` so it fires once, not every tick.
+   */
+  useEffect(() => {
+    if (!timedOut || paid !== null || booking.paymentExpired) return;
+    router.refresh();
+  }, [timedOut, paid, booking.paymentExpired, router]);
+
+  /**
+   * The window this booking was given.
+   *
+   * Read from the shared constant, not re-derived from `paymentDueAt` minus
+   * `createdAt`: the deadline is a field that can move (the test suite ages it,
+   * and a future "extend my hold" feature would too), and deriving the *rule*
+   * from a mutable value reported a nonsense "1 minute" window as soon as it
+   * did. A constant cannot drift from itself.
+   */
+  const paymentWindowMinutes = PAYMENT_WINDOW_MINUTES;
 
   const meta = useMemo<ResolvedMethodMeta>(() => {
     const { labelKey, hintKey, ...rest } = METHOD_META[method];
@@ -164,15 +213,6 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
     },
   });
 
-  // Cosmetic countdown; expiry only asks the user to refresh the code.
-  // A timeout re-armed from `secondsLeft` keeps the dependency list simple.
-  useEffect(() => {
-    if (paid || method === "CARD" || secondsLeft <= 0) return;
-    const timer = setTimeout(() => setSecondsLeft((value) => value - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [paid, method, secondsLeft]);
-
-  const expired = method !== "CARD" && secondsLeft === 0;
 
   const validateCard = (): boolean => {
     if (digitsOnly(card.number).length < 13 || !luhnValid(card.number)) {
@@ -220,10 +260,10 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
         <dl className="space-y-2.5 rounded-xl border bg-muted/30 p-4 text-left text-sm">
           {(
             [
-              ["payment.labelListing", paid.listing.title],
+              ["payment.labelListing", localizedTitle(locale, paid.listing)],
               [
                 "payment.labelStayDates",
-                `${formatDate(paid.checkIn)} – ${formatDate(paid.checkOut)}`,
+                `${formatDate(paid.checkIn, locale)} – ${formatDate(paid.checkOut, locale)}`,
               ],
               [
                 "payment.labelGuests",
@@ -231,7 +271,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
               ],
               ["payment.labelMethod", paid.paymentMethodLabel ?? "—"],
               ["payment.labelTradeNo", paid.paymentTradeNo ?? "—"],
-              ["payment.labelPaidAt", paid.paidAt ? formatDate(paid.paidAt) : "—"],
+              ["payment.labelPaidAt", paid.paidAt ? formatDate(paid.paidAt, locale) : "—"],
             ] as const
           ).map(([labelKey, value]) => (
             <div key={labelKey} className="flex justify-between gap-4">
@@ -258,6 +298,61 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
     );
   }
 
+  // ----------------------------------------------------------- expired state
+  /**
+   * The deadline is a real rule, so running out of time is a terminal state, not
+   * a prompt to try again: the server refuses the payment and has released the
+   * dates. Showing the disabled checkout here (or a "refresh" button on the QR
+   * code) would invite a click that can only fail, so the whole checkout is
+   * replaced with the outcome and a route back to booking.
+   */
+  if (expired) {
+    return (
+      <div className="mx-auto max-w-lg space-y-6 rounded-2xl border p-8 text-center">
+        <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-amber-500/10">
+          <Clock className="size-8 text-amber-600" />
+        </div>
+
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {t("payment.expiredTitle")}
+          </h1>
+          <p className="text-muted-foreground mt-1.5 text-sm">
+            {t("payment.expiredBody", { minutes: paymentWindowMinutes })}
+          </p>
+        </div>
+
+        <dl className="space-y-2.5 rounded-xl border bg-muted/30 p-4 text-left text-sm">
+          {(
+            [
+              ["payment.labelListing", localizedTitle(locale, booking.listing)],
+              [
+                "payment.labelStayDates",
+                `${formatDate(booking.checkIn, locale)} – ${formatDate(booking.checkOut, locale)}`,
+              ],
+              ["payment.labelGuestCount", t("common.guests", { count: booking.guests })],
+              ["payment.orderNo", booking.id.slice(-12).toUpperCase()],
+            ] as const
+          ).map(([labelKey, value]) => (
+            <div key={labelKey} className="flex justify-between gap-4">
+              <dt className="text-muted-foreground shrink-0">{t(labelKey)}</dt>
+              <dd className="truncate font-medium tabular-nums">{value}</dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
+          <Button asChild>
+            <Link href={`/listings/${booking.listing.id}`}>{t("payment.expiredRebook")}</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/trips">{t("payment.expiredTrips")}</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ------------------------------------------------------------ checkout UI
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
@@ -268,7 +363,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           <p className="text-muted-foreground mt-1 text-sm">
             {t("payment.orderNo")}{" "}
             <span className="tabular-nums">{booking.id.slice(-12).toUpperCase()}</span> ·{" "}
-            {t("payment.payWithin", { minutes: Math.round(COUNTDOWN_SECONDS / 60) })}
+            {t("payment.payWithin", { minutes: paymentWindowMinutes })}
           </p>
         </div>
 
@@ -326,9 +421,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
               method={method}
               meta={meta}
               bookingId={booking.id}
-              secondsLeft={secondsLeft}
-              expired={expired}
-              onRefresh={() => setSecondsLeft(COUNTDOWN_SECONDS)}
+              secondsLeft={secondsLeft ?? 0}
             />
           )}
         </div>
@@ -379,16 +472,18 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           <div className="relative aspect-16/9 w-full overflow-hidden rounded-xl bg-muted">
             <SafeImage
               src={booking.listing.image}
-              alt={booking.listing.title}
+              alt={localizedTitle(locale, booking.listing)}
               sizes="(max-width: 1024px) 100vw, 380px"
             />
           </div>
 
           <div className="flex gap-3">
             <div className="min-w-0">
-              <p className="line-clamp-2 text-sm font-medium">{booking.listing.title}</p>
+              <p className="line-clamp-2 text-sm font-medium">
+                {localizedTitle(locale, booking.listing)}
+              </p>
               <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
-                {booking.listing.location}
+                {localizedLocation(locale, booking.listing)}
               </p>
               <p className="text-muted-foreground mt-0.5 text-xs">
                 {propertyTypeLabel(t, booking.listing.propertyType)}
@@ -401,11 +496,11 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("payment.labelCheckIn")}</dt>
-              <dd>{formatDate(booking.checkIn)}</dd>
+              <dd>{formatDate(booking.checkIn, locale)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("payment.labelCheckOut")}</dt>
-              <dd>{formatDate(booking.checkOut)}</dd>
+              <dd>{formatDate(booking.checkOut, locale)}</dd>
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">{t("payment.labelGuestCount")}</dt>
@@ -444,7 +539,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           </dl>
 
           <p className="text-muted-foreground rounded-lg bg-muted/50 p-3 text-xs leading-relaxed">
-            {t("payment.holdNotice", { date: formatDate(booking.checkIn) })}
+            {t("payment.holdNotice", { date: formatDate(booking.checkIn, locale) })}
           </p>
         </div>
       </aside>
@@ -454,20 +549,21 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
 
 // --------------------------------------------------------------- QR checkout
 
+/**
+ * The scan-to-pay view. It is only ever rendered while the hold is still live —
+ * once the deadline passes the panel is replaced by the cancelled state, so this
+ * component has no expiry of its own to handle.
+ */
 function QrCheckout({
   method,
   meta,
   bookingId,
   secondsLeft,
-  expired,
-  onRefresh,
 }: {
   method: PaymentMethodValue;
   meta: ResolvedMethodMeta;
   bookingId: string;
   secondsLeft: number;
-  expired: boolean;
-  onRefresh: () => void;
 }) {
   const t = useT();
   const MethodIcon = meta.icon;
@@ -483,10 +579,7 @@ function QrCheckout({
         <QrPlaceholder
           seed={`${method}:${bookingId}`}
           size={200}
-          className={cn(
-            "rounded-xl border p-2 shadow-sm transition-opacity",
-            expired && "opacity-30 grayscale",
-          )}
+          className="rounded-xl border p-2 shadow-sm transition-opacity"
         >
           <span
             className="flex size-8 items-center justify-center rounded-md text-white"
@@ -495,25 +588,13 @@ function QrCheckout({
             <MethodIcon className="size-4" />
           </span>
         </QrPlaceholder>
-
-        {expired ? (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <p className="text-sm font-medium">{t("payment.qrExpired")}</p>
-            <Button size="sm" variant="outline" onClick={onRefresh} className="gap-1.5">
-              <RefreshCw className="size-3.5" />
-              {t("payment.qrRefresh")}
-            </Button>
-          </div>
-        ) : null}
       </div>
 
       <p className="text-muted-foreground max-w-xs text-sm">{meta.hint}</p>
 
-      {!expired ? (
-        <p className="text-xs tabular-nums">
-          {t("payment.qrCountdown", { time: formatCountdown(secondsLeft) })}
-        </p>
-      ) : null}
+      <p className="text-xs tabular-nums">
+        {t("payment.qrCountdown", { time: formatCountdown(secondsLeft) })}
+      </p>
 
       <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
         {t("payment.qrDemo")}

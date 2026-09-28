@@ -52,6 +52,7 @@ export function mapListingRow(row: ListingRow): ListingSummary {
     location: row.location,
     city: row.city,
     cityLabel: cityLabel(row.city),
+    country: row.country,
     countryLabel: countryLabel(row.country),
     pricePerNight: row.pricePerNight,
     propertyType: type,

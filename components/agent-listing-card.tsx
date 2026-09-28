@@ -8,6 +8,7 @@ import { useLocale } from "@/components/locale-provider";
 import { SafeImage } from "@/components/safe-image";
 import { formatPrice, formatRating } from "@/lib/format";
 import { localizedTitle } from "@/lib/i18n/listing-text";
+import { cityName } from "@/lib/i18n/cities";
 
 /** Loose shape: tool outputs vary slightly between tools. */
 export type AgentListing = {
@@ -34,7 +35,7 @@ export type AgentListing = {
  */
 export function AgentListingCard({ listing }: { listing: AgentListing }) {
   const { locale, t } = useLocale();
-  const city = listing.cityLabel ?? listing.city ?? "";
+  const city = listing.city ? cityName(locale, listing.city) : (listing.cityLabel ?? "");
   const image = listing.image;
 
   return (

@@ -260,7 +260,9 @@ export function TripsView() {
                         )}
                       >
                         {isCancelled
-                          ? t("trips.statusCancelled")
+                          ? booking.paymentTimedOut
+                            ? t("trips.statusTimedOut")
+                            : t("trips.statusCancelled")
                           : isPending
                             ? t("trips.statusPending")
                             : isPast
@@ -294,8 +296,8 @@ export function TripsView() {
                     <span className="flex items-center gap-1.5">
                       <CalendarDays className="size-3.5" />
                       {t("trips.stayDates", {
-                        checkIn: formatDate(booking.checkIn),
-                        checkOut: formatDate(booking.checkOut),
+                        checkIn: formatDate(booking.checkIn, locale),
+                        checkOut: formatDate(booking.checkOut, locale),
                         count: booking.nights,
                       })}
                     </span>
@@ -390,7 +392,7 @@ export function TripsView() {
                                 ? `${t("trips.refundTradeNo", { tradeNo: refund.tradeNo })}`
                                 : null}
                               {refund.completedAt
-                                ? ` ${t("trips.refundArrived", { date: formatDate(refund.completedAt) })}`
+                                ? ` ${t("trips.refundArrived", { date: formatDate(refund.completedAt, locale) })}`
                                 : ` ${t("trips.refundEta")}`}
                             </p>
                           </div>

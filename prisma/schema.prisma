@@ -300,6 +300,16 @@ model Booking {
   /// Archiving keeps the audit trail while removing the row from `/trips`.
   archivedAt DateTime?
 
+  /// Deadline for paying a PENDING hold. Past it the booking is auto-cancelled
+  /// and its dates are released, so a hold can never block a listing forever.
+  ///
+  /// `timestamptz` rather than the default `timestamp`: this value is compared
+  /// against `now()` from SQL as well as through Prisma, and a naive column makes
+  /// those two disagree by the session's UTC offset (Prisma writes UTC-naive,
+  /// `now()` converts to local). Every other datetime here is only ever read back
+  /// through Prisma, so the default is harmless for them.
+  paymentDueAt DateTime? @db.Timestamptz(3)
+
   @@index([userId])
   @@index([listingId])
   @@index([userId, status])

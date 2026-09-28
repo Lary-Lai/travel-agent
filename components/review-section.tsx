@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { useT } from "@/components/locale-provider";
+import { useLocale, useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { api, ApiClientError } from "@/lib/api";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Translate } from "@/lib/i18n";
+import type { Locale } from "@/lib/i18n/locales";
 import type { ReviewDto } from "@/types";
 
 const MAX_COMMENT = 600;
@@ -96,12 +97,14 @@ function ReviewCard({
   onDelete,
   deleting,
   t,
+  locale,
 }: {
   review: ReviewDto;
   onEdit?: () => void;
   onDelete?: () => void;
   deleting?: boolean;
   t: Translate;
+  locale: Locale;
 }) {
   return (
     <article className="space-y-2.5 rounded-2xl border p-4">
@@ -126,7 +129,9 @@ function ReviewCard({
           </div>
           <div className="mt-1 flex items-center gap-2">
             <StarPicker value={review.rating} size="sm" />
-            <span className="text-muted-foreground text-xs">{formatDate(review.createdAt)}</span>
+            <span className="text-muted-foreground text-xs">
+              {formatDate(review.createdAt, locale)}
+            </span>
           </div>
         </div>
 
@@ -175,7 +180,7 @@ export function ReviewSection({ listingId }: { listingId: string }) {
   const { user } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const t = useT();
+  const { locale, t } = useLocale();
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -352,6 +357,7 @@ export function ReviewSection({ listingId }: { listingId: string }) {
               key={review.id}
               review={review}
               t={t}
+              locale={locale}
               deleting={deleteMutation.isPending}
               onEdit={review.isMine ? startEdit : undefined}
               onDelete={review.isMine ? () => deleteMutation.mutate() : undefined}

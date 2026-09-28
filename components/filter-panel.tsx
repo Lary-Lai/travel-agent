@@ -190,7 +190,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
           >
             <Minus className="size-3.5" />
           </Button>
-          <span className="min-w-16 text-center text-sm tabular-nums">{guestsLabel(guests)}</span>
+          <span className="min-w-16 text-center text-sm tabular-nums">{guestsLabel(t, guests)}</span>
           <Button
             type="button"
             variant="outline"

@@ -105,6 +105,13 @@ export type ListingSummary = {
   location: string;
   city: string;
   cityLabel: string;
+  /**
+   * The raw English country ("United Kingdom"). The `*Label` fields are the
+   * authored Chinese labels kept for the API and the Agent; the UI renders the
+   * country and city through `countryName` / `cityName` so a reader of the
+   * English or Japanese UI does not get "英国" in the middle of an address.
+   */
+  country: string;
   countryLabel: string;
   pricePerNight: number;
   propertyType: PropertyTypeValue;
@@ -299,6 +306,23 @@ export type BookingDto = {
   /** Present once a paid booking has been cancelled. */
   refund: RefundDto | null;
   listing: ListingSummary;
+  /**
+   * When a PENDING hold stops being payable. The checkout counts down to this
+   * instant, so the timer and the server agree on the same deadline.
+   */
+  paymentDueAt: string | null;
+
+  /** True when the payment window has closed (server-computed, for the UI). */
+  paymentExpired: boolean;
+
+  /**
+   * True when the deadline passed with nothing paid — the record of *why* a hold
+   * was cancelled. Unlike `paymentExpired` this stays true after the sweep has
+   * moved the row to CANCELLED, so "My trips" can label it as timed out instead
+   * of showing the same thing as an order the user cancelled themselves.
+   */
+  paymentTimedOut: boolean;
+
 };
 
 export type SessionUserDto = {

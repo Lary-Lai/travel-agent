@@ -89,3 +89,84 @@ export const CITY_NAMES: Record<Locale, Record<string, string>> = {
 export function cityName(locale: Locale, englishName: string): string {
   return CITY_NAMES[locale]?.[englishName] ?? englishName;
 }
+
+/**
+ * Country names, same reasoning as the cities above.
+ *
+ * This exists because localising the city alone produced a half-translated
+ * address — "Camden, London · 英国" — which reads worse than leaving the whole
+ * line in one language.
+ */
+export const COUNTRY_NAMES: Record<Locale, Record<string, string>> = {
+  "zh-CN": {
+    Australia: "澳大利亚",
+    France: "法国",
+    Japan: "日本",
+    Singapore: "新加坡",
+    "South Korea": "韩国",
+    Spain: "西班牙",
+    Thailand: "泰国",
+    "United Kingdom": "英国",
+    "United States": "美国",
+  },
+  "zh-TW": {
+    Australia: "澳洲",
+    France: "法國",
+    Japan: "日本",
+    Singapore: "新加坡",
+    "South Korea": "韓國",
+    Spain: "西班牙",
+    Thailand: "泰國",
+    "United Kingdom": "英國",
+    "United States": "美國",
+  },
+  en: {
+    Australia: "Australia",
+    France: "France",
+    Japan: "Japan",
+    Singapore: "Singapore",
+    "South Korea": "South Korea",
+    Spain: "Spain",
+    Thailand: "Thailand",
+    "United Kingdom": "United Kingdom",
+    "United States": "United States",
+  },
+  ja: {
+    Australia: "オーストラリア",
+    France: "フランス",
+    Japan: "日本",
+    Singapore: "シンガポール",
+    "South Korea": "韓国",
+    Spain: "スペイン",
+    Thailand: "タイ",
+    "United Kingdom": "イギリス",
+    "United States": "アメリカ合衆国",
+  },
+  ko: {
+    Australia: "호주",
+    France: "프랑스",
+    Japan: "일본",
+    Singapore: "싱가포르",
+    "South Korea": "한국",
+    Spain: "스페인",
+    Thailand: "태국",
+    "United Kingdom": "영국",
+    "United States": "미국",
+  },
+  es: {
+    Australia: "Australia",
+    France: "Francia",
+    Japan: "Japón",
+    Singapore: "Singapur",
+    "South Korea": "Corea del Sur",
+    Spain: "España",
+    Thailand: "Tailandia",
+    "United Kingdom": "Reino Unido",
+    "United States": "Estados Unidos",
+  },
+};
+
+/** Localised country name for the canonical English name; falls back to the input. */
+export function countryName(locale: Locale, englishName: string): string {
+  return COUNTRY_NAMES[locale]?.[englishName] ?? englishName;
+}

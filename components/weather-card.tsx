@@ -22,8 +22,9 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { weatherAdviceLabel as adviceLabel, weatherKindLabel as kindLabel } from "@/lib/i18n/labels";
+import { cityName } from "@/lib/i18n/cities";
 import { weekdayLabel } from "@/lib/weather";
 import { cn } from "@/lib/utils";
 import type { CityWeather } from "@/types";
@@ -66,7 +67,7 @@ export function WeatherCard({
   className?: string;
 }) {
   // Hooks must run unconditionally, so this sits above the early return.
-  const t = useT();
+  const { locale, t } = useLocale();
 
   if (!weather) return null;
 
@@ -83,7 +84,7 @@ export function WeatherCard({
       >
         <span className="flex items-center gap-2 font-medium">
           <WeatherIcon name={current.icon} className="size-4" />
-          {weather.cityLabel} {current.temperature}°C
+          {cityName(locale, weather.city)} {current.temperature}°C
         </span>
         <span className="text-muted-foreground">{kindLabel(t, current.kind, current.description)}</span>
         <span className="text-muted-foreground text-xs">
@@ -101,7 +102,7 @@ export function WeatherCard({
       <div className="from-primary/10 flex items-start justify-between gap-3 bg-gradient-to-br to-transparent p-4">
         <div>
           <p className="text-muted-foreground text-xs font-medium">
-            {t("weather.current")} · {weather.cityLabel}
+            {t("weather.current")} · {cityName(locale, weather.city)}
           </p>
           <div className="mt-1.5 flex items-end gap-2">
             <span className="text-3xl font-semibold tabular-nums">{current.temperature}°</span>

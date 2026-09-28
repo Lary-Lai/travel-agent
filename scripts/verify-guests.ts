@@ -2,8 +2,8 @@
  * Guest-count stepper.
  *
  * The bug being guarded against: the original inline stepper made the value 1
- * unreachable (不限 stepped up to 2, and stepping down from 2 fell back to 不限),
- * so a solo traveller could never be selected.
+ * unreachable (the "any" state stepped up to 2, and stepping down from 2 fell
+ * back to "any"), so a solo traveller could never be selected.
  *
  *     npx tsx scripts/verify-guests.ts
  */
@@ -14,6 +14,7 @@ import {
   guestsLabel,
   increaseGuests,
 } from "../lib/guests";
+import { createTranslator } from "../lib/i18n";
 import { MAX_GUESTS } from "../lib/pricing";
 
 let passed = 0;
@@ -29,11 +30,43 @@ function check(name: string, ok: boolean, detail = ""): void {
   }
 }
 
+const zh = createTranslator("zh-CN");
+const en = createTranslator("en");
+
 console.log("\n— guest stepper");
 
-check("any label reads 不限", guestsLabel(GUESTS_ANY) === "不限", guestsLabel(GUESTS_ANY));
-check("one guest reads 1 位", guestsLabel(1) === "1 位", guestsLabel(1));
-check("four guests read 4 位", guestsLabel(4) === "4 位", guestsLabel(4));
+check("any label reads 不限", guestsLabel(zh, GUESTS_ANY) === "不限", guestsLabel(zh, GUESTS_ANY));
+check("one guest reads 1 位", guestsLabel(zh, 1) === "1 位", guestsLabel(zh, 1));
+check("four guests read 4 位", guestsLabel(zh, 4) === "4 位", guestsLabel(zh, 4));
+
+// The label used to be hardcoded Chinese, which is why the English filter panel
+// showed 不限 in its guest stepper.
+check("the label follows the locale", guestsLabel(en, 2) === "2 guests", guestsLabel(en, 2));
+check(
+  "and the any-state is translated too",
+  guestsLabel(en, GUESTS_ANY) === "Any" && !/[\u4e00-\u9fff]/.test(guestsLabel(en, GUESTS_ANY)),
+  guestsLabel(en, GUESTS_ANY),
+);
+// Only Latin-script locales are scanned for CJK: Japanese legitimately uses
+// kanji in its own labels, so a blanket "no CJK" rule would fail correct output.
+check(
+  "no locale leaks Chinese into its guest labels",
+  (["en", "es"] as const).every(
+    (locale) => !/[\u4e00-\u9fff]/.test(guestsLabel(createTranslator(locale), 3)),
+  ),
+  guestsLabel(en, 3),
+);
+// zh-TW is excluded on purpose: 位 is written identically in both Chinese
+// scripts, so an identical label there is correct, not a copy-paste slip.
+check(
+  "and every other locale renders its own wording",
+  (["ja", "ko", "es"] as const).every(
+    (locale) => guestsLabel(createTranslator(locale), 3) !== guestsLabel(zh, 3),
+  ),
+  (["ja", "ko", "es"] as const)
+    .map((locale) => `${locale}=${guestsLabel(createTranslator(locale), 3)}`)
+    .join(" "),
+);
 
 console.log("\n— the regression: 1 must be selectable");
 check("不限 steps up to 1, not 2", increaseGuests(GUESTS_ANY) === 1, String(increaseGuests(GUESTS_ANY)));

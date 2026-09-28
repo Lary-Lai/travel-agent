@@ -7,7 +7,9 @@
  */
 import { prisma } from "../lib/db";
 import { formatDate, parseDateOnly, todayUtc } from "../lib/format";
+import { FALLBACK_LOCALE } from "../lib/i18n/locales";
 import { badRequest, conflict, forbidden, notFound } from "../lib/http";
+import { PAYMENT_WINDOW_MS } from "../lib/payment";
 import { MAX_GUESTS, MAX_NIGHTS, calculatePrice, nightsBetween } from "../lib/pricing";
 import {
   REFUND_TIER_LABELS,
@@ -53,7 +55,54 @@ const BOOKING_INCLUDE = {
 
 type BookingRow = Prisma.BookingGetPayload<{ include: typeof BOOKING_INCLUDE }>;
 
-const ACTIVE_STATUSES: BookingStatusValue[] = ["CONFIRMED", "PENDING"];
+/**
+ * How long a PENDING hold survives before it is auto-cancelled.
+ *
+ * The value itself lives in `lib/payment.ts` so the checkout can count down to
+ * the same instant without importing this module (and therefore Prisma) into the
+ * browser bundle. Re-exported here because this is where callers look for it.
+ */
+export { PAYMENT_WINDOW_MINUTES, PAYMENT_WINDOW_MS } from "@/lib/payment";
+
+/** The deadline a booking created now would get. */
+export function paymentDueAt(from: Date = new Date()): Date {
+  return new Date(from.getTime() + PAYMENT_WINDOW_MS);
+}
+/**
+ * Which bookings still block their dates.
+ *
+ * A PENDING booking only holds dates while its payment window is open. Without
+ * the `paymentDueAt` condition an abandoned checkout would block the listing for
+ * every future guest — which is exactly the bug this feature fixes. CONFIRMED
+ * bookings block indefinitely.
+ */
+function blockingHolds(now: Date) {
+  return [
+    { status: "CONFIRMED" as const },
+    { status: "PENDING" as const, paymentDueAt: { gt: now } },
+  ];
+}
+
+/**
+ * Cancel PENDING bookings whose payment window has closed.
+ *
+ * Called lazily on read rather than from a cron job: the project has no
+ * scheduler, and the only moment the answer matters is when someone looks. It is
+ * scoped to one user on the user-facing paths so a request never sweeps the
+ * whole table; pass no user id for a full sweep.
+ */
+export async function expireStaleBookings(userId?: string): Promise<number> {
+  const result = await prisma.booking.updateMany({
+    where: {
+      ...(userId ? { userId } : {}),
+      status: "PENDING",
+      paidAt: null,
+      paymentDueAt: { lte: new Date() },
+    },
+    data: { status: "CANCELLED" },
+  });
+  return result.count;
+}
 
 export function mapRefundRow(row: RefundRowShape): RefundDto {
   const status = row.status as RefundStatusValue;
@@ -99,6 +148,21 @@ function mapBooking(row: BookingRow): BookingDto {
     paidAt: row.paidAt?.toISOString() ?? null,
     paymentTradeNo: row.paymentTradeNo,
     isPaid: row.paidAt !== null,
+    paymentDueAt: row.paymentDueAt ? row.paymentDueAt.toISOString() : null,
+    // Computed here so the UI never has to decide what "expired" means, and so
+    // the checkout and the server can never disagree about the deadline.
+    paymentExpired:
+      row.status === "PENDING" &&
+      row.paidAt === null &&
+      row.paymentDueAt !== null &&
+      row.paymentDueAt.getTime() <= Date.now(),
+    // Deliberately independent of status: the moment the sweeper cancels a hold
+    // `paymentExpired` turns false, which is exactly when the UI most needs to
+    // explain that the deadline, not the guest, ended the order.
+    paymentTimedOut:
+      row.paidAt === null &&
+      row.paymentDueAt !== null &&
+      row.paymentDueAt.getTime() <= Date.now(),
     refund: row.refunds.length > 0 ? mapRefundRow(row.refunds[0]) : null,
     listing: mapListingRow(row.listing),
   };
@@ -155,15 +219,18 @@ export async function createBooking(
   const clash = await prisma.booking.findFirst({
     where: {
       listingId: listing.id,
-      status: { in: ACTIVE_STATUSES },
+      OR: blockingHolds(new Date()),
       checkIn: { lt: checkOut },
       checkOut: { gt: checkIn },
     },
     select: { checkIn: true, checkOut: true },
   });
   if (clash) {
+    // Chinese deliberately: server errors carry no locale (the request's locale
+    // is only known to the UI layer), and this one is shown verbatim when the
+    // client cannot map it to a translated message.
     throw conflict(
-      `该房源在 ${formatDate(clash.checkIn)} – ${formatDate(clash.checkOut)} 已被预订，请选择其他日期`,
+      `该房源在 ${formatDate(clash.checkIn, FALLBACK_LOCALE)} – ${formatDate(clash.checkOut, FALLBACK_LOCALE)} 已被预订，请选择其他日期`,
     );
   }
 
@@ -182,8 +249,10 @@ export async function createBooking(
       cleaningFee: price.cleaningFee,
       serviceFee: price.serviceFee,
       totalPrice: price.totalPrice,
-      // Held, not confirmed: the dates are blocked until checkout is paid.
+      // Held, not confirmed: the dates are blocked until checkout is paid,
+      // and only for as long as the payment window stays open.
       status: "PENDING",
+      paymentDueAt: paymentDueAt(),
     },
     include: BOOKING_INCLUDE,
   });
@@ -192,6 +261,7 @@ export async function createBooking(
 }
 
 export async function listBookings(userId: string): Promise<BookingDto[]> {
+  await expireStaleBookings(userId);
   const rows = await prisma.booking.findMany({
     where: { userId, archivedAt: null },
     include: BOOKING_INCLUDE,
@@ -202,6 +272,7 @@ export async function listBookings(userId: string): Promise<BookingDto[]> {
 }
 
 export async function getBooking(userId: string, bookingId: string): Promise<BookingDto> {
+  await expireStaleBookings(userId);
   const row = await prisma.booking.findUnique({
     where: { id: bookingId },
     include: BOOKING_INCLUDE,
@@ -328,8 +399,24 @@ export async function payBooking(
   });
   if (!row) throw notFound("订单不存在");
   if (row.userId !== userId) throw forbidden("无权操作该订单");
-  if (row.status === "CANCELLED") throw conflict("该订单已取消，无法支付");
+  // A paid booking is a duplicate-payment question regardless of its deadline,
+  // so that check stays first.
   if (row.paidAt) throw conflict("该订单已完成支付，请勿重复支付");
+
+  // Deadline before the generic CANCELLED check: by the time a late payer gets
+  // here the sweeper has usually already flipped the row, so testing status
+  // first would report "this order was cancelled" and hide the actual reason.
+  if (row.paymentDueAt && row.paymentDueAt.getTime() <= Date.now()) {
+    if (row.status !== "CANCELLED") {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "CANCELLED" },
+      });
+    }
+    throw conflict("支付时限已过，订单已自动取消，请重新预订");
+  }
+
+  if (row.status === "CANCELLED") throw conflict("该订单已取消，无法支付");
 
   const paidAt = new Date();
 
@@ -368,6 +455,7 @@ function buildTradeNo(method: PaymentMethodValue, at: Date): string {
 
 /** Trip totals for the Trips page summary strip. */
 export async function getBookingStats(userId: string) {
+  await expireStaleBookings(userId);
   const bookings = await prisma.booking.findMany({
     where: { userId },
     select: { status: true, totalPrice: true, checkIn: true, nights: true },

@@ -35,9 +35,14 @@ export const payment = {
     "payment.hintAlipay": "打开支付宝「扫一扫」，扫描二维码完成支付",
     "payment.hintCard": "支持 Visa / Mastercard / 银联借记卡与信用卡",
 
-    "payment.qrExpired": "二维码已失效",
-    "payment.qrRefresh": "点击刷新",
-    "payment.qrCountdown": "二维码有效期 {time}",
+    // The countdown and the expiry notice describe the *order* deadline, not the
+    // QR image, because that is the deadline the server actually enforces.
+    "payment.qrCountdown": "订单剩余支付时间 {time}",
+    "payment.expiredTitle": "支付超时，订单已自动取消",
+    "payment.expiredBody":
+      "已超过 {minutes} 分钟支付时限，订单自动取消，房源已重新开放。如仍需预订，请重新下单。",
+    "payment.expiredRebook": "重新预订",
+    "payment.expiredTrips": "查看我的订单",
     "payment.qrDemo": "演示用二维码，不可真实扫描支付。点击下方按钮模拟支付成功。",
     "payment.qrAlt": "演示用二维码（不可真实支付）",
 
@@ -102,9 +107,12 @@ export const payment = {
     "payment.hintAlipay": "打開支付寶「掃一掃」，掃描 QR Code 完成付款",
     "payment.hintCard": "支援 Visa / Mastercard / 銀聯簽帳卡與信用卡",
 
-    "payment.qrExpired": "QR Code 已失效",
-    "payment.qrRefresh": "點擊重新整理",
-    "payment.qrCountdown": "QR Code 有效期限 {time}",
+    "payment.qrCountdown": "訂單剩餘付款時間 {time}",
+    "payment.expiredTitle": "付款逾時，訂單已自動取消",
+    "payment.expiredBody":
+      "已超過 {minutes} 分鐘付款時限，訂單自動取消，房源已重新開放。如仍需預訂，請重新下單。",
+    "payment.expiredRebook": "重新預訂",
+    "payment.expiredTrips": "查看我的訂單",
     "payment.qrDemo": "展示用 QR Code，無法實際掃描付款。請點擊下方按鈕模擬付款成功。",
     "payment.qrAlt": "展示用 QR Code（無法實際付款）",
 
@@ -170,9 +178,12 @@ export const payment = {
     "payment.hintAlipay": "Open Alipay, tap “Scan”, and scan the QR code to pay",
     "payment.hintCard": "Supports Visa / Mastercard / UnionPay debit and credit cards",
 
-    "payment.qrExpired": "This QR code has expired",
-    "payment.qrRefresh": "Refresh",
-    "payment.qrCountdown": "QR code valid for {time}",
+    "payment.qrCountdown": "Time left to pay {time}",
+    "payment.expiredTitle": "Payment window closed — order cancelled",
+    "payment.expiredBody":
+      "The {minutes}-minute payment window has passed, so this order was cancelled automatically and the dates were released. Book again to continue.",
+    "payment.expiredRebook": "Book again",
+    "payment.expiredTrips": "View my trips",
     "payment.qrDemo": "Demo QR code — it cannot really be scanned to pay. Use the button below to simulate a successful payment.",
     "payment.qrAlt": "Demo QR code (cannot be used to really pay)",
 
@@ -239,9 +250,12 @@ export const payment = {
     "payment.hintAlipay": "Alipay を開いて「スキャン」から QR コードを読み取り、支払いを完了してください",
     "payment.hintCard": "Visa / Mastercard / 銀聯のデビットカード・クレジットカードに対応",
 
-    "payment.qrExpired": "QR コードの有効期限が切れました",
-    "payment.qrRefresh": "タップして更新",
-    "payment.qrCountdown": "QR コードの有効期限 {time}",
+    "payment.qrCountdown": "お支払いまでの残り時間 {time}",
+    "payment.expiredTitle": "支払い期限を過ぎたため、注文は自動キャンセルされました",
+    "payment.expiredBody":
+      "{minutes} 分のお支払い期限を過ぎたため、この注文は自動的にキャンセルされ、宿泊日は再び予約可能になりました。続ける場合はもう一度予約してください。",
+    "payment.expiredRebook": "もう一度予約する",
+    "payment.expiredTrips": "予約一覧を見る",
     "payment.qrDemo": "これはデモ用の QR コードで、実際に読み取って支払うことはできません。下のボタンで支払い成功をシミュレートしてください。",
     "payment.qrAlt": "デモ用 QR コード（実際の支払いには使えません）",
 
@@ -308,9 +322,12 @@ export const payment = {
     "payment.hintAlipay": "Alipay를 열고 「스캔」으로 QR 코드를 스캔해 결제를 완료하세요",
     "payment.hintCard": "Visa / Mastercard / UnionPay 체크카드와 신용카드를 지원합니다",
 
-    "payment.qrExpired": "QR 코드가 만료되었습니다",
-    "payment.qrRefresh": "새로 고치기",
-    "payment.qrCountdown": "{time} 동안 유효합니다",
+    "payment.qrCountdown": "결제 남은 시간 {time}",
+    "payment.expiredTitle": "결제 시간이 초과되어 주문이 자동 취소되었습니다",
+    "payment.expiredBody":
+      "{minutes}분의 결제 기한이 지나 주문이 자동으로 취소되었고 숙소 날짜는 다시 예약 가능해졌습니다. 계속하려면 다시 예약해 주세요.",
+    "payment.expiredRebook": "다시 예약하기",
+    "payment.expiredTrips": "내 예약 보기",
     "payment.qrDemo": "데모용 QR 코드라 실제로 스캔해 결제할 수 없습니다. 아래 버튼으로 결제 성공을 시뮬레이션하세요.",
     "payment.qrAlt": "데모용 QR 코드 (실제 결제 불가)",
 
@@ -377,9 +394,12 @@ export const payment = {
     "payment.hintAlipay": "Abre Alipay, toca «Escanear» y escanea el código QR para pagar",
     "payment.hintCard": "Compatible con tarjetas de débito y crédito Visa / Mastercard / UnionPay",
 
-    "payment.qrExpired": "Este código QR ha caducado",
-    "payment.qrRefresh": "Actualizar",
-    "payment.qrCountdown": "Código QR válido durante {time}",
+    "payment.qrCountdown": "Tiempo restante para pagar {time}",
+    "payment.expiredTitle": "Se agotó el tiempo de pago: pedido cancelado",
+    "payment.expiredBody":
+      "Han pasado los {minutes} minutos del plazo de pago, así que el pedido se canceló automáticamente y las fechas volvieron a quedar libres. Vuelve a reservar para continuar.",
+    "payment.expiredRebook": "Volver a reservar",
+    "payment.expiredTrips": "Ver mis viajes",
     "payment.qrDemo": "Código QR de demostración: no se puede escanear para pagar de verdad. Usa el botón de abajo para simular un pago correcto.",
     "payment.qrAlt": "Código QR de demostración (no sirve para pagar de verdad)",
 

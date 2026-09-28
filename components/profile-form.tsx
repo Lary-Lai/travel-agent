@@ -23,7 +23,7 @@ import { toast } from "sonner";
 
 import { ChipListEditor } from "@/components/chip-list-editor";
 import { EmptyState } from "@/components/empty-state";
-import { useT } from "@/components/locale-provider";
+import { useLocale, useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,7 @@ export function ProfileForm() {
 }
 
 function ProfileEditor({ user }: { user: SessionUserDto }) {
-  const t = useT();
+  const { locale, t } = useLocale();
   const { refresh } = useSession();
 
   const [name, setName] = useState(user.name);
@@ -210,7 +210,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
       label: t("account.statTrips"),
       value: t("account.statTripsValue", { value: trips?.bookings.length ?? "—" }),
     },
-    { label: t("account.statJoined"), value: formatDate(user.createdAt) },
+    { label: t("account.statJoined"), value: formatDate(user.createdAt, locale) },
   ];
 
   return (
@@ -431,7 +431,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             </p>
             <p className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
-              {t("account.joinedAt", { date: formatDate(user.createdAt) })}
+              {t("account.joinedAt", { date: formatDate(user.createdAt, locale) })}
             </p>
           </div>
         </section>

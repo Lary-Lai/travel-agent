@@ -27,14 +27,14 @@ import { formatDateShort } from "@/lib/format";
 import { buildSearchQuery, countActiveFilters, parseSearchParams } from "@/lib/search-params";
 import { useSearchDraftStore } from "@/lib/store";
 import type { ListingSearchInput, SortOption } from "@/types";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { propertyTypeLabel, sortLabel } from "@/lib/i18n/labels";
 import { SORT_OPTIONS } from "@/types";
 
 export function SearchResults() {
   const router = useRouter();
   const pathname = usePathname();
-  const t = useT();
+  const { locale, t } = useLocale();
   const urlParams = useSearchParams();
   const setDraft = useSearchDraftStore((state) => state.setDraft);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -85,7 +85,7 @@ export function SearchResults() {
   }
   if (criteria.checkIn && criteria.checkOut) {
     chips.push({
-      label: `${formatDateShort(criteria.checkIn)} – ${formatDateShort(criteria.checkOut)}`,
+      label: `${formatDateShort(criteria.checkIn, locale)} – ${formatDateShort(criteria.checkOut, locale)}`,
       onRemove: () => updateCriteria({ checkIn: undefined, checkOut: undefined }),
     });
   }

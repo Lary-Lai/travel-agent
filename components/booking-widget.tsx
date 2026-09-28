@@ -8,7 +8,7 @@ import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
 import { HouseRulesPanel } from "@/components/house-rules-panel";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -28,7 +28,7 @@ import type { ListingDetail } from "@/types";
  */
 export function BookingWidget({ listing }: { listing: ListingDetail }) {
   const router = useRouter();
-  const t = useT();
+  const { locale, t } = useLocale();
   const { user, isLoading: sessionLoading } = useSession();
 
   const [range, setRange] = useState<DateRange | undefined>();
@@ -121,13 +121,13 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
                 <span>
                   <span className="text-muted-foreground block text-[11px] font-semibold">{t("booking.checkIn")}</span>
                   <span className={checkIn ? "" : "text-muted-foreground"}>
-                    {checkIn ? formatDateShort(checkIn) : t("booking.selectDates")}
+                    {checkIn ? formatDateShort(checkIn, locale) : t("booking.selectDates")}
                   </span>
                 </span>
                 <span>
                   <span className="text-muted-foreground block text-[11px] font-semibold">{t("booking.checkOut")}</span>
                   <span className={checkOut ? "" : "text-muted-foreground"}>
-                    {checkOut ? formatDateShort(checkOut) : t("booking.selectDates")}
+                    {checkOut ? formatDateShort(checkOut, locale) : t("booking.selectDates")}
                   </span>
                 </span>
               </span>
