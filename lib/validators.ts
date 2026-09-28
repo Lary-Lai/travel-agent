@@ -233,6 +233,34 @@ export const createBookingSchema = z.object({
 /** Simulated checkout: which channel the user picked. */
 export const paymentMethodSchema = z.enum(["WECHAT", "ALIPAY", "CARD"]);
 
+/**
+ * A guest review. One per (listing, user) — the service upserts, so posting
+ * again edits the existing review rather than adding a duplicate.
+ */
+export const saveReviewSchema = z.object({
+  rating: z.coerce.number().int().min(1, "评分需要在 1 到 5 之间").max(5, "评分需要在 1 到 5 之间"),
+  comment: z
+    .string()
+    .trim()
+    .min(4, "评论至少 4 个字")
+    .max(600, "评论不能超过 600 个字"),
+});
+
+/**
+ * A search the user ran, recorded for personalisation.
+ *
+ * Everything is optional except `location`: a search with no destination carries
+ * no signal about *where* the user wants to go, which is the only thing this
+ * table is for.
+ */
+export const recordSearchSchema = z.object({
+  location: z.string().trim().min(1, "缺少 destination").max(80),
+  guests: z.coerce.number().int().min(1).max(MAX_GUESTS).optional(),
+  priceMin: z.coerce.number().int().min(0).max(100_000).optional(),
+  priceMax: z.coerce.number().int().min(0).max(100_000).optional(),
+  propertyType: propertyTypeSchema.optional(),
+});
+
 export const payBookingSchema = z.object({
   method: paymentMethodSchema,
 });

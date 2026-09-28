@@ -11,6 +11,7 @@ import { FilterPanel } from "@/components/filter-panel";
 import { ListingCard, ListingGridSkeleton } from "@/components/listing-card";
 import { CityWeatherStrip } from "@/components/city-weather-strip";
 import { SearchBar } from "@/components/search-bar";
+import { SearchRecorder } from "@/components/search-recorder";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -112,6 +113,15 @@ export function SearchResults() {
 
   return (
     <div className="space-y-6">
+      {/* Feed what the user is searching into personalisation (no-op when out). */}
+      <SearchRecorder
+        location={criteria.location}
+        guests={criteria.guests}
+        priceMin={criteria.priceMin}
+        priceMax={criteria.priceMax}
+        propertyType={criteria.propertyType}
+      />
+
       {/* Search bar keeps the current criteria so it never looks reset. */}
       <SearchBar
         variant="compact"

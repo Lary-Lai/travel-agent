@@ -1,0 +1,153 @@
+"use client";
+
+import {
+  BedDouble,
+  CalendarCheck,
+  CheckCircle2,
+  Clock,
+  Info,
+  KeyRound,
+  ScrollText,
+} from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import type { HouseRules } from "@/types";
+
+type Props = {
+  rules: HouseRules;
+  title: string;
+  /** Rendered inline under the booking widget, or as a standalone button. */
+  variant?: "button" | "inline";
+};
+
+/**
+ * 入住须知 — check-in logistics and house rules.
+ *
+ * A dialog rather than a permanently expanded block: it is reference material a
+ * guest checks once or twice, and inlining it would push the price breakdown off
+ * the screen. Reachable from the booking widget so it is discoverable at exactly
+ * the moment someone is deciding whether to book.
+ */
+export function HouseRulesPanel({ rules, title, variant = "button" }: Props) {
+  const content = (
+    <div className="space-y-5">
+      {/* Check-in / out times */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border p-4">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <Clock className="size-3.5" />
+            入住时间
+          </div>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{rules.checkInTime}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs">之后可随时入住</p>
+        </div>
+        <div className="rounded-2xl border p-4">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+            <CalendarCheck className="size-3.5" />
+            退房时间
+          </div>
+          <p className="mt-1 text-xl font-semibold tabular-nums">{rules.checkOutTime}</p>
+          <p className="text-muted-foreground mt-0.5 text-xs">之前请完成退房</p>
+        </div>
+      </div>
+
+      <div className="bg-secondary/50 flex items-start gap-2.5 rounded-xl p-3">
+        <KeyRound className="text-primary mt-0.5 size-4 shrink-0" />
+        <p className="text-xs leading-relaxed">
+          入住当天房东会发送门锁密码与到达指引，无需现场交接钥匙。
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* House rules */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <ScrollText className="text-primary size-4" />
+          <h3 className="text-sm font-semibold">入住守则</h3>
+          <Badge variant="secondary" className="ml-auto text-[11px]">
+            {rules.rules.length} 条
+          </Badge>
+        </div>
+        <ul className="space-y-2">
+          {rules.rules.map((rule) => (
+            <li key={rule} className="flex items-start gap-2 text-sm leading-relaxed">
+              <CheckCircle2 className="text-primary mt-0.5 size-3.5 shrink-0" />
+              {rule}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <Separator />
+
+      {/* Practical notes */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Info className="text-primary size-4" />
+          <h3 className="text-sm font-semibold">其他须知</h3>
+        </div>
+        <ul className="space-y-2">
+          {rules.notes.map((note) => (
+            <li
+              key={note}
+              className="text-muted-foreground flex items-start gap-2 text-sm leading-relaxed"
+            >
+              <BedDouble className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+              {note}
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        预订即表示你同意以上守则。如遇特殊情况请提前与房东沟通，大部分情况都可以协商。
+      </p>
+    </div>
+  );
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        {variant === "inline" ? (
+          <button
+            type="button"
+            className="hover:bg-accent flex w-full items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors"
+          >
+            <ScrollText className="text-primary size-4 shrink-0" />
+            <span className="text-sm font-medium">入住须知</span>
+            <span className="text-muted-foreground ml-auto text-xs">
+              {rules.checkInTime} 入住 · {rules.checkOutTime} 退房
+            </span>
+          </button>
+        ) : (
+          <Button variant="outline" className="w-full gap-2">
+            <ScrollText className="size-4" />
+            查看入住须知
+          </Button>
+        )}
+      </DialogTrigger>
+
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ScrollText className="text-primary size-4" />
+            入住须知
+          </DialogTitle>
+          <DialogDescription className="line-clamp-2">{title}</DialogDescription>
+        </DialogHeader>
+        {content}
+      </DialogContent>
+    </Dialog>
+  );
+}

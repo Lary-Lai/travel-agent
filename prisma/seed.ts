@@ -345,6 +345,87 @@ function buildImages(index: number, propertyType: string) {
   });
 }
 
+/**
+ * Check-in logistics and house rules.
+ *
+ * Derived from the listing's own attributes so the rules never contradict the
+ * amenities (a place advertising 可带宠物 must not also say 禁止宠物), which is
+ * the usual way this kind of text goes wrong when it is written by hand.
+ */
+function buildHouseRules(shape: Shape, amenityNames: string[]): {
+  checkInTime: string;
+  checkOutTime: string;
+  houseRules: string[];
+  houseNotes: string[];
+} {
+  const has = (name: string) => amenityNames.includes(name);
+
+  const rules = [
+    "入住时间后可使用门锁密码自助入住",
+    shape.propertyType === "HOTEL" ? "请在前台出示身份证件办理登记" : "请勿在室内吸烟",
+    "晚上 22:00 后请保持安静，避免影响邻居",
+  ];
+
+  if (has("可带宠物")) rules.push("可携带宠物，请自备宠物用品并清理毛发");
+  else rules.push("恕不接待宠物");
+
+  if (shape.maxGuests > 4) rules.push("不接受聚会或派对活动");
+  else rules.push("不适合举办聚会");
+
+  const notes = [
+    has("免费停车") ? "楼下有免费停车位，先到先得" : "周边路边可停车，费用约 20 元/小时",
+    has("地铁附近") ? "步行可达地铁站，建议乘公共交通出行" : "建议打车或自驾前往，周边公交线路密集",
+    has("专属办公区") ? "书桌区域配有插座与台灯，适合远程办公" : "客厅可临时办公，但没有专用书桌",
+    "如需延迟退房请提前一天告知，视房态而定",
+  ];
+
+  return {
+    // Hotels run later check-outs than private homes; both are plausible defaults.
+    checkInTime: shape.propertyType === "HOTEL" ? "14:00" : "15:00",
+    checkOutTime: shape.propertyType === "HOTEL" ? "12:00" : "11:00",
+    houseRules: rules,
+    houseNotes: notes,
+  };
+}
+
+/**
+ * Guest accounts that author the seeded reviews.
+ *
+ * Separate from HOSTS on purpose: a host reviewing their own listing is a
+ * credibility hole, and the review service rejects it — so the seed must not
+ * create data the app itself would refuse.
+ */
+const REVIEWERS = [
+  { name: "周小满", email: "guest.zhou@travel-agent.dev" },
+  { name: "许知远", email: "guest.xu@travel-agent.dev" },
+  { name: "Nina Fischer", email: "nina.fischer@travel-agent.dev" },
+  { name: "Tomás Rivera", email: "tomas.rivera@travel-agent.dev" },
+  { name: "郑一诺", email: "guest.zheng@travel-agent.dev" },
+  { name: "Aisha Rahman", email: "aisha.rahman@travel-agent.dev" },
+];
+
+/** Comment bodies per rating, so the text matches the stars. */
+const REVIEW_TEMPLATES: Record<number, string[]> = {
+  5: [
+    "位置非常好，出门就是地铁，房间比照片还干净。房东回复很快，入住全程没有任何问题。",
+    "采光特别好，早上坐在窗边喝咖啡很舒服。厨房用具齐全，自己做饭完全够用。",
+    "第二次住这里了，依然很满意。床垫软硬适中，隔音也比想象中好。",
+  ],
+  4: [
+    "整体很不错，房间整洁、交通方便。唯一的小问题是晚上热水来得有点慢。",
+    "和描述基本一致，性价比高。周边吃饭方便，走几步就有便利店。",
+    "住得挺舒服，房东也很热情。如果能有更多衣架就更好了。",
+  ],
+  3: [
+    "位置和价格都还行，但房间比照片看起来小一些，两个人住刚好。",
+    "基本能满足需求。楼上有装修声，白天在房间休息会有点吵。",
+  ],
+};
+
+const REVIEW_WITH_SCORES = Object.entries(REVIEW_TEMPLATES).flatMap(([rating, comments]) =>
+  comments.map((comment) => ({ rating: Number(rating), comment })),
+);
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -402,8 +483,7 @@ async function main() {
     );
   }
 
-  const demoUser = await prisma.user.upsert({
-    where: { email: DEMO_EMAIL },
+  const demoUser = await prisma.user.upsert({    where: { email: DEMO_EMAIL },
     create: {
       email: DEMO_EMAIL,
       name: "演示用户",
@@ -480,6 +560,7 @@ async function main() {
         beds: shape.beds,
         bathrooms: shape.bathrooms,
         hostId: hosts[index % hosts.length].id,
+        ...buildHouseRules(shape, amenityNames),
       };
 
       const amenityRows = amenityNames
@@ -516,6 +597,64 @@ async function main() {
     where: { seedKey: { notIn: producedKeys } },
   });
   if (stale.count > 0) console.log(`[seed] removed ${stale.count} stale listing(s)`);
+
+  // ---------------------------------------------------------------- reviews
+  //
+  // Upserted by (listingId, userId) so re-running the seed refreshes the text
+  // instead of stacking duplicates — and reviews written by real users are never
+  // touched, because those user ids are not in REVIEWERS.
+  console.log("[seed] guest reviewers + reviews (upsert) ...");
+  const reviewers: Array<{ id: string }> = [];
+  for (const reviewer of REVIEWERS) {
+    reviewers.push(
+      await prisma.user.upsert({
+        where: { email: reviewer.email },
+        create: {
+          email: reviewer.email,
+          name: reviewer.name,
+          password: passwordHash,
+          avatar: presetAvatarFor(reviewer.email),
+        },
+        update: { name: reviewer.name, avatar: presetAvatarFor(reviewer.email) },
+      }),
+    );
+  }
+
+  const allListings = await prisma.listing.findMany({
+    select: { id: true, hostId: true },
+    orderBy: { id: "asc" },
+  });
+
+  let reviewCount = 0;
+  for (const listing of allListings) {
+    // 1-3 reviews each, deterministic, never by the listing's own host.
+    const eligible = reviewers.filter((reviewer) => reviewer.id !== listing.hostId);
+    const howMany = Math.min(eligible.length, intBetween(1, 3));
+
+    for (let i = 0; i < howMany; i++) {
+      // Deterministic spread: a small char-code hash of the id, so different
+      // listings get different reviewers instead of all sharing the first one.
+      const hash = [...listing.id].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+      const reviewer = eligible[(hash + i * 3) % eligible.length];
+      const template = pick(REVIEW_WITH_SCORES);
+      // Spread the timestamps so the list has a believable order.
+      const createdAt = new Date(Date.now() - intBetween(1, 240) * 86_400_000);
+
+      await prisma.review.upsert({
+        where: { listingId_userId: { listingId: listing.id, userId: reviewer.id } },
+        create: {
+          listingId: listing.id,
+          userId: reviewer.id,
+          rating: template.rating,
+          comment: template.comment,
+          createdAt,
+        },
+        update: { rating: template.rating, comment: template.comment },
+      });
+      reviewCount++;
+    }
+  }
+  console.log(`[seed] reviews: ${reviewCount} across ${allListings.length} listings`);
 
   console.log("[seed] demo wishlists (upsert) ...");
   const tokyoListings = (listingIdsByCity.get("Tokyo") ?? []).slice(0, 3);

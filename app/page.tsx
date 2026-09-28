@@ -16,7 +16,8 @@ import { SafeImage } from "@/components/safe-image";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { ListingCard } from "@/components/listing-card";
-import { SearchBar } from "@/components/search-bar";
+import { PersonalizedDestinations } from "@/components/personalized-destinations";
+import { StickySearchBar } from "@/components/sticky-search-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
@@ -92,8 +93,7 @@ export default async function HomePage() {
 
             <div className="relative mt-8">
               <div className="glow-primary pointer-events-none absolute inset-x-8 -inset-y-4 -z-10" aria-hidden />
-              <SearchBar
-                variant="hero"
+              <StickySearchBar
                 destinations={cities.map((city) => ({ city: city.city, cityLabel: city.cityLabel }))}
               />
             </div>
@@ -153,7 +153,7 @@ export default async function HomePage() {
           </section>
 
           {/* ---------------------------------------------------- destinations */}
-          <section className="space-y-5">
+          <section id="destinations" className="scroll-mt-32 space-y-5">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
@@ -219,7 +219,9 @@ export default async function HomePage() {
           </section>
 
           {/* ----------------------------------------------------- recommended */}
-          <section className="space-y-5">
+          <PersonalizedDestinations />
+
+          <section id="recommended" className="scroll-mt-32 space-y-5">
             <div className="flex items-end justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">为你推荐的房源</h2>

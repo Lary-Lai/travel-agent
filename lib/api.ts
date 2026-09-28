@@ -12,7 +12,10 @@ import type {
   ListingSearchInput,
   ListingSearchResult,
   PaymentMethodValue,
+  PersonalizedDestination,
   RefundDto,
+  ReviewDto,
+  ReviewSummary,
   SessionUserDto,
   WishlistDto,
 } from "@/types";
@@ -243,4 +246,45 @@ export const api = {
 
   cancelBooking: (id: string) =>
     request<{ booking: BookingDto }>(`/api/bookings/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  // --------------------------------------------------------------- reviews
+  /** Public: reviews are readable without an account. */
+  listReviews: (listingId: string) =>
+    request<ReviewSummary>(`/api/listings/${encodeURIComponent(listingId)}/reviews`),
+
+  /** Upserts — posting twice edits your existing review instead of duplicating. */
+  saveReview: (listingId: string, input: { rating: number; comment: string }) =>
+    request<{ review: ReviewDto; summary: ReviewSummary }>(
+      `/api/listings/${encodeURIComponent(listingId)}/reviews`,
+      { method: "POST", body: JSON.stringify(input) },
+    ),
+
+  deleteReview: (listingId: string) =>
+    request<{ summary: ReviewSummary }>(
+      `/api/listings/${encodeURIComponent(listingId)}/reviews`,
+      { method: "DELETE" },
+    ),
+
+  // ------------------------------------------------------- personalisation
+  /** Fire-and-forget: a signed-out caller is a no-op, not an error. */
+  recordSearch: (input: {
+    location: string;
+    guests?: number;
+    priceMin?: number;
+    priceMax?: number;
+    propertyType?: string;
+  }) =>
+    request<{ recorded: boolean; reason?: string }>("/api/search-events", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  getPersonalizedDestinations: () =>
+    request<{
+      personalised: boolean;
+      totalSearches: number;
+      summary: string;
+      destinations: PersonalizedDestination[];
+      source: "history" | "popular";
+    }>("/api/recommendations/destinations"),
 };

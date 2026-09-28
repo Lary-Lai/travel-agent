@@ -77,9 +77,11 @@ model User {
   /// 已旅行地点 — the "display case" of places already visited.
   visitedPlaces     String[] @default([])
 
-  hostedListings Listing[]  @relation("HostListings")
+  hostedListings Listing[]     @relation("HostListings")
   wishlists      Wishlist[]
   bookings       Booking[]
+  reviews        Review[]
+  searchEvents   SearchEvent[]
 
   @@index([email])
 }
@@ -112,11 +114,21 @@ model Listing {
   /// any listing created outside the seed.
   seedKey String? @unique
 
+  // ------------------------------------------------------------- house rules
+  // Shown in the "入住须知" panel on the booking widget.
+  checkInTime  String   @default("15:00")
+  checkOutTime String   @default("11:00")
+  /// Free-form rules (禁止吸烟 / 不允许携带宠物 ...).
+  houseRules   String[] @default([])
+  /// Practical notes shown under the rules (停车、门禁、周边 ...).
+  houseNotes   String[] @default([])
+
   host          User             @relation("HostListings", fields: [hostId], references: [id], onDelete: Cascade)
   images        ListingImage[]
   amenities     ListingAmenity[]
   wishlistItems WishlistItem[]
   bookings      Booking[]
+  reviews       Review[]
 
   @@index([city])
   @@index([propertyType])
@@ -124,6 +136,55 @@ model Listing {
   @@index([hostId])
   @@index([city, pricePerNight])
   @@index([city, propertyType, pricePerNight])
+}
+
+/// A guest review.
+///
+/// One row per (listing, user): a guest edits their own review rather than
+/// stacking duplicates, which keeps the average meaningful and makes "my review"
+/// a single lookup. Keyed by user id, so a review is still there on the next
+/// login — that is the whole point of storing it server-side.
+model Review {
+  id        String   @id @default(cuid())
+  listingId String
+  userId    String
+  /// 1-5.
+  rating    Int
+  comment   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, userId])
+  @@index([listingId, createdAt])
+  @@index([userId])
+}
+
+/// A search the user actually ran, used to personalise recommendations.
+///
+/// Only recorded for signed-in users: an anonymous session has no identity to
+/// personalise, and storing strangers' queries would be collection without
+/// purpose. The destination is stored as the canonical city name where it
+/// resolves, so "东京" and "Tokyo" aggregate together.
+model SearchEvent {
+  id           String        @id @default(cuid())
+  userId       String
+  /// Raw text the user typed.
+  query        String
+  /// Canonical city name when the query resolved to one, else null.
+  city         String?
+  guests       Int?
+  priceMin     Int?
+  priceMax     Int?
+  propertyType PropertyType?
+  createdAt    DateTime      @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, city])
 }
 
 model ListingImage {

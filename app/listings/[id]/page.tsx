@@ -16,7 +16,10 @@ import { connection } from "next/server";
 import { AmenityList } from "@/components/amenity-list";
 import { BookingWidget } from "@/components/booking-widget";
 import { FavoriteButton } from "@/components/favorite-button";
+import { HouseRulesPanel } from "@/components/house-rules-panel";
 import { ListingGallery } from "@/components/listing-gallery";
+import { ListingMap } from "@/components/listing-map";
+import { ReviewSection } from "@/components/review-section";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -179,10 +182,22 @@ export default async function ListingDetailPage({ params }: Props) {
               <p>
                 {listing.cityLabel} · {listing.location}
               </p>
-              <p className="text-xs tabular-nums">
-                经纬度 {listing.latitude.toFixed(4)}, {listing.longitude.toFixed(4)}
-              </p>
             </div>
+            <ListingMap
+              latitude={listing.latitude}
+              longitude={listing.longitude}
+              label={listing.location}
+            />
+            <p className="text-muted-foreground text-xs tabular-nums">
+              经纬度 {listing.latitude.toFixed(4)}, {listing.longitude.toFixed(4)} ·
+              出于隐私考虑，地图显示的是街区位置而非门牌号
+            </p>
+          </section>
+
+          {/* house rules */}
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">入住须知</h2>
+            <HouseRulesPanel rules={listing.houseRules} title={listing.title} variant="inline" />
           </section>
 
           {/* weather in the destination city */}
@@ -195,6 +210,11 @@ export default async function ListingDetailPage({ params }: Props) {
               </section>
             </>
           ) : null}
+
+          <Separator />
+
+          {/* reviews */}
+          <ReviewSection listingId={listing.id} />
         </div>
 
         {/* ---------------------------------------------------- booking panel */}

@@ -40,7 +40,7 @@ const EXEC_OPTIONS = { toolCallId: "verify", messages: [] };
 
 async function main() {
   const { prisma } = await import("../lib/db");
-  const { createAgentTools } = await import("../agent/tools");
+  const { createAgentTools, AGENT_TOOL_LABELS } = await import("../agent/tools");
   const { getSession } = await import("../agent/session");
 
   const demo = await prisma.user.findUniqueOrThrow({
@@ -295,6 +295,60 @@ async function main() {
 
   const anonAdd = await anonRun("addToWishlist", { position: 1 });
   check("addToWishlist refuses anonymous callers", anonAdd.ok === false);
+
+  // ------------------------------------------------- search-history tool
+  console.log("\n— getMySearchHistory (personalisation)");
+
+  check(
+    "the tool is registered in the agent's tool set",
+    typeof tools.getMySearchHistory === "object" && tools.getMySearchHistory !== null,
+  );
+  check(
+    "every registered tool has a Chinese label for the UI",
+    Object.keys(tools).every((name) => typeof AGENT_TOOL_LABELS[name] === "string"),
+    Object.keys(tools).filter((name) => !AGENT_TOOL_LABELS[name]).join(", "),
+  );
+
+  const anonHistory = await anonRun("getMySearchHistory", {});
+  check("it refuses anonymous callers", anonHistory.ok === false, String(anonHistory.error));
+  check(
+    "the refusal points the model at asking the user instead",
+    /未登录|询问/.test(String(anonHistory.hint)),
+    String(anonHistory.hint),
+  );
+
+  // Record a couple of searches, then confirm the tool reports them.
+  const { recordSearch, getSearchInsights } = await import("../server/personalization.service");
+  await recordSearch(demo.id, { location: "Tokyo" });
+  await recordSearch(demo.id, { location: "首尔" });
+
+  const history = await run("getMySearchHistory", {});
+  check("it succeeds for a signed-in user", history.ok === true, String(history.error));
+
+  const topCities = (history.topCities ?? []) as Array<{ city: string; cityLabel: string }>;
+  check("it reports the searched cities", topCities.length > 0, JSON.stringify(topCities));
+  check(
+    "the Chinese query resolved to a canonical city",
+    topCities.some((entry) => entry.city === "Seoul"),
+    JSON.stringify(topCities.map((entry) => entry.city)),
+  );
+  check(
+    "the summary is written for the model to quote",
+    /搜索/.test(String(history.summary)),
+    String(history.summary),
+  );
+
+  // The recency weighting must actually be used, not just counted.
+  const insights = await getSearchInsights(demo.id);
+  check("insights expose a total count", insights.totalSearches >= 2, String(insights.totalSearches));
+  check(
+    "the most recent search ranks first",
+    insights.topCities[0]?.city === "Seoul",
+    insights.topCities[0]?.city,
+  );
+
+  // Cleaning up keeps the demo account's history from growing across runs.
+  await prisma.searchEvent.deleteMany({ where: { userId: demo.id } });
 
   // ---------------------------------------------------------------- cleanup
   await prisma.wishlist.deleteMany({ where: { name: { startsWith: "AI 验证-" } } });

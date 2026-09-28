@@ -23,6 +23,14 @@ type Props = {
   initial?: Partial<SearchDraft>;
   /** When provided, the bar calls this instead of navigating. */
   onSearch?: (draft: SearchDraft) => void;
+  /**
+   * Controlled mode. The home page renders the same draft in two places — the
+   * hero bar and the compact bar that appears once the hero scrolls away — and
+   * they must agree, so the owner holds the state and both instances mirror it.
+   * Without this each instance would keep its own private copy.
+   */
+  value?: Partial<SearchDraft>;
+  onChange?: (draft: SearchDraft) => void;
 };
 
 const MIN_GUESTS = 1;
@@ -34,28 +42,69 @@ export function SearchBar({
   destinations = [],
   initial,
   onSearch,
+  value,
+  onChange,
 }: Props) {
   const router = useRouter();
   const setDraft = useSearchDraftStore((state) => state.setDraft);
 
-  const [destination, setDestination] = useState(initial?.destination ?? "");
-  const [range, setRange] = useState<DateRange | undefined>(() => {
+  const [localDestination, setDestination] = useState(initial?.destination ?? "");
+  const [localRange, setLocalRange] = useState<DateRange | undefined>(() => {
     if (!initial?.checkIn) return undefined;
     return {
       from: parseDateOnly(initial.checkIn),
       to: initial.checkOut ? parseDateOnly(initial.checkOut) : undefined,
     };
   });
-  const [guests, setGuests] = useState(initial?.guests ?? 2);
+  const [localGuests, setLocalGuests] = useState(initial?.guests ?? 2);
+
+  // In controlled mode the owner's value wins; otherwise the local copy does.
+  const controlled = value !== undefined;
+  const destination = controlled ? (value.destination ?? "") : localDestination;
+  const guests = controlled ? (value.guests ?? 2) : localGuests;
+  const range: DateRange | undefined = controlled
+    ? value.checkIn
+      ? {
+          from: parseDateOnly(value.checkIn),
+          to: value.checkOut ? parseDateOnly(value.checkOut) : undefined,
+        }
+      : undefined
+    : localRange;
+
+  const draft: SearchDraft = {
+    destination,
+    checkIn: range?.from ? toDateOnlyString(range.from) : "",
+    checkOut: range?.to ? toDateOnlyString(range.to) : "",
+    guests,
+  };
+
+  /** Single funnel for every edit, so both modes stay in step. */
+  const update = (patch: Partial<SearchDraft>) => {
+    const next = { ...draft, ...patch };
+    if (controlled) onChange?.(next);
+    else {
+      if (patch.destination !== undefined) setDestination(patch.destination);
+      if (patch.guests !== undefined) setLocalGuests(patch.guests);
+      if (patch.checkIn !== undefined || patch.checkOut !== undefined) {
+        setLocalRange(
+          patch.checkIn
+            ? {
+                from: parseDateOnly(patch.checkIn),
+                to: patch.checkOut ? parseDateOnly(patch.checkOut) : undefined,
+              }
+            : undefined,
+        );
+      }
+    }
+  };
 
   const [openPanel, setOpenPanel] = useState<"destination" | "dates" | "guests" | null>(null);
 
   const today = useMemo(() => todayUtc(), []);
-  const checkIn = range?.from ? toDateOnlyString(range.from) : "";
-  const checkOut = range?.to ? toDateOnlyString(range.to) : "";
+  const checkIn = draft.checkIn;
+  const checkOut = draft.checkOut;
 
   const submit = () => {
-    const draft: SearchDraft = { destination: destination.trim(), checkIn, checkOut, guests };
     setDraft(draft);
 
     if (onSearch) {
@@ -120,7 +169,7 @@ export function SearchBar({
             <Input
               autoFocus
               value={destination}
-              onChange={(event) => setDestination(event.target.value)}
+              onChange={(event) => update({ destination: event.target.value })}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
                   event.preventDefault();
@@ -140,7 +189,7 @@ export function SearchBar({
                     key={item.city}
                     type="button"
                     onClick={() => {
-                      setDestination(item.city);
+                      update({ destination: item.city });
                       setOpenPanel(null);
                     }}
                     className="hover:bg-accent rounded-lg px-3 py-2 text-left text-sm transition-colors"
@@ -176,7 +225,12 @@ export function SearchBar({
             mode="range"
             required={false}
             selected={range}
-            onSelect={setRange}
+            onSelect={(next) =>
+              update({
+                checkIn: next?.from ? toDateOnlyString(next.from) : "",
+                checkOut: next?.to ? toDateOnlyString(next.to) : "",
+              })
+            }
             numberOfMonths={1}
             disabled={{ before: today }}
             autoFocus
@@ -188,7 +242,12 @@ export function SearchBar({
                 : "请选择入住与退房日期"}
             </span>
             <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setRange(undefined)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => update({ checkIn: "", checkOut: "" })}
+              >
                 清除
               </Button>
               <Button
@@ -229,7 +288,7 @@ export function SearchBar({
                 variant="outline"
                 size="icon"
                 className="size-8"
-                onClick={() => setGuests((value) => Math.max(MIN_GUESTS, value - 1))}
+                onClick={() => update({ guests: Math.max(MIN_GUESTS, guests - 1) })}
                 disabled={guests <= MIN_GUESTS}
                 aria-label="减少人数"
               >
@@ -241,7 +300,7 @@ export function SearchBar({
                 variant="outline"
                 size="icon"
                 className="size-8"
-                onClick={() => setGuests((value) => Math.min(MAX_GUESTS, value + 1))}
+                onClick={() => update({ guests: Math.min(MAX_GUESTS, guests + 1) })}
                 disabled={guests >= MAX_GUESTS}
                 aria-label="增加人数"
               >

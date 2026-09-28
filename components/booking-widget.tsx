@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
+import { HouseRulesPanel } from "@/components/house-rules-panel";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -245,6 +246,12 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
         <ShieldCheck className="size-3.5" />
         价格由服务端重新计算，保证安全
       </p>
+
+      {/* Check-in logistics live here so they are reachable at the moment of
+          deciding, without pushing the price breakdown off the panel. */}
+      <div className="mt-3">
+        <HouseRulesPanel rules={listing.houseRules} title={listing.title} variant="inline" />
+      </div>
     </div>
   );
 }

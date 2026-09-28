@@ -148,6 +148,14 @@ export type ListingAmenityDetail = {
   cityUsage: number;
 };
 
+/** Check-in / check-out logistics, shown in the 入住须知 panel. */
+export type HouseRules = {
+  checkInTime: string;
+  checkOutTime: string;
+  rules: string[];
+  notes: string[];
+};
+
 /** Full listing payload for the detail page. */
 export type ListingDetail = ListingSummary & {
   description: string;
@@ -158,6 +166,61 @@ export type ListingDetail = ListingSummary & {
   amenities: ListingAmenityDetail[];
   /** Denominator for `cityUsage` — total listings in this city. */
   cityListingCount: number;
+  houseRules: HouseRules;
+};
+
+/** One guest review. */
+export type ReviewDto = {
+  id: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+  /** True for the caller's own review, so the UI can offer edit/delete. */
+  isMine: boolean;
+  author: {
+    id: string;
+    name: string;
+    avatar: string | null;
+  };
+};
+
+/**
+ * Reviews for one listing.
+ *
+ * `seeded` separates the historical aggregate baked into the listing row
+ * (`rating` / `reviewCount`) from the reviews actually stored in the Review
+ * table, so the UI can be honest about which numbers come from where.
+ */
+export type ReviewSummary = {
+  average: number | null;
+  count: number;
+  /** Histogram of 1..5 stars for the stored reviews. */
+  distribution: Array<{ stars: number; count: number }>;
+  reviews: ReviewDto[];
+  /** The caller's own review, if signed in and already reviewed. */
+  myReview: ReviewDto | null;
+  /** Reviews the listing claims from before this feature existed. */
+  seededCount: number;
+  seededRating: number;
+};
+
+/** A city the user's search history suggests they are interested in. */
+export type PersonalizedDestination = {
+  city: string;
+  cityLabel: string;
+  /** How many recorded searches mentioned this city. */
+  hits: number;
+  reason: string;
+};
+
+export type SearchInsights = {
+  /** Most-searched cities, newest-weighted. */
+  topCities: PersonalizedDestination[];
+  totalSearches: number;
+  lastSearchAt: string | null;
+  /** Human-readable digest handed to the AI agent. */
+  summary: string;
 };
 
 /** Normalised search input; every field is optional. */

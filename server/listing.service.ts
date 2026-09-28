@@ -228,6 +228,12 @@ export async function getListingDetail(id: string): Promise<ListingDetail> {
     },
     gallery: row.images.map((image) => ({ url: image.url, caption: image.caption })),
     cityListingCount,
+    houseRules: {
+      checkInTime: row.checkInTime,
+      checkOutTime: row.checkOutTime,
+      rules: row.houseRules,
+      notes: row.houseNotes,
+    },
     amenities: row.amenities.map((a) => ({
       name: a.amenity.name,
       icon: a.amenity.icon,
