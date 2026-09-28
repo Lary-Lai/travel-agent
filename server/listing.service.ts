@@ -66,6 +66,8 @@ export function mapListingRow(row: ListingRow): ListingSummary {
     images,
     amenityNames: row.amenities.map((a) => a.amenity.name),
     hostName: row.host.name,
+    titleI18n: (row as { titleI18n?: Record<string, string> | null }).titleI18n ?? null,
+    locationI18n: (row as { locationI18n?: Record<string, string> | null }).locationI18n ?? null,
     latitude: row.latitude,
     longitude: row.longitude,
   };

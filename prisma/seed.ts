@@ -27,6 +27,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { AMENITY_CATALOG, galleryAnglesFor } from "../lib/amenities";
 import { presetAvatarFor } from "../lib/avatars";
 import { CITIES, type CityMeta } from "../lib/cities";
+import { buildLocalizedListingText } from "../lib/i18n/listing-text";
 import { PrismaClient } from "../lib/generated/prisma/client";
 
 // 45 photo ids, each verified to return HTTP 200.
@@ -187,9 +188,17 @@ const DEMO_PASSWORD = "Demo1234";
 const SEED_EMAIL_DOMAIN = "@travel-agent.dev";
 
 /** Build a unique, realistic title for a listing. */
-function buildTitle(city: CityMeta, neighborhood: string, shape: Shape, used: Set<string>): string {
-  const adj = pick(ADJECTIVES);
-  const walk = intBetween(2, 9);
+function buildTitle(
+  city: CityMeta,
+  neighborhood: string,
+  shape: Shape,
+  used: Set<string>,
+  /** Chosen by the caller so the localised titles can reuse the same values. */
+  chosenAdj?: string,
+  chosenWalk?: number,
+): string {
+  const adj = chosenAdj ?? pick(ADJECTIVES);
+  const walk = chosenWalk ?? intBetween(2, 9);
 
   // Enough candidates per type that a city's listings rarely fall through to the
   // generic numbered fallback below.
@@ -533,7 +542,21 @@ async function main() {
     for (let s = 0; s < SHAPES.length; s++) {
       const shape = SHAPES[s];
       const neighborhood = neighborhoods[s % neighborhoods.length];
-      const title = buildTitle(city, neighborhood, shape, usedTitles);
+      // Chosen once so the Chinese title and every localised title agree on the
+      // same adjective and walking distance.
+      const chosenAdj = pick(ADJECTIVES);
+      const chosenWalk = intBetween(2, 9);
+      const title = buildTitle(city, neighborhood, shape, usedTitles, chosenAdj, chosenWalk);
+      const localized = buildLocalizedListingText({
+        neighborhood,
+        city: city.name,
+        cityZh: city.nameZh,
+        propertyType: shape.propertyType,
+        adjective: chosenAdj,
+        walk: chosenWalk,
+        guests: shape.maxGuests,
+        variant: s,
+      });
 
       const price = roundTo(city.basePrice * shape.priceMultiplier * between(0.82, 1.22), 10);
       const amenityNames = buildAmenities(shape);
@@ -561,6 +584,10 @@ async function main() {
         bathrooms: shape.bathrooms,
         hostId: hosts[index % hosts.length].id,
         ...buildHouseRules(shape, amenityNames),
+        // The Chinese title goes LAST: the generated map already carries a
+        // `zh-CN` key (empty), so spreading it afterwards blanks the value.
+        titleI18n: { ...localized.titleI18n, "zh-CN": title },
+        locationI18n: localized.locationI18n,
       };
 
       const amenityRows = amenityNames

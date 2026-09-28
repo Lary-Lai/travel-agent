@@ -4,7 +4,8 @@ import { MapPin, Star } from "lucide-react";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
+import { localizedLocation, localizedTitle } from "@/lib/i18n/listing-text";
 import { SafeImage } from "@/components/safe-image";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,7 +34,7 @@ export function ListingCard({
   priority?: boolean;
   className?: string;
 }) {
-  const t = useT();
+  const { locale, t } = useLocale();
 
   return (
     <article className={cn("group relative", className)}>
@@ -41,7 +42,7 @@ export function ListingCard({
         <div className="bg-muted relative aspect-square overflow-hidden rounded-xl">
           <SafeImage
             src={listing.image}
-            alt={listing.title}
+            alt={localizedTitle(locale, listing)}
             sizes={SIZES}
             priority={priority}
             className="transition-transform duration-500 will-change-transform group-hover:scale-[1.06]"
@@ -58,7 +59,7 @@ export function ListingCard({
 
         <div className="mt-3 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="line-clamp-1 text-sm font-semibold tracking-tight">{listing.title}</h3>
+            <h3 className="line-clamp-1 text-sm font-semibold tracking-tight">{localizedTitle(locale, listing)}</h3>
             <span className="flex shrink-0 items-center gap-1 text-xs font-medium">
               <Star className="size-3.5 fill-current" />
               {formatRating(listing.rating)}
@@ -67,7 +68,7 @@ export function ListingCard({
 
           <p className="text-muted-foreground line-clamp-1 flex items-center gap-1 text-xs">
             <MapPin className="size-3" />
-            {listing.location}
+            {localizedLocation(locale, listing)}
           </p>
 
           <p className="text-muted-foreground text-xs">
@@ -88,7 +89,7 @@ export function ListingCard({
       </Link>
 
       {/* Sibling of the Link (not nested) so the markup stays valid. */}
-      <FavoriteButton listingId={listing.id} listingTitle={listing.title} />
+      <FavoriteButton listingId={listing.id} listingTitle={localizedTitle(locale, listing)} />
     </article>
   );
 }
