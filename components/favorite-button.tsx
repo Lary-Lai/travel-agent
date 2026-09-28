@@ -53,19 +53,31 @@ export function FavoriteButton({ listingId, listingTitle, variant = "overlay", c
         aria-label={saved ? "管理收藏" : "收藏房源"}
         aria-pressed={saved}
         className={cn(
-          "group/heart inline-flex items-center justify-center transition-transform active:scale-90",
-          variant === "overlay" &&
-            "absolute top-3 right-3 z-10 size-8 rounded-full bg-black/25 backdrop-blur-sm hover:bg-black/40",
+          "group/heart inline-flex items-center justify-center transition-all active:scale-90",
+          // The overlay sits on top of an arbitrary photo, so it has to carry its
+          // own contrast instead of relying on the image behind it. The previous
+          // 25%-black disc with a 30%-black heart read as "there is no button
+          // here" on bright photos. A 45% disc plus a hairline white ring and a
+          // shadow stays legible on light and dark images alike, and the saved
+          // state flips to a white disc with a red heart so the two states are
+          // unmistakable at a glance.
+          variant === "overlay" && [
+            "absolute top-3 right-3 z-10 size-9 rounded-full ring-1 backdrop-blur-md",
+            "duration-200",
+            saved
+              ? "bg-white/95 ring-black/10 shadow-md hover:bg-white"
+              : "bg-black/45 ring-white/25 shadow-sm hover:bg-black/65",
+          ],
           className,
         )}
       >
         <Heart
           className={cn(
-            "size-4 transition-colors",
+            "size-[18px] transition-colors",
             saved
               ? "fill-primary text-primary"
               : variant === "overlay"
-                ? "fill-black/30 text-white"
+                ? "fill-white/30 text-white"
                 : "text-muted-foreground",
           )}
         />

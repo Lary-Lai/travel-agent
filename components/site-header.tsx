@@ -7,6 +7,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { LocaleSwitcher } from "@/components/locale-switcher";
+import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -25,17 +27,18 @@ import { cn } from "@/lib/utils";
 import { useAgentStore } from "@/lib/store";
 
 const NAV = [
-  { href: "/", label: "首页", icon: Compass },
-  { href: "/search", label: "搜索房源", icon: Search },
-  { href: "/wishlist", label: "心愿单", icon: Heart },
-  { href: "/trips", label: "我的行程", icon: Route },
-];
+  { href: "/", key: "nav.home", icon: Compass },
+  { href: "/search", key: "nav.search", icon: Search },
+  { href: "/wishlist", key: "nav.wishlist", icon: Heart },
+  { href: "/trips", key: "nav.trips", icon: Route },
+] as const;
 
 export function SiteHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isLoading, refresh } = useSession();
+  const t = useT();
   const openAgent = useAgentStore((state) => state.setOpen);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -46,11 +49,11 @@ export function SiteHeader() {
       await api.logout();
       queryClient.clear();
       await refresh();
-      toast.success("已退出登录");
+      toast.success(t("common.logout"));
       router.push("/");
       router.refresh();
     } catch {
-      toast.error("退出登录失败，请重试");
+      toast.error(t("common.logout"));
     } finally {
       setSigningOut(false);
     }
@@ -65,12 +68,17 @@ export function SiteHeader() {
         {/* Mobile nav */}
         <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
           <SheetTrigger asChild>
-            <Button variant="ghost" size="icon" className="md:hidden" aria-label="打开菜单">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              aria-label={t("common.menu")}
+            >
               <Menu className="size-5" />
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="w-72 p-6">
-            <SheetTitle className="sr-only">导航菜单</SheetTitle>
+            <SheetTitle className="sr-only">{t("common.navigation")}</SheetTitle>
             <Link
               href="/"
               onClick={() => setMobileOpen(false)}
@@ -93,7 +101,7 @@ export function SiteHeader() {
                   )}
                 >
                   <item.icon className="size-4" />
-                  {item.label}
+                  {t(item.key)}
                 </Link>
               ))}
             </nav>
@@ -121,12 +129,15 @@ export function SiteHeader() {
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/60",
               )}
             >
-              {item.label}
+              {t(item.key)}
             </Link>
           ))}
         </nav>
 
         <div className="flex-1" />
+
+        {/* Language */}
+        <LocaleSwitcher />
 
         {/* Night mode */}
         <ThemeToggle />
@@ -139,7 +150,7 @@ export function SiteHeader() {
           className="border-primary/30 text-primary hover:bg-primary/5 gap-1.5"
         >
           <Sparkles className="size-4" />
-          <span className="hidden sm:inline">AI 助手</span>
+          <span className="hidden sm:inline">{t("nav.aiAgent")}</span>
         </Button>
 
         {/* Account */}
@@ -153,7 +164,7 @@ export function SiteHeader() {
               <button
                 type="button"
                 className="ring-offset-background focus-visible:ring-ring rounded-full transition-shadow focus-visible:ring-2 focus-visible:ring-offset-2"
-                aria-label="账户菜单"
+                aria-label={t("common.account")}
               >
                 <Avatar className="size-9 border">
                   {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
@@ -172,19 +183,19 @@ export function SiteHeader() {
               <DropdownMenuItem asChild>
                 <Link href="/wishlist" className="cursor-pointer">
                   <Heart className="size-4" />
-                  我的心愿单
+                  {t("nav.wishlist")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/trips" className="cursor-pointer">
                   <Route className="size-4" />
-                  我的行程
+                  {t("nav.trips")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/profile" className="cursor-pointer">
                   <Settings className="size-4" />
-                  个人主页
+                  {t("common.profile")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -197,7 +208,7 @@ export function SiteHeader() {
                 className="cursor-pointer"
               >
                 {signingOut ? <Loader2 className="size-4 animate-spin" /> : <LogOut className="size-4" />}
-                退出登录
+                {t("common.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -206,11 +217,11 @@ export function SiteHeader() {
             <Button variant="ghost" size="sm" asChild className="hidden sm:inline-flex">
               <Link href="/login">
                 <User className="size-4" />
-                登录
+                {t("common.login")}
               </Link>
             </Button>
             <Button size="sm" asChild>
-              <Link href="/register">注册</Link>
+              <Link href="/register">{t("common.register")}</Link>
             </Button>
           </div>
         )}

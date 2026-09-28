@@ -21,6 +21,7 @@ import { StickySearchBar } from "@/components/sticky-search-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
+import { getTranslator } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 import { getCityStats, getRecommendedListings, type CityStat } from "@/server/listing.service";
 import type { ListingSummary, PropertyTypeValue } from "@/types";
@@ -56,6 +57,7 @@ export default async function HomePage() {
     loadFailed = true;
   }
 
+  const { t } = await getTranslator();
   const totalListings = cities.reduce((sum, city) => sum + city.count, 0);
 
   return (
@@ -77,18 +79,19 @@ export default async function HomePage() {
               className="edge-light bg-background/70 mb-4 border-transparent backdrop-blur"
             >
               <Sparkles className="size-3.5" />
-              AI Travel Agent 已上线
+              {t("home.badge")}
             </Badge>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
-              让 AI 帮你找到
+              {t("home.heroLine1")}
               <span className="from-primary bg-gradient-to-r to-rose-500 bg-clip-text text-transparent">
                 {" "}
-                旅途中的家
+                {t("home.heroLine2")}
               </span>
             </h1>
             <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
-              {cities.length > 0 ? `${cities.length} 座城市 · ${totalListings} 套真实房源。` : ""}
-              搜索、收藏、预订，或者直接用一句话描述需求，让 Agent 帮你搞定。
+              {cities.length > 0
+                ? t("home.heroSubtitle", { cities: cities.length, listings: totalListings })
+                : ""}
             </p>
 
             <div className="relative mt-8">
@@ -116,17 +119,17 @@ export default async function HomePage() {
 
       {loadFailed ? (
         <ErrorState
-          title="房源数据加载失败"
-          description="无法连接数据库。请确认 PostgreSQL 已启动（npm run db:start）并已执行 npm run db:seed。"
+          title={t("home.loadFailedTitle")}
+          description={t("home.loadFailedBody")}
         />
       ) : (
         <>
           {/* ------------------------------------------------------ categories */}
-          <section className="space-y-5">
+          <section id="browse" className="scroll-mt-32 space-y-5">
             <div>
-              <h2 className="text-xl font-semibold tracking-tight">按房源类型浏览</h2>
+              <h2 className="text-xl font-semibold tracking-tight">{t("home.browseByType")}</h2>
               <p className="text-muted-foreground mt-1 text-sm">
-                公寓、独栋、酒店、别墅，总有一款适合你
+                {t("home.browseByTypeHint")}
               </p>
             </div>
             <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
@@ -158,14 +161,14 @@ export default async function HomePage() {
               <div>
                 <h2 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
                   <TrendingUp className="size-5" />
-                  热门目的地
+                  {t("home.destinations")}
                 </h2>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  {cities.length} 座城市，点击直接查看当地全部房源
+                  {t("home.destinationsHint", { cities: cities.length })}
                 </p>
               </div>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/search">查看全部</Link>
+                <Link href="/search">{t("common.viewAll")}</Link>
               </Button>
             </div>
 
@@ -185,10 +188,7 @@ export default async function HomePage() {
             ) : null}
 
             {cities.length === 0 ? (
-              <EmptyState
-                title="还没有房源数据"
-                description="运行 npm run db:seed 生成演示房源后刷新本页。"
-              />
+              <EmptyState title={t("home.emptyTitle")} description={t("home.emptyBody")} />
             ) : (
               <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
                 {cities.map((city) => (
@@ -209,7 +209,10 @@ export default async function HomePage() {
                     <div className="absolute inset-x-0 bottom-0 p-3 text-white">
                       <p className="text-sm font-semibold">{city.cityLabel}</p>
                       <p className="text-[11px] text-white/80">
-                        {city.count} 套房源 · 起 {formatPrice(city.minPrice)}
+                        {t("home.destinationCard", {
+                          count: city.count,
+                          price: formatPrice(city.minPrice),
+                        })}
                       </p>
                     </div>
                   </Link>
@@ -225,10 +228,10 @@ export default async function HomePage() {
             <div className="flex items-end justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold tracking-tight">为你推荐的房源</h2>
-                <p className="text-muted-foreground mt-1 text-sm">按评分与评价数挑选的高分房源</p>
+                <p className="text-muted-foreground mt-1 text-sm">{t("home.recommendedHint")}</p>
               </div>
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/search">浏览全部房源</Link>
+                <Link href="/search">{t("home.browseAll")}</Link>
               </Button>
             </div>
 

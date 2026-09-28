@@ -10,6 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { useT } from "@/components/locale-provider";
 import { formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useSearchDraftStore, type SearchDraft } from "@/lib/store";
@@ -19,6 +20,8 @@ export type SearchBarDestination = { city: string; cityLabel: string };
 type Props = {
   variant?: "hero" | "compact";
   className?: string;
+  /** Inline style escape hatch — the sticky wrapper drives width/border-radius. */
+  style?: React.CSSProperties;
   destinations?: SearchBarDestination[];
   initial?: Partial<SearchDraft>;
   /** When provided, the bar calls this instead of navigating. */
@@ -39,6 +42,7 @@ const MAX_GUESTS = 16;
 export function SearchBar({
   variant = "hero",
   className,
+  style,
   destinations = [],
   initial,
   onSearch,
@@ -46,6 +50,7 @@ export function SearchBar({
   onChange,
 }: Props) {
   const router = useRouter();
+  const t = useT();
   const setDraft = useSearchDraftStore((state) => state.setDraft);
 
   const [localDestination, setDestination] = useState(initial?.destination ?? "");
@@ -149,6 +154,7 @@ export function SearchBar({
           : "rounded-2xl shadow-lg shadow-black/5",
         className,
       )}
+      style={style}
     >
       {/* Destination */}
       <Popover
@@ -157,9 +163,9 @@ export function SearchBar({
       >
         <PopoverTrigger asChild>
           <button type="button" className={cn(segmentClass, "flex-1")}>
-            <span className={labelClass}>目的地</span>
+            <span className={labelClass}>{t("searchBar.destination")}</span>
             <span className={cn(valueClass, !destination && "text-muted-foreground")}>
-              {destination || "想去哪里？"}
+              {destination || t("searchBar.destinationPlaceholder")}
             </span>
           </button>
         </PopoverTrigger>
@@ -176,13 +182,15 @@ export function SearchBar({
                   setOpenPanel(null);
                 }
               }}
-              placeholder="输入城市，例如 东京 / Tokyo"
+              placeholder={t("searchBar.destinationInput")}
               className="pl-9"
             />
           </div>
           {destinations.length > 0 && (
             <div className="mt-3">
-              <p className="text-muted-foreground mb-1.5 px-1 text-xs font-medium">热门目的地</p>
+              <p className="text-muted-foreground mb-1.5 px-1 text-xs font-medium">
+                {t("searchBar.popular")}
+              </p>
               <div className="grid grid-cols-2 gap-1">
                 {destinations.map((item) => (
                   <button
@@ -212,11 +220,11 @@ export function SearchBar({
       >
         <PopoverTrigger asChild>
           <button type="button" className={cn(segmentClass, "flex-1")}>
-            <span className={labelClass}>入住 / 退房</span>
+            <span className={labelClass}>{t("searchBar.dates")}</span>
             <span className={cn(valueClass, !checkIn && "text-muted-foreground")}>
               {checkIn
-                ? `${formatDateShort(checkIn)}${checkOut ? ` – ${formatDateShort(checkOut)}` : " – 选择退房日"}`
-                : "选择日期"}
+                ? `${formatDateShort(checkIn)}${checkOut ? ` – ${formatDateShort(checkOut)}` : ` – ${t("searchBar.selectCheckout")}`}`
+                : t("searchBar.datesPlaceholder")}
             </span>
           </button>
         </PopoverTrigger>
@@ -239,7 +247,7 @@ export function SearchBar({
             <span className="text-muted-foreground text-xs">
               {checkIn && checkOut
                 ? `${formatDateShort(checkIn)} – ${formatDateShort(checkOut)}`
-                : "请选择入住与退房日期"}
+                : t("searchBar.datePrompt")}
             </span>
             <div className="flex gap-2">
               <Button
@@ -248,7 +256,7 @@ export function SearchBar({
                 size="sm"
                 onClick={() => update({ checkIn: "", checkOut: "" })}
               >
-                清除
+                {t("searchBar.clearDates")}
               </Button>
               <Button
                 type="button"
@@ -272,15 +280,15 @@ export function SearchBar({
       >
         <PopoverTrigger asChild>
           <button type="button" className={cn(segmentClass, "md:w-44")}>
-            <span className={labelClass}>入住人数</span>
-            <span className={valueClass}>{guests} 位房客</span>
+            <span className={labelClass}>{t("searchBar.guests")}</span>
+            <span className={valueClass}>{t("common.guests", { count: guests })}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-64 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="text-muted-foreground size-4" />
-              <span className="text-sm font-medium">房客</span>
+              <span className="text-sm font-medium">{t("searchBar.guests")}</span>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -319,7 +327,7 @@ export function SearchBar({
           className={cn("w-full gap-2 md:w-auto", isHero && "h-12 rounded-2xl px-6 md:rounded-full")}
         >
           <Search className="size-4" />
-          搜索
+          {t("common.search")}
         </Button>
       </div>
 
@@ -327,7 +335,7 @@ export function SearchBar({
       {!isHero && !checkIn && (
         <p className="text-muted-foreground flex items-center gap-1.5 px-2 pb-1 text-xs md:hidden">
           <CalendarIcon className="size-3.5" />
-          未选择日期时展示全部可订房源
+          {t("searchBar.noDatesHint")}
         </p>
       )}
     </form>
