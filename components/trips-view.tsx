@@ -11,6 +11,7 @@ import { SafeImage } from "@/components/safe-image";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { useT } from "@/components/locale-provider";
+import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { useSession } from "@/components/session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -188,7 +189,7 @@ export function TripsView() {
                       </Link>
                       <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
                         <MapPin className="size-3" />
-                        {booking.listing.location} · {booking.listing.propertyTypeLabel}
+                        {booking.listing.location} · {propertyTypeLabel(t, booking.listing.propertyType)}
                       </p>
                     </div>
 

@@ -27,6 +27,7 @@ import { WeatherCard } from "@/components/weather-card";
 import { formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
 import { getTranslator } from "@/lib/i18n/server";
+import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { getListingDetail } from "@/server/listing.service";
 import { getCityWeather } from "@/server/weather.service";
 
@@ -96,7 +97,7 @@ export default async function ListingDetailPage({ params }: Props) {
               <MapPin className="size-3.5" />
               {listing.location} · {listing.countryLabel}
             </span>
-            <Badge variant="secondary">{listing.propertyTypeLabel}</Badge>
+            <Badge variant="secondary">{propertyTypeLabel(t, listing.propertyType)}</Badge>
           </div>
         </div>
 

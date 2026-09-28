@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { useT } from "@/components/locale-provider";
+import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { QrPlaceholder } from "@/components/qr-placeholder";
 import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
@@ -390,7 +391,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
                 {booking.listing.location}
               </p>
               <p className="text-muted-foreground mt-0.5 text-xs">
-                {booking.listing.propertyTypeLabel}
+                {propertyTypeLabel(t, booking.listing.propertyType)}
               </p>
             </div>
           </div>

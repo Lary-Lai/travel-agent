@@ -22,11 +22,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { cityName } from "@/lib/i18n/cities";
+import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { getTranslator } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 import { getCityStats, getRecommendedListings, type CityStat } from "@/server/listing.service";
 import type { ListingSummary, PropertyTypeValue } from "@/types";
-import { PROPERTY_TYPE_LABELS } from "@/types";
 
 /** Category chips double as a fast filter entry point into /search. */
 const CATEGORIES: Array<{
@@ -113,7 +113,7 @@ export default async function HomePage() {
                   className="edge-light bg-background/70 hover:border-primary/40 hover:bg-background flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium backdrop-blur transition-all hover:-translate-y-px"
                 >
                   <category.icon className="size-3.5" />
-                  {PROPERTY_TYPE_LABELS[category.type]}
+                  {propertyTypeLabel(t, category.type)}
                 </Link>
               ))}
             </div>
@@ -152,7 +152,7 @@ export default async function HomePage() {
                     <category.icon className="size-5" />
                   </span>
                   <span className="text-xs font-medium">
-                    {PROPERTY_TYPE_LABELS[category.type]}
+                    {propertyTypeLabel(t, category.type)}
                   </span>
                 </Link>
               ))}
