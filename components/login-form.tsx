@@ -4,6 +4,8 @@ import { AlertCircle, Compass, Loader2, LogIn } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+
+import { useT } from "@/components/locale-provider";
 import { toast } from "sonner";
 
 import { useSession } from "@/components/session-provider";
@@ -18,6 +20,7 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { refresh } = useSession();
+  const t = useT();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,11 +37,11 @@ export function LoginForm() {
     try {
       const { user } = await api.login(email, password);
       await refresh();
-      toast.success(`欢迎回来，${user.name}`);
+      toast.success(t("auth.welcomeBack", { name: user.name }));
       router.push(redirect);
       router.refresh();
     } catch (caught) {
-      const message = caught instanceof ApiClientError ? caught.message : "登录失败，请稍后重试";
+      const message = caught instanceof ApiClientError ? caught.message : t("auth.loginFailed");
       setError(message);
     } finally {
       setSubmitting(false);
@@ -51,8 +54,8 @@ export function LoginForm() {
         <span className="bg-primary text-primary-foreground mx-auto mb-4 flex size-11 items-center justify-center rounded-xl">
           <Compass className="size-5" />
         </span>
-        <h1 className="text-xl font-semibold tracking-tight">登录旅居 Agent</h1>
-        <p className="text-muted-foreground mt-1 text-sm">登录后即可收藏房源、管理行程</p>
+        <h1 className="text-xl font-semibold tracking-tight">{t("auth.loginTitle")}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("auth.loginSubtitle")}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border p-6">
@@ -64,7 +67,7 @@ export function LoginForm() {
         ) : null}
 
         <div className="space-y-2">
-          <Label htmlFor="email">邮箱</Label>
+          <Label htmlFor="email">{t("auth.email")}</Label>
           <Input
             id="email"
             type="email"
@@ -77,7 +80,7 @@ export function LoginForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">密码</Label>
+          <Label htmlFor="password">{t("auth.password")}</Label>
           <Input
             id="password"
             type="password"
@@ -85,19 +88,19 @@ export function LoginForm() {
             required
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="请输入密码"
+            placeholder={t("auth.passwordInputPlaceholder")}
           />
         </div>
 
         <Button type="submit" className="w-full gap-2" disabled={submitting}>
           {submitting ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-          {submitting ? "登录中…" : "登录"}
+          {submitting ? t("auth.signingIn") : t("auth.loginSubmit")}
         </Button>
 
         {/* Demo credentials */}
         <div className="bg-muted/50 rounded-lg p-3 text-xs">
           <p className="text-muted-foreground mb-2">
-            演示账号：<code className="text-foreground">{DEMO.email}</code> /{" "}
+            {t("auth.demoAccount")}<code className="text-foreground">{DEMO.email}</code> /{" "}
             <code className="text-foreground">{DEMO.password}</code>
           </p>
           <Button
@@ -110,14 +113,14 @@ export function LoginForm() {
               setPassword(DEMO.password);
             }}
           >
-            填入演示账号
+            {t("auth.fillDemo")}
           </Button>
         </div>
 
         <p className="text-muted-foreground text-center text-sm">
-          还没有账号？
+          {t("auth.noAccount")}
           <Link href="/register" className="text-primary ml-1 font-medium hover:underline">
-            立即注册
+            {t("auth.goRegister")}
           </Link>
         </p>
       </form>

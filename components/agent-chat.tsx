@@ -16,20 +16,28 @@ import { toast } from "sonner";
 
 import { useAgent } from "@/components/agent-provider";
 import { AgentMessage } from "@/components/agent-message";
+import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAgentStore } from "@/lib/store";
 
+/**
+ * Starter prompts, as translation keys. The four demo prompts already live in the
+ * main dictionary (`agent.example*Prompt`), so only the extra one has a key here.
+ * A suggestion is sent verbatim, so translating it also translates the question
+ * the model actually answers.
+ */
 const SUGGESTIONS = [
-  "国庆想去东京玩 5 天，4 个人，每晚预算 800 元左右，希望离地铁近一点。",
-  "我和三个朋友去东京，预算每晚 800 元，希望交通方便，帮我选三个。",
-  "帮我比较刚才这几个房源，哪个更适合四个人？",
-  "把刚才推荐的第一个房源加入「东京旅行」心愿单。",
-  "看看我的心愿单里都有什么。",
-];
+  "agent.exampleSearchPrompt",
+  "agent.exampleRecommendPrompt",
+  "agent.exampleComparePrompt",
+  "agent.exampleWishlistPrompt",
+  "agentUi.suggestionWishlists",
+] as const;
 
 export function AgentChat() {
+  const t = useT();
   const { user } = useSession();
   const { messages, status, busy, error, send, stop, clear, retryLast, agentStatus, notConfigured } =
     useAgent();
@@ -57,11 +65,11 @@ export function AgentChat() {
     const isImage = file.type.startsWith("image/");
 
     if (!isPdf && !isImage) {
-      toast.error("请上传 PDF 或图片（JPG / PNG / WebP）格式的旅行计划");
+      toast.error(t("agentUi.uploadTypeError"));
       return;
     }
     if (file.size > 8 * 1024 * 1024) {
-      toast.error("文件过大，请上传 8MB 以内的文件");
+      toast.error(t("agentUi.uploadSizeError"));
       return;
     }
 
@@ -74,7 +82,7 @@ export function AgentChat() {
       const payload = await response.json();
 
       if (!payload.ok) {
-        toast.error(payload.error?.message ?? "PDF 解析失败");
+        toast.error(payload.error?.message ?? t("agentUi.parseFailed"));
         return;
       }
 
@@ -90,25 +98,34 @@ export function AgentChat() {
         textLength: number;
       };
 
-      toast.success(`已解析旅行计划（提取 ${textLength} 个字符）`);
+      toast.success(t("agentUi.parseSuccess", { count: textLength }));
 
       // Hand the structured plan back to the Agent to continue the workflow.
+      // The tool name stays literal — it is an identifier, not a sentence.
       const prompt = [
-        "我上传了一份旅行计划，已解析出以下信息，请据此帮我推荐住宿：",
-        `- 目的地：${plan.destination ?? "未识别"}`,
-        plan.days ? `- 天数：${plan.days} 天` : null,
-        plan.guests ? `- 人数：${plan.guests} 人` : null,
-        plan.budgetPerNight ? `- 每晚预算：约 ${plan.budgetPerNight} 元` : null,
-        plan.places.length > 0 ? `- 计划中的地点：${plan.places.join("、")}` : null,
-        plan.summary ? `- 概述：${plan.summary}` : null,
-        "请先调用 recommendListings 推荐 3 个合适的房源。",
+        t("agentUi.uploadPromptIntro"),
+        t("agentUi.uploadPromptDestination", {
+          value: plan.destination ?? t("agentUi.planUnknownDestination"),
+        }),
+        plan.days ? t("agentUi.uploadPromptDays", { count: plan.days }) : null,
+        plan.guests ? t("agentUi.uploadPromptGuests", { count: plan.guests }) : null,
+        plan.budgetPerNight
+          ? t("agentUi.uploadPromptBudget", { amount: plan.budgetPerNight })
+          : null,
+        plan.places.length > 0
+          ? t("agentUi.uploadPromptPlaces", {
+              places: plan.places.join(t("agentUi.placesSeparator")),
+            })
+          : null,
+        plan.summary ? t("agentUi.uploadPromptSummary", { summary: plan.summary }) : null,
+        t("agentUi.uploadPromptAsk"),
       ]
         .filter(Boolean)
         .join("\n");
 
       send(prompt);
     } catch {
-      toast.error("PDF 上传失败，请重试");
+      toast.error(t("agentUi.uploadFailed"));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -124,9 +141,11 @@ export function AgentChat() {
             <Sparkles className="size-3.5" />
           </span>
           <div>
-            <p className="text-sm font-semibold">AI 旅行助手</p>
+            <p className="text-sm font-semibold">{t("agent.title")}</p>
             <p className="text-muted-foreground text-[11px]">
-              {notConfigured ? "未配置模型" : `模型 ${agentStatus?.model ?? "…"}`}
+              {notConfigured
+                ? t("agentUi.modelUnknown")
+                : t("agentUi.modelLabel", { name: agentStatus?.model ?? "…" })}
             </p>
           </div>
         </div>
@@ -143,7 +162,7 @@ export function AgentChat() {
               disabled={busy}
             >
               <Trash2 className="size-3.5" />
-              清空
+              {t("agent.clear")}
             </Button>
           ) : null}
 
@@ -152,7 +171,7 @@ export function AgentChat() {
             size="icon-sm"
             className="text-muted-foreground hover:text-foreground"
             onClick={() => setOpen(false)}
-            aria-label="关闭助手"
+            aria-label={t("agentUi.closeAssistant")}
           >
             <X className="size-4" />
           </Button>
@@ -162,7 +181,11 @@ export function AgentChat() {
       {notConfigured ? (
         <div className="bg-destructive/10 text-destructive flex items-start gap-2 border-b px-4 py-2.5 text-[11px] leading-relaxed">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-          <span>尚未配置可用的 AI 模型：{agentStatus?.problem ?? "请在 .env 设置 AI_API_KEY"}</span>
+          <span>
+            {t("agentUi.modelMissing", {
+              problem: agentStatus?.problem ?? t("agentUi.modelMissingHint"),
+            })}
+          </span>
         </div>
       ) : null}
 
@@ -171,22 +194,24 @@ export function AgentChat() {
         {messages.length === 0 ? (
           <div className="space-y-4">
             <div className="bg-muted/50 rounded-2xl p-4">
-              <p className="text-sm font-medium">你好，我是旅居 AI 助手 👋</p>
+              <p className="text-sm font-medium">{t("agentUi.greeting")}</p>
               <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                用一句话告诉我你的旅行需求。我会查询真实房源、比较价格与设施，甚至直接帮你写入心愿单。
+                {t("agentUi.greetingBody")}
               </p>
             </div>
             <div className="space-y-2">
-              <p className="text-muted-foreground px-1 text-[11px] font-medium">试试这些：</p>
+              <p className="text-muted-foreground px-1 text-[11px] font-medium">
+                {t("agentUi.tryThese")}
+              </p>
               {SUGGESTIONS.map((suggestion) => (
                 <button
                   key={suggestion}
                   type="button"
-                  onClick={() => send(suggestion)}
+                  onClick={() => send(t(suggestion))}
                   disabled={busy}
                   className="hover:border-primary/40 hover:bg-accent/50 w-full rounded-xl border px-3 py-2.5 text-left text-xs transition-colors disabled:opacity-60"
                 >
-                  {suggestion}
+                  {t(suggestion)}
                 </button>
               ))}
             </div>
@@ -198,7 +223,7 @@ export function AgentChat() {
         {status === "submitted" ? (
           <div className="text-muted-foreground flex items-center gap-2 px-1 text-xs">
             <Loader2 className="size-3.5 animate-spin" />
-            正在理解你的需求…
+            {t("agent.thinking")}
           </div>
         ) : null}
 
@@ -206,7 +231,7 @@ export function AgentChat() {
           <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-start gap-2 rounded-xl border p-3 text-xs">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
             <div className="flex-1">
-              <p className="font-medium">请求失败</p>
+              <p className="font-medium">{t("agentUi.requestFailed")}</p>
               <p className="mt-0.5 leading-relaxed">{error.message}</p>
             </div>
           </div>
@@ -216,9 +241,7 @@ export function AgentChat() {
       {/* ------------------------------------------------------------- input */}
       <div className="space-y-2 border-t px-4 py-3">
         {!user ? (
-          <p className="text-muted-foreground text-[11px]">
-            当前未登录：可以搜索与比较房源，收藏相关操作需要先登录。
-          </p>
+          <p className="text-muted-foreground text-[11px]">{t("agentUi.guestHint")}</p>
         ) : null}
 
         <div className="flex items-end gap-2">
@@ -231,18 +254,28 @@ export function AgentChat() {
                 submit();
               }
             }}
-            placeholder="描述你的旅行需求，例如：国庆去东京 5 天，4 个人，每晚 800 左右…"
+            placeholder={t("agent.placeholder")}
             rows={2}
             disabled={busy}
             className="min-h-11 resize-none text-sm"
           />
 
           {busy ? (
-            <Button size="icon" variant="outline" onClick={stop} aria-label="停止生成">
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={stop}
+              aria-label={t("agentUi.stopGenerating")}
+            >
               <Square className="size-4" />
             </Button>
           ) : (
-            <Button size="icon" onClick={submit} disabled={!input.trim()} aria-label="发送">
+            <Button
+              size="icon"
+              onClick={submit}
+              disabled={!input.trim()}
+              aria-label={t("agent.send")}
+            >
               <Send className="size-4" />
             </Button>
           )}
@@ -271,7 +304,7 @@ export function AgentChat() {
             ) : (
               <FileText className="size-3.5" />
             )}
-            {uploading ? "解析中…" : "上传旅行计划"}
+            {uploading ? t("agentUi.parsing") : t("agentUi.uploadPlan")}
           </Button>
 
           {error ? (
@@ -282,7 +315,7 @@ export function AgentChat() {
               onClick={retryLast}
             >
               <RotateCcw className="size-3.5" />
-              重试
+              {t("agentUi.retry")}
             </Button>
           ) : null}
         </div>

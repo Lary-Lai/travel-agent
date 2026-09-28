@@ -4,6 +4,8 @@ import { AlertCircle, Compass, Loader2, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+
+import { useT } from "@/components/locale-provider";
 import { toast } from "sonner";
 
 import { useSession } from "@/components/session-provider";
@@ -16,6 +18,7 @@ export function RegisterForm() {
   const router = useRouter();
   const params = useSearchParams();
   const { refresh } = useSession();
+  const t = useT();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,7 +33,7 @@ export function RegisterForm() {
     setError(null);
 
     if (password.length < 8) {
-      setError("密码至少需要 8 位字符");
+      setError(t("auth.passwordTooShort"));
       return;
     }
 
@@ -38,11 +41,11 @@ export function RegisterForm() {
     try {
       const { user } = await api.register(name, email, password);
       await refresh();
-      toast.success(`注册成功，欢迎 ${user.name}`);
+      toast.success(t("auth.registered", { name: user.name }));
       router.push(redirect);
       router.refresh();
     } catch (caught) {
-      const message = caught instanceof ApiClientError ? caught.message : "注册失败，请稍后重试";
+      const message = caught instanceof ApiClientError ? caught.message : t("auth.registerFailed");
       setError(message);
     } finally {
       setSubmitting(false);
@@ -55,8 +58,8 @@ export function RegisterForm() {
         <span className="bg-primary text-primary-foreground mx-auto mb-4 flex size-11 items-center justify-center rounded-xl">
           <Compass className="size-5" />
         </span>
-        <h1 className="text-xl font-semibold tracking-tight">创建你的账号</h1>
-        <p className="text-muted-foreground mt-1 text-sm">注册后即可使用收藏、预订与 AI 助手</p>
+        <h1 className="text-xl font-semibold tracking-tight">{t("auth.registerTitle")}</h1>
+        <p className="text-muted-foreground mt-1 text-sm">{t("auth.registerSubtitle")}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border p-6">
@@ -68,19 +71,19 @@ export function RegisterForm() {
         ) : null}
 
         <div className="space-y-2">
-          <Label htmlFor="name">昵称</Label>
+          <Label htmlFor="name">{t("auth.name")}</Label>
           <Input
             id="name"
             required
             maxLength={40}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            placeholder="怎么称呼你？"
+            placeholder={t("auth.namePlaceholder")}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">邮箱</Label>
+          <Label htmlFor="email">{t("auth.email")}</Label>
           <Input
             id="email"
             type="email"
@@ -93,7 +96,7 @@ export function RegisterForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">密码</Label>
+          <Label htmlFor="password">{t("auth.password")}</Label>
           <Input
             id="password"
             type="password"
@@ -102,19 +105,19 @@ export function RegisterForm() {
             minLength={8}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            placeholder="至少 8 位字符"
+            placeholder={t("auth.passwordPlaceholder")}
           />
         </div>
 
         <Button type="submit" className="w-full gap-2" disabled={submitting}>
           {submitting ? <Loader2 className="size-4 animate-spin" /> : <UserPlus className="size-4" />}
-          {submitting ? "注册中…" : "注册并登录"}
+          {submitting ? t("auth.registering") : t("auth.registerSubmit")}
         </Button>
 
         <p className="text-muted-foreground text-center text-sm">
-          已经有账号了？
+          {t("auth.haveAccount")}
           <Link href="/login" className="text-primary ml-1 font-medium hover:underline">
-            去登录
+            {t("auth.goLogin")}
           </Link>
         </p>
       </form>

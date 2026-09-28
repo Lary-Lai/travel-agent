@@ -280,6 +280,7 @@ export const es = {
     wind: "Viento",
     feelsLike: "Sensación",
     provider: "Datos de Open-Meteo",
+    cached: " · en caché",
     feelsLikeShort: "Sensación {temp}°",
     kind: {
       clear: "Despejado",
@@ -355,6 +356,8 @@ export const es = {
 
   searchResults: {
     titleIn: "Alojamientos en {city}",
+    metaTitle: "Buscar alojamientos",
+    metaDescription: "Filtra alojamientos reales por destino, fechas, huéspedes, precio y servicios.",
     titleAll: "Todos los alojamientos",
     found: "{count} alojamientos encontrados",
     clearAll: "Borrar todo",

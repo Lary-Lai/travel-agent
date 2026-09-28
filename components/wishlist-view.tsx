@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { ListingCard, ListingGridSkeleton } from "@/components/listing-card";
+import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import { api, ApiClientError } from "@/lib/api";
 
 export function WishlistView() {
   const queryClient = useQueryClient();
+  const t = useT();
   const { user, isLoading: sessionLoading } = useSession();
 
   const [newName, setNewName] = useState("");
@@ -42,14 +44,14 @@ export function WishlistView() {
   };
 
   const onError = (error: unknown) => {
-    toast.error(error instanceof ApiClientError ? error.message : "操作失败，请稍后重试");
+    toast.error(error instanceof ApiClientError ? error.message : t("wishlist.actionFailed"));
   };
 
   const createMutation = useMutation({
     mutationFn: (name: string) => api.createWishlist(name),
     onSuccess: (result) => {
       setNewName("");
-      toast.success(`已创建「${result.wishlist.name}」`);
+      toast.success(t("wishlist.created", { name: result.wishlist.name }));
       invalidate();
     },
     onError,
@@ -58,7 +60,7 @@ export function WishlistView() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteWishlist(id),
     onSuccess: () => {
-      toast.success("心愿单已删除");
+      toast.success(t("wishlist.deleted"));
       setPendingDelete(null);
       invalidate();
     },
@@ -69,7 +71,7 @@ export function WishlistView() {
     mutationFn: ({ wishlistId, listingId }: { wishlistId: string; listingId: string }) =>
       api.removeFromWishlist(wishlistId, listingId),
     onSuccess: (result) => {
-      toast.success(`已从「${result.wishlist.name}」移除`);
+      toast.success(t("wishlist.removedFrom", { name: result.wishlist.name }));
       invalidate();
     },
     onError,
@@ -89,13 +91,13 @@ export function WishlistView() {
     return (
       <EmptyState
         icon={Heart}
-        title="登录后查看你的心愿单"
-        description="把喜欢的房源收藏起来，按「东京旅行」「欧洲之旅」这样的主题分组管理。"
+        title={t("wishlist.signInTitle")}
+        description={t("wishlist.signInBody")}
         action={
           <Button asChild className="gap-2">
             <Link href="/login?redirect=%2Fwishlist">
               <LogIn className="size-4" />
-              去登录
+              {t("wishlist.signInCta")}
             </Link>
           </Button>
         }
@@ -109,11 +111,14 @@ export function WishlistView() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">我的心愿单</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("wishlist.pageTitle")}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
             {wishlists.length > 0
-              ? `共 ${wishlists.length} 个心愿单 · ${wishlists.reduce((sum, w) => sum + w.itemCount, 0)} 个房源`
-              : "把喜欢的房源收藏起来，方便之后比较和预订"}
+              ? t("wishlist.countLine", {
+                  lists: wishlists.length,
+                  items: wishlists.reduce((sum, w) => sum + w.itemCount, 0),
+                })
+              : t("wishlist.subtitle")}
           </p>
         </div>
 
@@ -129,7 +134,7 @@ export function WishlistView() {
           <Input
             value={newName}
             onChange={(event) => setNewName(event.target.value)}
-            placeholder="新建心愿单名称"
+            placeholder={t("wishlist.newListPlaceholder")}
             maxLength={60}
             className="w-48"
           />
@@ -139,15 +144,15 @@ export function WishlistView() {
             ) : (
               <Plus className="size-4" />
             )}
-            创建
+            {t("wishlist.createCta")}
           </Button>
         </form>
       </div>
 
       {isError ? (
         <ErrorState
-          title="心愿单加载失败"
-          description="无法获取你的心愿单，请稍后重试。"
+          title={t("wishlist.loadFailedTitle")}
+          description={t("wishlist.loadFailedBody")}
           onRetry={() => void refetch()}
         />
       ) : isLoading ? (
@@ -155,11 +160,11 @@ export function WishlistView() {
       ) : wishlists.length === 0 ? (
         <EmptyState
           icon={Bookmark}
-          title="还没有任何心愿单"
-          description="创建一个心愿单，例如「东京旅行」，然后在房源卡片上点击爱心即可收藏。"
+          title={t("wishlist.emptyTitle")}
+          description={t("wishlist.emptyBody")}
           action={
             <Button asChild variant="outline">
-              <Link href="/search">去搜索房源</Link>
+              <Link href="/search">{t("wishlist.browseListings")}</Link>
             </Button>
           }
         />
@@ -172,7 +177,7 @@ export function WishlistView() {
                   <Bookmark className="text-muted-foreground size-4 shrink-0" />
                   <h2 className="truncate text-lg font-semibold tracking-tight">{wishlist.name}</h2>
                   <span className="text-muted-foreground shrink-0 text-sm">
-                    {wishlist.itemCount} 个房源
+                    {t("wishlist.itemCount", { count: wishlist.itemCount })}
                   </span>
                 </div>
                 <Button
@@ -182,13 +187,13 @@ export function WishlistView() {
                   onClick={() => setPendingDelete({ id: wishlist.id, name: wishlist.name })}
                 >
                   <Trash2 className="size-3.5" />
-                  删除
+                  {t("common.delete")}
                 </Button>
               </div>
 
               {wishlist.items.length === 0 ? (
                 <p className="text-muted-foreground rounded-xl border border-dashed px-4 py-8 text-center text-sm">
-                  这个心愿单还是空的，去房源页点击爱心添加吧
+                  {t("wishlist.listEmpty")}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -197,7 +202,7 @@ export function WishlistView() {
                       <ListingCard listing={item.listing} />
                       <button
                         type="button"
-                        aria-label={`从「${wishlist.name}」移除`}
+                        aria-label={t("wishlist.removeAria", { name: wishlist.name })}
                         onClick={() =>
                           removeItemMutation.mutate({
                             wishlistId: wishlist.id,
@@ -222,14 +227,14 @@ export function WishlistView() {
       <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>删除心愿单？</DialogTitle>
+            <DialogTitle>{t("wishlist.deleteDialogTitle")}</DialogTitle>
             <DialogDescription>
-              将删除「{pendingDelete?.name}」以及其中的全部收藏，此操作无法撤销。
+              {t("wishlist.deleteDialogBody", { name: pendingDelete?.name ?? "" })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPendingDelete(null)}>
-              取消
+              {t("common.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -237,7 +242,7 @@ export function WishlistView() {
               onClick={() => pendingDelete && deleteMutation.mutate(pendingDelete.id)}
             >
               {deleteMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              确认删除
+              {t("wishlist.deleteConfirmCta")}
             </Button>
           </DialogFooter>
         </DialogContent>

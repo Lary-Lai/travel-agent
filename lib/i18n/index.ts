@@ -23,6 +23,13 @@ import { zhTW } from "./dictionaries/zh-TW";
 
 export type { Dictionary } from "./dictionaries/zh-CN";
 
+import { MESSAGE_MODULES, moduleValue, type ModuleKey, type ModuleName } from "./messages";
+
+/** Group namespaces are routed to their own modules; everything else is a dot-path. */
+const MODULE_NAMES = new Set<string>(Object.keys(MESSAGE_MODULES));
+
+export type TranslationKey = MainKey | ModuleKey;
+
 export const DICTIONARIES: Record<Locale, Dictionary> = {
   "zh-CN": zhCN,
   "zh-TW": zhTW as Dictionary,
@@ -37,7 +44,7 @@ type Leaf<T> = {
   [K in keyof T & string]: T[K] extends string ? K : `${K}.${Leaf<T[K]>}`;
 }[keyof T & string];
 
-export type TranslationKey = Leaf<Dictionary>;
+export type MainKey = Leaf<Dictionary>;
 
 export type TVars = Record<string, string | number>;
 
@@ -67,8 +74,22 @@ export function interpolate(template: string, vars?: TVars): string {
 }
 
 export function translate(locale: Locale, key: TranslationKey, vars?: TVars): string {
+  const namespace = key.split(".")[0];
+
+  // A group module owns its whole namespace, so route there first — but fall
+  // THROUGH rather than returning the key if the module does not define it.
+  // A module can legitimately own a namespace while the main dictionary still
+  // holds keys in it (e.g. `wishlist.*` exists in both); without this fallback
+  // such a key renders as its own name instead of its translation.
+  if (MODULE_NAMES.has(namespace)) {
+    const fromModule =
+      moduleValue(namespace as ModuleName, locale, key) ??
+      moduleValue(namespace as ModuleName, FALLBACK_LOCALE, key);
+    if (fromModule !== undefined) return interpolate(fromModule, vars);
+  }
+
   // A count of exactly 1 may need a singular form ("1 night", not "1 nights").
-  const singular = singularForm(locale, key, typeof vars?.count === "number" ? vars.count : undefined);
+  const singular = singularForm(locale, key as MainKey, typeof vars?.count === "number" ? vars.count : undefined);
   const fromLocale = singular ?? lookup(DICTIONARIES[locale], key);
   const fromFallback = lookup(DICTIONARIES[FALLBACK_LOCALE], key);
   return interpolate(fromLocale ?? fromFallback ?? key, vars);

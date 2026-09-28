@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Info, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useT } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +18,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiClientError } from "@/lib/api";
 import { formatCurrency, formatDateRange } from "@/lib/format";
+import type { TranslationKey } from "@/lib/i18n";
 import { POLICY_TABLE } from "@/lib/refund";
 import { cn } from "@/lib/utils";
 import type { BookingDto } from "@/types";
@@ -35,6 +37,7 @@ export function CancelBookingDialog({
   booking: BookingDto | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const open = Boolean(booking);
 
@@ -52,11 +55,17 @@ export function CancelBookingDialog({
     onSuccess: (result) => {
       const refund = result.booking.refund;
       if (refund && refund.amount > 0) {
-        toast.success(`订单已取消，${formatCurrency(refund.amount)} 将退回${refund.methodLabel}`, {
-          description: "退款处理中，预计 1-3 个工作日到账",
-        });
+        toast.success(
+          t("trips.cancelSuccessRefund", {
+            amount: formatCurrency(refund.amount),
+            method: refund.methodLabel,
+          }),
+          {
+            description: t("trips.cancelSuccessRefundBody"),
+          },
+        );
       } else {
-        toast.success("订单已取消，房源日期已释放");
+        toast.success(t("trips.cancelSuccess"));
       }
       void queryClient.invalidateQueries({ queryKey: ["bookings"] });
       // Dates are free again, so search results may change.
@@ -64,7 +73,7 @@ export function CancelBookingDialog({
       onOpenChange(false);
     },
     onError: (error) => {
-      toast.error(error instanceof ApiClientError ? error.message : "取消失败，请稍后重试");
+      toast.error(error instanceof ApiClientError ? error.message : t("trips.cancelFailed"));
     },
   });
 
@@ -75,11 +84,18 @@ export function CancelBookingDialog({
         ? "border-amber-500/30 bg-amber-500/15 text-amber-700"
         : "border-destructive/30 bg-destructive/10 text-destructive";
 
+  // Built here (not in the JSX) so each row keeps a typed translation key.
+  const breakdown: Array<[TranslationKey, number, number]> = [
+    ["trips.refundRoom", quote?.roomRefund ?? 0, booking?.roomPrice ?? 0],
+    ["trips.refundCleaning", quote?.cleaningRefund ?? 0, booking?.cleaningFee ?? 0],
+    ["trips.refundService", quote?.serviceRefund ?? 0, booking?.serviceFee ?? 0],
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>取消这笔订单？</DialogTitle>
+          <DialogTitle>{t("trips.cancelTitle")}</DialogTitle>
           <DialogDescription className="line-clamp-2">
             {booking?.listing.title}
             {booking ? ` · ${formatDateRange(booking.checkIn, booking.checkOut)}` : null}
@@ -101,7 +117,7 @@ export function CancelBookingDialog({
                 </Badge>
                 {quote.totalPaid > 0 ? (
                   <span className="text-xs opacity-80">
-                    已支付 {formatCurrency(quote.totalPaid)}
+                    {t("trips.paidAmount", { amount: formatCurrency(quote.totalPaid) })}
                   </span>
                 ) : null}
               </div>
@@ -113,7 +129,7 @@ export function CancelBookingDialog({
                   <span className="text-2xl font-semibold tabular-nums">
                     {formatCurrency(quote.amount)}
                   </span>
-                  <span className="text-xs opacity-80">将原路退回</span>
+                  <span className="text-xs opacity-80">{t("trips.refundOriginalChannel")}</span>
                 </div>
               ) : null}
             </div>
@@ -121,29 +137,25 @@ export function CancelBookingDialog({
             {/* --------------------------------------------------- breakdown */}
             {quote.totalPaid > 0 ? (
               <dl className="space-y-2 rounded-xl border p-4 text-sm">
-                {[
-                  ["房费退款", quote.roomRefund, booking?.roomPrice ?? 0],
-                  ["清洁费退款", quote.cleaningRefund, booking?.cleaningFee ?? 0],
-                  ["服务费退款", quote.serviceRefund, booking?.serviceFee ?? 0],
-                ].map(([label, refunded, paid]) => (
-                  <div key={label as string} className="flex items-center justify-between gap-4">
-                    <dt className="text-muted-foreground">{label as string}</dt>
+                {breakdown.map(([label, refunded, paid]) => (
+                  <div key={label} className="flex items-center justify-between gap-4">
+                    <dt className="text-muted-foreground">{t(label)}</dt>
                     <dd
                       className={cn(
                         "tabular-nums",
-                        (refunded as number) === 0 && "text-muted-foreground line-through",
+                        refunded === 0 && "text-muted-foreground line-through",
                       )}
                     >
-                      {formatCurrency(refunded as number)}
+                      {formatCurrency(refunded)}
                       <span className="text-muted-foreground ml-1.5 text-xs">
-                        / {formatCurrency(paid as number)}
+                        / {formatCurrency(paid)}
                       </span>
                     </dd>
                   </div>
                 ))}
                 <Separator />
                 <div className="flex items-center justify-between font-semibold">
-                  <dt>合计退款</dt>
+                  <dt>{t("trips.refundTotal")}</dt>
                   <dd className="tabular-nums">{formatCurrency(quote.amount)}</dd>
                 </div>
               </dl>
@@ -153,20 +165,20 @@ export function CancelBookingDialog({
             <details className="rounded-xl border p-4 text-sm">
               <summary className="flex cursor-pointer items-center gap-1.5 font-medium">
                 <Info className="size-3.5" />
-                查看取消政策
+                {t("trips.viewPolicy")}
                 {quote.totalPaid > 0 && quote.daysUntilCheckIn >= 0 ? (
                   <span className="text-muted-foreground ml-1 text-xs font-normal">
-                    （距入住 {quote.daysUntilCheckIn} 天）
+                    {t("trips.daysUntilCheckIn", { days: quote.daysUntilCheckIn })}
                   </span>
                 ) : null}
               </summary>
               <table className="mt-3 w-full text-xs">
                 <thead className="text-muted-foreground">
                   <tr>
-                    <th className="pb-1.5 text-left font-normal">取消时间</th>
-                    <th className="pb-1.5 text-right font-normal">房费</th>
-                    <th className="pb-1.5 text-right font-normal">清洁费</th>
-                    <th className="pb-1.5 text-right font-normal">服务费</th>
+                    <th className="pb-1.5 text-left font-normal">{t("trips.policyWindow")}</th>
+                    <th className="pb-1.5 text-right font-normal">{t("trips.policyRoom")}</th>
+                    <th className="pb-1.5 text-right font-normal">{t("trips.policyCleaning")}</th>
+                    <th className="pb-1.5 text-right font-normal">{t("trips.policyService")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -184,15 +196,15 @@ export function CancelBookingDialog({
 
             <p className="text-muted-foreground flex items-start gap-2 text-xs leading-relaxed">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-              取消后房源日期会立即释放，其他用户可以重新预订。
-              {quote.refundable ? "退款为模拟流程，不会产生真实资金变动。" : null}
+              {t("trips.cancelNotice")}
+              {quote.refundable ? t("trips.cancelNoticeSimulated") : null}
             </p>
           </div>
         )}
 
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            再想想
+            {t("trips.keepBooking")}
           </Button>
           <Button
             variant={quote?.refundable ? "destructive" : "default"}
@@ -205,7 +217,9 @@ export function CancelBookingDialog({
             ) : (
               <Undo2 className="size-4" />
             )}
-            {quote?.refundable ? `确认取消并退款 ${formatCurrency(quote.amount)}` : "确认取消订单"}
+            {quote?.refundable
+              ? t("trips.confirmCancelRefund", { amount: formatCurrency(quote.amount) })
+              : t("trips.confirmCancel")}
           </Button>
         </div>
       </DialogContent>

@@ -4,6 +4,7 @@ import { Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 import { AgentChat } from "@/components/agent-chat";
+import { useT } from "@/components/locale-provider";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAgentStore } from "@/lib/store";
 
@@ -14,6 +15,7 @@ import { useAgentStore } from "@/lib/store";
  * and reopening the drawer does not reset the chat.
  */
 export function AgentDrawer() {
+  const t = useT();
   const open = useAgentStore((state) => state.open);
   const setOpen = useAgentStore((state) => state.setOpen);
 
@@ -29,7 +31,7 @@ export function AgentDrawer() {
           // its own close button instead, so both sit in one aligned row.
           showCloseButton={false}
         >
-          <SheetTitle className="sr-only">AI 旅行助手</SheetTitle>
+          <SheetTitle className="sr-only">{t("agent.title")}</SheetTitle>
           <AgentChat />
         </SheetContent>
       </Sheet>
@@ -41,11 +43,11 @@ export function AgentDrawer() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.25, ease: "easeOut" }}
           onClick={() => setOpen(true)}
-          aria-label="打开 AI 旅行助手"
+          aria-label={t("agentUi.openAssistant")}
           className="bg-primary text-primary-foreground hover:bg-primary/90 fixed right-5 bottom-5 z-50 flex items-center gap-2 rounded-full px-4 py-3 text-sm font-medium shadow-lg shadow-black/20 transition-colors sm:right-6 sm:bottom-6"
         >
           <Sparkles className="size-4" />
-          <span className="hidden sm:inline">AI 助手</span>
+          <span className="hidden sm:inline">{t("nav.aiAgent")}</span>
         </motion.button>
       ) : null}
     </>

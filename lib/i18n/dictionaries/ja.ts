@@ -275,6 +275,7 @@ export const ja = {
     wind: "風速",
     feelsLike: "体感温度",
     provider: "データ提供：Open-Meteo",
+    cached: " · キャッシュ",
     feelsLikeShort: "体感 {temp}°",
     kind: {
       clear: "晴れ",
@@ -347,6 +348,8 @@ export const ja = {
 
   searchResults: {
     titleIn: "{city}の宿",
+    metaTitle: "宿を検索",
+    metaDescription: "目的地・日付・人数・料金・設備で実際の宿を絞り込みます。",
     titleAll: "すべての宿",
     found: "{count} 件見つかりました",
     clearAll: "すべて解除",

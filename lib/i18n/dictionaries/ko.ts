@@ -277,6 +277,7 @@ export const ko = {
     wind: "풍속",
     feelsLike: "체감",
     provider: "데이터 제공 Open-Meteo",
+    cached: " · 캐시됨",
     feelsLikeShort: "체감 {temp}°",
     kind: {
       clear: "맑음",
@@ -346,6 +347,8 @@ export const ko = {
 
   searchResults: {
     titleIn: "{city} 숙소",
+    metaTitle: "숙소 검색",
+    metaDescription: "목적지, 날짜, 인원, 가격, 편의시설로 실제 숙소를 필터링합니다.",
     titleAll: "전체 숙소",
     found: "숙소 {count}개를 찾았습니다",
     clearAll: "전체 해제",

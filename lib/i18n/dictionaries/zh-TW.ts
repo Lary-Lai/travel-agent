@@ -276,6 +276,7 @@ export const zhTW = {
     wind: "風速",
     feelsLike: "體感",
     provider: "資料來自 Open-Meteo",
+    cached: " · 快取",
     feelsLikeShort: "體感 {temp}°",
     kind: {
       clear: "晴",
@@ -351,6 +352,8 @@ export const zhTW = {
 
   searchResults: {
     titleIn: "{city}的房源",
+    metaTitle: "搜尋房源",
+    metaDescription: "依目的地、日期、人數、價格與設施篩選真實房源。",
     titleAll: "全部房源",
     found: "共找到 {count} 間房源",
     clearAll: "清除全部",

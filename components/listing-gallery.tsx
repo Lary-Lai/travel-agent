@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight, Grid2x2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { useT } from "@/components/locale-provider";
 import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,7 @@ export function ListingGallery({
 }) {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
+  const t = useT();
 
   const images = gallery.length > 0 ? gallery : [{ url: "", caption: null }];
   const hero = images.slice(0, 5);
@@ -63,9 +65,11 @@ export function ListingGallery({
               key={`${image.url}-${index}`}
               type="button"
               onClick={() => setLightboxIndex(index)}
-              aria-label={`查看 ${image.caption ?? `图片 ${index + 1}`}`}
+              aria-label={t("media.galleryView", {
+                caption: image.caption ?? t("media.galleryImageFallback", { index: index + 1 }),
+              })}
               className={cn(
-                "group relative overflow-hidden bg-muted",
+                "group bg-muted relative overflow-hidden",
                 index === 0
                   ? // Hero: full width on mobile, 2x2 on desktop.
                     "aspect-4/3 md:col-span-2 md:row-span-2 md:aspect-auto"
@@ -75,7 +79,7 @@ export function ListingGallery({
             >
               <SafeImage
                 src={image.url}
-                alt={`${title} — ${image.caption ?? `图片 ${index + 1}`}`}
+                alt={`${title} — ${image.caption ?? t("media.galleryImageFallback", { index: index + 1 })}`}
                 sizes={
                   index === 0 ? "(max-width: 768px) 100vw, 50vw" : "(max-width: 768px) 50vw, 25vw"
                 }
@@ -99,7 +103,7 @@ export function ListingGallery({
           className="absolute right-3 bottom-3 gap-2 shadow-sm"
         >
           <Grid2x2 className="size-3.5" />
-          查看全部 {images.length} 张
+          {t("media.galleryAll", { count: images.length })}
         </Button>
       </div>
 
@@ -112,14 +116,16 @@ export function ListingGallery({
           showCloseButton={false}
           className="max-w-5xl border-0 bg-transparent p-0 shadow-none sm:max-w-5xl"
         >
-          <DialogTitle className="sr-only">{title} 图片浏览</DialogTitle>
+          <DialogTitle className="sr-only">
+            {t("media.galleryLightboxTitle", { title })}
+          </DialogTitle>
 
           <div className="relative">
             <div className="relative aspect-3/2 w-full overflow-hidden rounded-2xl bg-black/60">
               {lightboxIndex !== null ? (
                 <SafeImage
                   src={images[lightboxIndex].url}
-                  alt={`${title} — ${images[lightboxIndex].caption ?? `图片 ${lightboxIndex + 1}`}`}
+                  alt={`${title} — ${images[lightboxIndex].caption ?? t("media.galleryImageFallback", { index: lightboxIndex + 1 })}`}
                   sizes="90vw"
                   className="object-contain"
                   priority
@@ -132,7 +138,7 @@ export function ListingGallery({
               size="icon"
               className="absolute top-3 right-3 rounded-full"
               onClick={() => setLightboxIndex(null)}
-              aria-label="关闭"
+              aria-label={t("common.close")}
             >
               <X className="size-4" />
             </Button>
@@ -142,7 +148,7 @@ export function ListingGallery({
               size="icon"
               className="absolute top-1/2 left-3 -translate-y-1/2 rounded-full"
               onClick={() => go(-1)}
-              aria-label="上一张"
+              aria-label={t("media.galleryPrevious")}
             >
               <ChevronLeft className="size-4" />
             </Button>
@@ -152,7 +158,7 @@ export function ListingGallery({
               size="icon"
               className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full"
               onClick={() => go(1)}
-              aria-label="下一张"
+              aria-label={t("media.galleryNext")}
             >
               <ChevronRight className="size-4" />
             </Button>
@@ -177,7 +183,7 @@ export function ListingGallery({
                 key={`thumb-${image.url}-${index}`}
                 type="button"
                 onClick={() => setLightboxIndex(index)}
-                aria-label={image.caption ?? `图片 ${index + 1}`}
+                aria-label={image.caption ?? t("media.galleryImageFallback", { index: index + 1 })}
                 className={cn(
                   "relative size-14 shrink-0 overflow-hidden rounded-lg border-2 transition-all sm:size-16",
                   index === lightboxIndex
@@ -196,7 +202,7 @@ export function ListingGallery({
       <Dialog open={showAll} onOpenChange={setShowAll}>
         <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto sm:max-w-4xl">
           <DialogTitle>
-            {title} · 全部 {images.length} 张
+            {title} · {t("media.galleryAll", { count: images.length })}
           </DialogTitle>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {images.map((image, index) => (
@@ -207,11 +213,11 @@ export function ListingGallery({
                   setShowAll(false);
                   setLightboxIndex(index);
                 }}
-                className="group relative aspect-4/3 overflow-hidden rounded-xl bg-muted"
+                className="group bg-muted relative aspect-4/3 overflow-hidden rounded-xl"
               >
                 <SafeImage
                   src={image.url}
-                  alt={`${title} — ${image.caption ?? `图片 ${index + 1}`}`}
+                  alt={`${title} — ${image.caption ?? t("media.galleryImageFallback", { index: index + 1 })}`}
                   sizes="(max-width: 640px) 100vw, 50vw"
                   className="transition-transform duration-500 group-hover:scale-[1.04]"
                 />

@@ -5,6 +5,7 @@ import { Bookmark, Loader2, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,6 +34,7 @@ type Props = {
  */
 export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTitle }: Props) {
   const queryClient = useQueryClient();
+  const t = useT();
   const [newName, setNewName] = useState("");
 
   const markSaved = useSavedStore((state) => state.markSaved);
@@ -55,14 +57,14 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
   };
 
   const onError = (error: unknown) => {
-    toast.error(error instanceof ApiClientError ? error.message : "操作失败，请稍后重试");
+    toast.error(error instanceof ApiClientError ? error.message : t("wishlist.actionFailed"));
     invalidate();
   };
 
   const addMutation = useMutation({
     mutationFn: (wishlistId: string) => api.addToWishlist(wishlistId, listingId),
     onSuccess: (result) => {
-      toast.success(`已加入「${result.wishlist.name}」`);
+      toast.success(t("wishlist.added", { name: result.wishlist.name }));
       markSaved(listingId);
       invalidate();
     },
@@ -72,7 +74,7 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
   const removeMutation = useMutation({
     mutationFn: (wishlistId: string) => api.removeFromWishlist(wishlistId, listingId),
     onSuccess: (result) => {
-      toast.success(`已从「${result.wishlist.name}」移除`);
+      toast.success(t("wishlist.removedFrom", { name: result.wishlist.name }));
       invalidate();
     },
     onError,
@@ -82,7 +84,7 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
     mutationFn: (name: string) => api.createWishlist(name),
     onSuccess: (result) => {
       setNewName("");
-      toast.success(`已创建「${result.wishlist.name}」，正在加入房源`);
+      toast.success(t("wishlist.createdAndAdding", { name: result.wishlist.name }));
       addMutation.mutate(result.wishlist.id);
     },
     onError,
@@ -104,7 +106,7 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>保存到心愿单</DialogTitle>
+          <DialogTitle>{t("wishlist.dialogTitle")}</DialogTitle>
           <DialogDescription className="line-clamp-2">{listingTitle}</DialogDescription>
         </DialogHeader>
 
@@ -116,7 +118,7 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
             </div>
           ) : wishlists.length === 0 ? (
             <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-center text-sm">
-              还没有心愿单，先创建一个吧
+              {t("wishlist.noLists")}
             </p>
           ) : (
             <ul className="max-h-64 space-y-1 overflow-y-auto">
@@ -133,7 +135,9 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
                       <Checkbox checked={checked} tabIndex={-1} className="pointer-events-none" />
                       <Bookmark className="text-muted-foreground size-4 shrink-0" />
                       <span className="flex-1 truncate text-sm font-medium">{wishlist.name}</span>
-                      <span className="text-muted-foreground text-xs">{wishlist.itemCount} 个房源</span>
+                      <span className="text-muted-foreground text-xs">
+                        {t("wishlist.itemCount", { count: wishlist.itemCount })}
+                      </span>
                       {isPending && <Loader2 className="size-3.5 animate-spin" />}
                     </button>
                   </li>
@@ -154,12 +158,12 @@ export function SaveToWishlistDialog({ open, onOpenChange, listingId, listingTit
             <Input
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
-              placeholder="新建心愿单，例如「东京旅行」"
+              placeholder={t("wishlist.createPlaceholder")}
               maxLength={60}
             />
             <Button type="submit" variant="outline" disabled={!newName.trim() || isPending}>
               <Plus className="size-4" />
-              创建
+              {t("wishlist.createCta")}
             </Button>
           </form>
         </div>

@@ -1,11 +1,15 @@
 import { connection } from "next/server";
 
 import { TripsView } from "@/components/trips-view";
+import { getTranslator } from "@/lib/i18n/server";
 
-export const metadata = {
-  title: "我的行程",
-  description: "查看与管理你的预订订单。",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslator();
+  return {
+    title: t("trips.metaTitle"),
+    description: t("trips.metaDescription"),
+  };
+}
 
 export default async function TripsPage() {
   await connection();

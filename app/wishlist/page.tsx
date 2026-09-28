@@ -1,11 +1,15 @@
 import { connection } from "next/server";
 
 import { WishlistView } from "@/components/wishlist-view";
+import { getTranslator } from "@/lib/i18n/server";
 
-export const metadata = {
-  title: "我的心愿单",
-  description: "按主题分组管理收藏的房源。",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslator();
+  return {
+    title: t("wishlist.pageTitle"),
+    description: t("wishlist.pageDescription"),
+  };
+}
 
 export default async function WishlistPage() {
   await connection();

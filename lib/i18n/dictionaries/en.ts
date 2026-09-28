@@ -279,6 +279,7 @@ export const en = {
     wind: "Wind",
     feelsLike: "Feels like",
     provider: "Data from Open-Meteo",
+    cached: " · cached",
     feelsLikeShort: "Feels like {temp}°",
     kind: {
       clear: "Clear",
@@ -348,6 +349,8 @@ export const en = {
 
   searchResults: {
     titleIn: "Stays in {city}",
+    metaTitle: "Search stays",
+    metaDescription: "Filter real stays by destination, dates, guests, price and amenities.",
     titleAll: "All stays",
     found: "{count} stays found",
     clearAll: "Clear all",

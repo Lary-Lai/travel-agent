@@ -3,6 +3,7 @@
 import { ExternalLink, Loader2, MapPin, Minus, Plus } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/components/locale-provider";
 import { cn } from "@/lib/utils";
 import {
   buildTileGrid,
@@ -44,6 +45,7 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
   const [zoom, setZoom] = useState(DEFAULT_MAP_ZOOM);
   const [loadedTiles, setLoadedTiles] = useState<Set<string>>(new Set());
   const [failedTiles, setFailedTiles] = useState<Set<string>>(new Set());
+  const t = useT();
 
   const grid = buildTileGrid(longitude, latitude, zoom, 3, 2);
   const allFailed = failedTiles.size >= grid.tiles.length;
@@ -88,12 +90,8 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
                 left: tile.column * grid.tileSize,
                 top: tile.row * grid.tileSize,
               }}
-              onLoad={() =>
-                setLoadedTiles((previous) => new Set(previous).add(tile.key))
-              }
-              onError={() =>
-                setFailedTiles((previous) => new Set(previous).add(tile.key))
-              }
+              onLoad={() => setLoadedTiles((previous) => new Set(previous).add(tile.key))}
+              onError={() => setFailedTiles((previous) => new Set(previous).add(tile.key))}
             />
           ))}
         </div>
@@ -112,9 +110,12 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
         {allFailed ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-neutral-200 p-4 text-center dark:bg-neutral-800">
             <MapPin className="text-muted-foreground size-6" />
-            <p className="text-sm font-medium">地图暂时无法加载</p>
+            <p className="text-sm font-medium">{t("map.unavailable")}</p>
             <p className="text-muted-foreground text-xs">
-              坐标 {latitude.toFixed(4)}, {longitude.toFixed(4)}
+              {t("listing.coordinates", {
+                lat: latitude.toFixed(4),
+                lng: longitude.toFixed(4),
+              })}
             </p>
           </div>
         ) : null}
@@ -122,17 +123,17 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
         {!anyLoaded && !allFailed ? (
           <div className="text-muted-foreground absolute inset-0 flex items-center justify-center gap-2 bg-neutral-100 dark:bg-neutral-900">
             <Loader2 className="size-4 animate-spin" />
-            <span className="text-sm">正在加载地图…</span>
+            <span className="text-sm">{t("map.loading")}</span>
           </div>
         ) : null}
 
         {/* Zoom controls */}
-        <div className="absolute top-3 right-3 flex flex-col overflow-hidden rounded-lg border bg-background/95 shadow-sm backdrop-blur">
+        <div className="bg-background/95 absolute top-3 right-3 flex flex-col overflow-hidden rounded-lg border shadow-sm backdrop-blur">
           <button
             type="button"
             onClick={() => setZoom((current) => clampZoom(current + 1))}
             disabled={zoom >= MAX_MAP_ZOOM}
-            aria-label="放大地图"
+            aria-label={t("map.zoomIn")}
             className="hover:bg-accent flex size-8 items-center justify-center transition-colors disabled:opacity-40"
           >
             <Plus className="size-4" />
@@ -142,15 +143,16 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
             type="button"
             onClick={() => setZoom((current) => clampZoom(current - 1))}
             disabled={zoom <= MIN_MAP_ZOOM}
-            aria-label="缩小地图"
+            aria-label={t("map.zoomOut")}
             className="hover:bg-accent flex size-8 items-center justify-center transition-colors disabled:opacity-40"
           >
             <Minus className="size-4" />
           </button>
         </div>
 
-        {/* Locality caption */}
-        <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full bg-background/95 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur">
+        {/* Locality caption. The label is seeded content (a street name), so it
+            is not translated; it needs no key of its own. */}
+        <div className="bg-background/95 absolute bottom-3 left-3 flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur">
           <MapPin className="text-primary size-3.5" />
           {label}
         </div>
@@ -158,7 +160,7 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
 
       <div className="flex items-center justify-between gap-2 border-t px-3 py-2">
         <p className="text-muted-foreground text-[11px]">
-          地图数据 © Esri · 缩放级别 {zoom}
+          {t("map.attribution", { zoom: t("media.mapZoomLevel", { zoom }) })}
         </p>
         <a
           href={openInMaps}
@@ -166,7 +168,7 @@ export function ListingMap({ latitude, longitude, label, className }: Props) {
           rel="noreferrer noopener"
           className="text-primary inline-flex items-center gap-1 text-xs font-medium hover:underline"
         >
-          在地图中打开
+          {t("map.open")}
           <ExternalLink className="size-3" />
         </a>
       </div>

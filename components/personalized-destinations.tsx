@@ -5,6 +5,7 @@ import { Compass, History, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { useT } from "@/components/locale-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
 
@@ -17,6 +18,7 @@ import { api } from "@/lib/api";
  * signed-out visitors see a sensible row instead of an empty section.
  */
 export function PersonalizedDestinations() {
+  const t = useT();
   const { data, isLoading } = useQuery({
     queryKey: ["personalized-destinations"],
     queryFn: api.getPersonalizedDestinations,
@@ -51,18 +53,18 @@ export function PersonalizedDestinations() {
             ) : (
               <Compass className="text-primary size-5" />
             )}
-            {fromHistory ? "根据你的搜索记录推荐" : "为你推荐的目的地"}
+            {fromHistory ? t("home.personalised") : t("home.popularForYou")}
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
             {fromHistory
-              ? `你已经搜索过 ${data?.totalSearches} 次，这些是你最常关注的城市`
-              : "登录并搜索几次后，这里会变成只属于你的推荐"}
+              ? t("home.personalisedHint", { count: data?.totalSearches ?? 0 })
+              : t("home.popularHint")}
           </p>
         </div>
         {fromHistory ? (
           <Badge variant="secondary" className="gap-1">
             <Sparkles className="size-3" />
-            个性化
+            {t("home.personalisedBadge")}
           </Badge>
         ) : null}
       </div>

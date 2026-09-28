@@ -12,6 +12,7 @@ import { DICTIONARIES, interpolate, translate } from "../lib/i18n";
 import { LOCALES, matchAcceptLanguage, type Locale } from "../lib/i18n/locales";
 import { PLURALS } from "../lib/i18n/plurals";
 import { zhCN } from "../lib/i18n/dictionaries/zh-CN";
+import { MESSAGE_MODULES, type ModuleName } from "../lib/i18n/messages";
 
 let passed = 0;
 let failed = 0;
@@ -153,6 +154,83 @@ check(
     return value.length > 0 && value !== "home.destinations";
   }),
 );
+
+console.log("\n— group modules");
+
+/**
+ * Per-group modules are separate files so they can be translated in parallel.
+ * `tsc` catches a group whose locales disagree, but these checks also assert the
+ * runtime can actually resolve every module key — a module that is not wired into
+ * `MESSAGE_MODULES` would otherwise render as its own key name.
+ */
+for (const moduleName of Object.keys(MESSAGE_MODULES) as ModuleName[]) {
+  const table = MESSAGE_MODULES[moduleName];
+  const reference = Object.keys(table["zh-CN"] as Record<string, string>);
+
+  const missingPerLocale: string[] = [];
+  for (const locale of LOCALES) {
+    const keys = Object.keys((table[locale] ?? {}) as Record<string, string>);
+    const missing = reference.filter((key) => !keys.includes(key));
+    const extra = keys.filter((key) => !reference.includes(key));
+    if (missing.length > 0) missingPerLocale.push(`${locale} missing ${missing.length}`);
+    if (extra.length > 0) missingPerLocale.push(`${locale} extra ${extra.length}`);
+  }
+
+  check(
+    `${moduleName}: every locale defines the same keys`,
+    missingPerLocale.length === 0,
+    missingPerLocale.join("; "),
+  );
+
+  if (reference.length === 0) {
+    console.log(`  SKIP  ${moduleName}: no keys yet`);
+    continue;
+  }
+
+  check(
+    `${moduleName}: no empty values`,
+    LOCALES.every((locale) =>
+      Object.values((table[locale] ?? {}) as Record<string, string>).every(
+        (value) => typeof value === "string" && value.trim().length > 0,
+      ),
+    ),
+  );
+
+  check(
+    `${moduleName}: keys are prefixed with the group name`,
+    reference.every((key) => key.startsWith(`${moduleName}.`)),
+    reference.filter((key) => !key.startsWith(`${moduleName}.`)).slice(0, 3).join(", "),
+  );
+
+  // Placeholders must survive translation.
+  const placeholderMismatch: string[] = [];
+  for (const key of reference) {
+    const expected = placeholdersOf((table["zh-CN"] as Record<string, string>)[key]);
+    for (const locale of LOCALES) {
+      const value = (table[locale] as Record<string, string>)[key];
+      if (placeholdersOf(value) !== expected) {
+        placeholderMismatch.push(`${locale}:${key}`);
+      }
+    }
+  }
+  check(
+    `${moduleName}: placeholders preserved in every locale`,
+    placeholderMismatch.length === 0,
+    placeholderMismatch.slice(0, 3).join(", "),
+  );
+
+  // The runtime must resolve them (routing by the first key segment).
+  const unresolvable = reference.filter(
+    (key) => translate("en", key as never) === key,
+  );
+  check(
+    `${moduleName}: every key resolves through translate()`,
+    unresolvable.length === 0,
+    unresolvable.slice(0, 3).join(", "),
+  );
+
+  console.log(`        ${reference.length} key(s) across ${LOCALES.length} locales`);
+}
 
 console.log("\n— Accept-Language matching");
 

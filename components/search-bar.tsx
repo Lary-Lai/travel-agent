@@ -264,7 +264,7 @@ export function SearchBar({
                 disabled={!checkIn || !checkOut}
                 onClick={() => setOpenPanel(null)}
               >
-                确定
+                {t("common.confirm")}
               </Button>
             </div>
           </div>
@@ -298,7 +298,7 @@ export function SearchBar({
                 className="size-8"
                 onClick={() => update({ guests: Math.max(MIN_GUESTS, guests - 1) })}
                 disabled={guests <= MIN_GUESTS}
-                aria-label="减少人数"
+                aria-label={t("filters.decrease")}
               >
                 <Minus className="size-3.5" />
               </Button>
@@ -310,13 +310,13 @@ export function SearchBar({
                 className="size-8"
                 onClick={() => update({ guests: Math.min(MAX_GUESTS, guests + 1) })}
                 disabled={guests >= MAX_GUESTS}
-                aria-label="增加人数"
+                aria-label={t("filters.increase")}
               >
                 <Plus className="size-3.5" />
               </Button>
             </div>
           </div>
-          <p className="text-muted-foreground mt-3 text-xs">最多支持 {MAX_GUESTS} 位房客</p>
+          <p className="text-muted-foreground mt-3 text-xs">{t("auth.maxGuestsHint", { max: MAX_GUESTS })}</p>
         </PopoverContent>
       </Popover>
 

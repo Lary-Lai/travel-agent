@@ -1,11 +1,17 @@
 import { connection } from "next/server";
 
 import { ProfileForm } from "@/components/profile-form";
+import { getTranslator } from "@/lib/i18n/server";
 
-export const metadata = {
-  title: "个人主页",
-  description: "编辑昵称与头像、查看账号信息、修改密码。",
-};
+// A separate function, so it needs its own translator.
+export async function generateMetadata() {
+  const { t } = await getTranslator();
+
+  return {
+    title: t("account.metaTitle"),
+    description: t("account.metaDescription"),
+  };
+}
 
 export default async function ProfilePage() {
   await connection();

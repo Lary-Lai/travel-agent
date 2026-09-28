@@ -6,7 +6,7 @@ import { Providers } from "@/components/providers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { LOCALE_META } from "@/lib/i18n/locales";
-import { getLocale } from "@/lib/i18n/server";
+import { getLocale, getTranslator } from "@/lib/i18n/server";
 
 import "./globals.css";
 
@@ -20,14 +20,23 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: {
-    default: "旅居 Agent · AI 旅游住宿平台",
-    template: "%s · 旅居 Agent",
-  },
-  description:
-    "AI 驱动的旅游住宿平台：搜索真实房源、收藏心愿单、完成预订，并用自然语言让 AI Agent 帮你找房、比较与下单。",
-};
+/**
+ * Metadata is request-scoped: the locale lives in a cookie, so the <title> and
+ * description follow the visitor's language like the rest of the page. The
+ * product name itself is a brand and stays the same in every locale.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getTranslator();
+  const brand = t("globals.brand");
+
+  return {
+    title: {
+      default: `${brand} · ${t("globals.metaTitle")}`,
+      template: `%s · ${brand}`,
+    },
+    description: t("globals.metaDescription"),
+  };
+}
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   // Read the locale on the server so the first paint is already in the right

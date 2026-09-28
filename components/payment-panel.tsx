@@ -17,6 +17,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { useT } from "@/components/locale-provider";
 import { QrPlaceholder } from "@/components/qr-placeholder";
 import { SafeImage } from "@/components/safe-image";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { api, ApiClientError } from "@/lib/api";
-import { formatCurrency, formatDate, formatDateRange } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
+import type { Translate, TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import type { BookingDto, PaymentMethodValue } from "@/types";
 import { PAYMENT_METHODS } from "@/types";
@@ -32,31 +34,49 @@ import { PAYMENT_METHODS } from "@/types";
 /** Checkout window shown on the QR screens. Cosmetic — it does not block payment. */
 const COUNTDOWN_SECONDS = 15 * 60;
 
-const METHOD_META: Record<
-  PaymentMethodValue,
-  { label: string; accent: string; soft: string; icon: typeof Wallet; hint: string }
-> = {
+/**
+ * Per-channel presentation. Styling and icons stay at module scope; the label
+ * and hint are translation keys, resolved inside the component because
+ * `Translate` is only reachable through the locale context there.
+ */
+const METHOD_META = {
   WECHAT: {
-    label: "微信支付",
+    labelKey: "payment.methodWechat",
     accent: "#07C160",
     soft: "bg-[#07C160]/10 text-[#07974a]",
     icon: MessageCircle,
-    hint: "打开微信「扫一扫」，扫描二维码完成支付",
+    hintKey: "payment.hintWechat",
   },
   ALIPAY: {
-    label: "支付宝",
+    labelKey: "payment.methodAlipay",
     accent: "#1677FF",
     soft: "bg-[#1677FF]/10 text-[#1259c3]",
     icon: Wallet,
-    hint: "打开支付宝「扫一扫」，扫描二维码完成支付",
+    hintKey: "payment.hintAlipay",
   },
   CARD: {
-    label: "银行卡",
+    labelKey: "payment.methodCard",
     accent: "#1F2937",
     soft: "bg-muted text-foreground",
     icon: CreditCard,
-    hint: "支持 Visa / Mastercard / 银联借记卡与信用卡",
+    hintKey: "payment.hintCard",
   },
+} satisfies Record<
+  PaymentMethodValue,
+  {
+    /** Typed as a key, not `string`, so it can be handed straight to `t()`. */
+    labelKey: TranslationKey;
+    accent: string;
+    soft: string;
+    icon: typeof Wallet;
+    hintKey: TranslationKey;
+  }
+>;
+
+/** `METHOD_META` with its keys resolved, as handed to the QR view. */
+type ResolvedMethodMeta = Omit<(typeof METHOD_META)[PaymentMethodValue], "labelKey" | "hintKey"> & {
+  label: string;
+  hint: string;
 };
 
 // ------------------------------------------------------------------ card utils
@@ -85,11 +105,16 @@ function luhnValid(number: string): boolean {
   return sum % 10 === 0;
 }
 
-function detectBrand(number: string): { name: string; accent: string } | null {
+/**
+ * Card brand from the leading digits. VISA / Mastercard / AMEX are brand names
+ * and stay as written; UnionPay alone is localised, because Chinese readers know
+ * it as 银联 and everyone else as UnionPay.
+ */
+function detectBrand(number: string, t: Translate): { name: string; accent: string } | null {
   const digits = digitsOnly(number);
   if (/^4/.test(digits)) return { name: "VISA", accent: "#1A1F71" };
   if (/^5[1-5]/.test(digits) || /^2[2-7]/.test(digits)) return { name: "Mastercard", accent: "#EB001B" };
-  if (/^62/.test(digits)) return { name: "银联", accent: "#E60012" };
+  if (/^62/.test(digits)) return { name: t("payment.brandUnionPay"), accent: "#E60012" };
   if (/^3[47]/.test(digits)) return { name: "AMEX", accent: "#2E77BC" };
   return null;
 }
@@ -110,6 +135,7 @@ function formatCountdown(totalSeconds: number): string {
 
 export function PaymentPanel({ booking }: { booking: BookingDto }) {
   const queryClient = useQueryClient();
+  const t = useT();
 
   const [method, setMethod] = useState<PaymentMethodValue>("WECHAT");
   const [secondsLeft, setSecondsLeft] = useState(COUNTDOWN_SECONDS);
@@ -117,18 +143,21 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
   const [cardError, setCardError] = useState<string | null>(null);
   const [paid, setPaid] = useState<BookingDto | null>(booking.isPaid ? booking : null);
 
-  const meta = METHOD_META[method];
-  const brand = useMemo(() => detectBrand(card.number), [card.number]);
+  const meta = useMemo<ResolvedMethodMeta>(() => {
+    const { labelKey, hintKey, ...rest } = METHOD_META[method];
+    return { ...rest, label: t(labelKey), hint: t(hintKey) };
+  }, [method, t]);
+  const brand = useMemo(() => detectBrand(card.number, t), [card.number, t]);
 
   const pay = useMutation({
     mutationFn: () => api.payBooking(booking.id, method),
     onSuccess: (result) => {
       setPaid(result.booking);
       void queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      toast.success("支付成功，订单已确认");
+      toast.success(t("payment.paySuccessToast"));
     },
     onError: (error) => {
-      const message = error instanceof ApiClientError ? error.message : "支付失败，请稍后重试";
+      const message = error instanceof ApiClientError ? error.message : t("payment.payFailed");
       setCardError(message);
       toast.error(message);
     },
@@ -146,20 +175,20 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
 
   const validateCard = (): boolean => {
     if (digitsOnly(card.number).length < 13 || !luhnValid(card.number)) {
-      setCardError("卡号无效，请检查后重新输入");
+      setCardError(t("payment.cardErrorNumber"));
       return false;
     }
     const [month, year] = card.expiry.split("/");
     if (!month || !year || Number(month) < 1 || Number(month) > 12) {
-      setCardError("有效期格式应为 MM/YY");
+      setCardError(t("payment.cardErrorExpiry"));
       return false;
     }
     if (digitsOnly(card.cvc).length < 3) {
-      setCardError("安全码应为 3-4 位数字");
+      setCardError(t("payment.cardErrorCvc"));
       return false;
     }
     if (card.holder.trim().length < 2) {
-      setCardError("请填写持卡人姓名");
+      setCardError(t("payment.cardErrorHolder"));
       return false;
     }
     setCardError(null);
@@ -181,25 +210,31 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
         </div>
 
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">支付成功</h1>
-          <p className="text-muted-foreground mt-1.5 text-sm">
-            订单已确认，行程已加入「我的行程」
-          </p>
+          <h1 className="text-xl font-semibold tracking-tight">{t("payment.successTitle")}</h1>
+          <p className="text-muted-foreground mt-1.5 text-sm">{t("payment.successBody")}</p>
         </div>
 
         <p className="text-3xl font-semibold tabular-nums">{formatCurrency(paid.totalPrice)}</p>
 
         <dl className="space-y-2.5 rounded-xl border bg-muted/30 p-4 text-left text-sm">
-          {[
-            ["房源", paid.listing.title],
-            ["入住日期", formatDateRange(paid.checkIn, paid.checkOut)],
-            ["入住人数", `${paid.guests} 位 · ${paid.nights} 晚`],
-            ["支付方式", paid.paymentMethodLabel ?? "—"],
-            ["交易号", paid.paymentTradeNo ?? "—"],
-            ["支付时间", paid.paidAt ? formatDate(paid.paidAt) : "—"],
-          ].map(([label, value]) => (
-            <div key={label} className="flex justify-between gap-4">
-              <dt className="text-muted-foreground shrink-0">{label}</dt>
+          {(
+            [
+              ["payment.labelListing", paid.listing.title],
+              [
+                "payment.labelStayDates",
+                `${formatDate(paid.checkIn)} – ${formatDate(paid.checkOut)}`,
+              ],
+              [
+                "payment.labelGuests",
+                `${t("common.guests", { count: paid.guests })} · ${t("common.nights", { count: paid.nights })}`,
+              ],
+              ["payment.labelMethod", paid.paymentMethodLabel ?? "—"],
+              ["payment.labelTradeNo", paid.paymentTradeNo ?? "—"],
+              ["payment.labelPaidAt", paid.paidAt ? formatDate(paid.paidAt) : "—"],
+            ] as const
+          ).map(([labelKey, value]) => (
+            <div key={labelKey} className="flex justify-between gap-4">
+              <dt className="text-muted-foreground shrink-0">{t(labelKey)}</dt>
               <dd className="truncate font-medium tabular-nums">{value}</dd>
             </div>
           ))}
@@ -207,16 +242,16 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
           <Button asChild>
-            <Link href="/trips">查看我的行程</Link>
+            <Link href="/trips">{t("payment.viewTrips")}</Link>
           </Button>
           <Button variant="outline" asChild>
-            <Link href="/search">继续浏览房源</Link>
+            <Link href="/search">{t("payment.browseMore")}</Link>
           </Button>
         </div>
 
         <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs">
           <ShieldCheck className="size-3.5" />
-          演示环境：本次支付为模拟流程，未产生真实扣款
+          {t("payment.successDemo")}
         </p>
       </div>
     );
@@ -228,10 +263,11 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
       {/* ------------------------------------------------------ left: methods */}
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">选择支付方式</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{t("payment.chooseMethod")}</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            订单号 <span className="tabular-nums">{booking.id.slice(-12).toUpperCase()}</span> ·
-            请在 15 分钟内完成支付
+            {t("payment.orderNo")}{" "}
+            <span className="tabular-nums">{booking.id.slice(-12).toUpperCase()}</span> ·{" "}
+            {t("payment.payWithin", { minutes: Math.round(COUNTDOWN_SECONDS / 60) })}
           </p>
         </div>
 
@@ -261,7 +297,7 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
                   className="size-5 shrink-0"
                   style={{ color: active ? optionMeta.accent : undefined }}
                 />
-                {optionMeta.label}
+                {t(optionMeta.labelKey)}
               </button>
             );
           })}
@@ -312,31 +348,31 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           {pay.isPending ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              正在处理支付…
+              {t("payment.payProcessing")}
             </>
           ) : method === "CARD" ? (
             <>
               <Lock className="size-4" />
-              确认支付 {formatCurrency(booking.totalPrice)}
+              {t("payment.payAmount", { amount: formatCurrency(booking.totalPrice) })}
             </>
           ) : (
             <>
               <Check className="size-4" />
-              我已完成支付（模拟）
+              {t("payment.payDoneDemo")}
             </>
           )}
         </Button>
 
         <p className="text-muted-foreground flex items-center justify-center gap-1.5 text-xs">
           <ShieldCheck className="size-3.5" />
-          演示环境：不会跳转真实支付网关，也不会产生任何扣款
+          {t("payment.demoNotice")}
         </p>
       </div>
 
       {/* ----------------------------------------------------- right: summary */}
       <aside>
         <div className="space-y-4 rounded-2xl border p-5 lg:sticky lg:top-24">
-          <h2 className="text-sm font-semibold">订单详情</h2>
+          <h2 className="text-sm font-semibold">{t("payment.orderSummary")}</h2>
 
           {/* Property photo, full width so the guest can confirm what they booked. */}
           <div className="relative aspect-16/9 w-full overflow-hidden rounded-xl bg-muted">
@@ -363,16 +399,19 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
 
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">入住</dt>
+              <dt className="text-muted-foreground">{t("payment.labelCheckIn")}</dt>
               <dd>{formatDate(booking.checkIn)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">退房</dt>
+              <dt className="text-muted-foreground">{t("payment.labelCheckOut")}</dt>
               <dd>{formatDate(booking.checkOut)}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">房客</dt>
-              <dd>{booking.guests} 位 · {booking.nights} 晚</dd>
+              <dt className="text-muted-foreground">{t("payment.labelGuestCount")}</dt>
+              <dd>
+                {t("common.guests", { count: booking.guests })} ·{" "}
+                {t("common.nights", { count: booking.nights })}
+              </dd>
             </div>
           </dl>
 
@@ -381,27 +420,30 @@ export function PaymentPanel({ booking }: { booking: BookingDto }) {
           <dl className="space-y-2.5 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">
-                {formatCurrency(booking.roomPrice / Math.max(booking.nights, 1))} × {booking.nights} 晚
+                {t("payment.nightlyRate", {
+                  price: formatCurrency(booking.roomPrice / Math.max(booking.nights, 1)),
+                  nights: t("common.nights", { count: booking.nights }),
+                })}
               </dt>
               <dd className="tabular-nums">{formatCurrency(booking.roomPrice)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">清洁费</dt>
+              <dt className="text-muted-foreground">{t("payment.cleaningFee")}</dt>
               <dd className="tabular-nums">{formatCurrency(booking.cleaningFee)}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">服务费</dt>
+              <dt className="text-muted-foreground">{t("payment.serviceFee")}</dt>
               <dd className="tabular-nums">{formatCurrency(booking.serviceFee)}</dd>
             </div>
             <Separator />
             <div className="flex items-baseline justify-between text-base font-semibold">
-              <dt>应付总额</dt>
+              <dt>{t("payment.totalDue")}</dt>
               <dd className="tabular-nums">{formatCurrency(booking.totalPrice)}</dd>
             </div>
           </dl>
 
           <p className="text-muted-foreground rounded-lg bg-muted/50 p-3 text-xs leading-relaxed">
-            支付完成后，房源将在 {formatDate(booking.checkIn)} 为你保留。演示项目不接入真实支付网关。
+            {t("payment.holdNotice", { date: formatDate(booking.checkIn) })}
           </p>
         </div>
       </aside>
@@ -420,12 +462,15 @@ function QrCheckout({
   onRefresh,
 }: {
   method: PaymentMethodValue;
-  meta: (typeof METHOD_META)[PaymentMethodValue];
+  meta: ResolvedMethodMeta;
   bookingId: string;
   secondsLeft: number;
   expired: boolean;
   onRefresh: () => void;
 }) {
+  const t = useT();
+  const MethodIcon = meta.icon;
+
   return (
     <div className="flex flex-col items-center gap-4 text-center">
       <div className={cn("inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium", meta.soft)}>
@@ -446,16 +491,16 @@ function QrCheckout({
             className="flex size-8 items-center justify-center rounded-md text-white"
             style={{ backgroundColor: meta.accent }}
           >
-            <meta.icon className="size-4" />
+            <MethodIcon className="size-4" />
           </span>
         </QrPlaceholder>
 
         {expired ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <p className="text-sm font-medium">二维码已失效</p>
+            <p className="text-sm font-medium">{t("payment.qrExpired")}</p>
             <Button size="sm" variant="outline" onClick={onRefresh} className="gap-1.5">
               <RefreshCw className="size-3.5" />
-              点击刷新
+              {t("payment.qrRefresh")}
             </Button>
           </div>
         ) : null}
@@ -465,12 +510,12 @@ function QrCheckout({
 
       {!expired ? (
         <p className="text-xs tabular-nums">
-          二维码有效期 <span className="text-foreground font-medium">{formatCountdown(secondsLeft)}</span>
+          {t("payment.qrCountdown", { time: formatCountdown(secondsLeft) })}
         </p>
       ) : null}
 
       <p className="text-muted-foreground max-w-xs text-[11px] leading-relaxed">
-        演示用二维码，不可真实扫描支付。点击下方按钮模拟支付成功。
+        {t("payment.qrDemo")}
       </p>
     </div>
   );
@@ -491,6 +536,8 @@ function CardForm({
   error: string | null;
   onFillTestCard: () => void;
 }) {
+  const t = useT();
+
   return (
     <div className="space-y-5">
       {/* card preview */}
@@ -513,11 +560,11 @@ function CardForm({
 
         <div className="mt-5 flex items-end justify-between text-xs">
           <div>
-            <p className="text-white/60">持卡人</p>
+            <p className="text-white/60">{t("payment.cardHolder")}</p>
             <p className="mt-0.5 font-medium uppercase">{card.holder || "YOUR NAME"}</p>
           </div>
           <div>
-            <p className="text-white/60">有效期</p>
+            <p className="text-white/60">{t("payment.cardExpiry")}</p>
             <p className="mt-0.5 font-medium tabular-nums">{card.expiry || "MM/YY"}</p>
           </div>
           <div className="text-right">
@@ -528,7 +575,7 @@ function CardForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="card-number">卡号</Label>
+          <Label htmlFor="card-number">{t("payment.cardNumber")}</Label>
           <Input
             id="card-number"
             inputMode="numeric"
@@ -542,7 +589,7 @@ function CardForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="card-expiry">有效期</Label>
+          <Label htmlFor="card-expiry">{t("payment.cardExpiry")}</Label>
           <Input
             id="card-expiry"
             inputMode="numeric"
@@ -556,7 +603,7 @@ function CardForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="card-cvc">安全码</Label>
+          <Label htmlFor="card-cvc">{t("payment.cardCvc")}</Label>
           <Input
             id="card-cvc"
             inputMode="numeric"
@@ -571,11 +618,11 @@ function CardForm({
         </div>
 
         <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="card-holder">持卡人姓名</Label>
+          <Label htmlFor="card-holder">{t("payment.cardHolderName")}</Label>
           <Input
             id="card-holder"
             autoComplete="cc-name"
-            placeholder="与卡面一致，例如 ZHANG SAN"
+            placeholder={t("payment.cardHolderPlaceholder")}
             value={card.holder}
             onChange={(event) =>
               setCard((previous) => ({ ...previous, holder: event.target.value.toUpperCase() }))
@@ -586,16 +633,18 @@ function CardForm({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 p-3">
         <p className="text-muted-foreground text-xs">
-          {brand ? `已识别卡种：${brand.name}` : "支持 Visa / Mastercard / 银联"}
+          {brand
+            ? t("payment.cardBrandDetected", { brand: brand.name })
+            : t("payment.cardSupported")}
         </p>
         <Button type="button" size="sm" variant="outline" onClick={onFillTestCard}>
-          填入测试卡号
+          {t("payment.cardFillTest")}
         </Button>
       </div>
 
       <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
         <Lock className="size-3.5" />
-        卡号仅用于前端演示校验（Luhn 算法），不会被发送或存储
+        {t("payment.secureCard")}
       </p>
 
       {error ? (

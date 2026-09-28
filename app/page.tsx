@@ -227,7 +227,7 @@ export default async function HomePage() {
           <section id="recommended" className="scroll-mt-32 space-y-5">
             <div className="flex items-end justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold tracking-tight">为你推荐的房源</h2>
+                <h2 className="text-xl font-semibold tracking-tight">{t("home.recommended")}</h2>
                 <p className="text-muted-foreground mt-1 text-sm">{t("home.recommendedHint")}</p>
               </div>
               <Button variant="ghost" size="sm" asChild>
@@ -237,8 +237,8 @@ export default async function HomePage() {
 
             {listings.length === 0 ? (
               <EmptyState
-                title="暂无推荐房源"
-                description="运行 npm run db:seed 生成演示数据后刷新本页。"
+                title={t("auth.homeNoListings")}
+                description={t("auth.homeNoListingsBody")}
               />
             ) : (
               <div className="grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

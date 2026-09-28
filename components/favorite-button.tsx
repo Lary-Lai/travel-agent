@@ -35,9 +35,9 @@ export function FavoriteButton({ listingId, listingTitle, variant = "overlay", c
     if (isLoading) return;
 
     if (!user) {
-      toast.error("请先登录后再收藏房源", {
+      toast.error(t("auth.loginToSave"), {
         action: {
-          label: "去登录",
+          label: t("auth.goLogin"),
           onClick: () => router.push(`/login?redirect=${encodeURIComponent(pathname)}`),
         },
       });

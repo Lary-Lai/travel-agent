@@ -4,6 +4,7 @@ import { ArrowUpRight, Star } from "lucide-react";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
+import { useT } from "@/components/locale-provider";
 import { SafeImage } from "@/components/safe-image";
 import { formatPrice, formatRating } from "@/lib/format";
 
@@ -31,6 +32,7 @@ export type AgentListing = {
  * Supports the two actions the brief requires: view detail and save.
  */
 export function AgentListingCard({ listing }: { listing: AgentListing }) {
+  const t = useT();
   const city = listing.cityLabel ?? listing.city ?? "";
   const image = listing.image;
 
@@ -65,7 +67,9 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
 
           <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[11px]">
             {listing.pricePerNight ? (
-              <span className="font-semibold">{formatPrice(listing.pricePerNight)}/晚</span>
+              <span className="font-semibold">
+                {formatPrice(listing.pricePerNight)} {t("common.perNight")}
+              </span>
             ) : null}
             {listing.rating ? (
               <span className="flex items-center gap-0.5">
@@ -73,13 +77,17 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
                 {formatRating(listing.rating)}
               </span>
             ) : null}
-            {listing.maxGuests ? <span>可住 {listing.maxGuests} 人</span> : null}
-            {listing.nearSubway ? <span className="text-primary">近地铁</span> : null}
+            {listing.maxGuests ? (
+              <span>{t("listing.maxGuests", { count: listing.maxGuests })}</span>
+            ) : null}
+            {listing.nearSubway ? (
+              <span className="text-primary">{t("amenities.nearSubway")}</span>
+            ) : null}
           </div>
 
           {listing.reason ? (
             <p className="text-muted-foreground mt-1 line-clamp-2 text-[11px] italic">
-              推荐理由：{listing.reason}
+              {t("agentUi.recommendReason", { reason: listing.reason })}
             </p>
           ) : null}
         </Link>
@@ -89,7 +97,7 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
             href={`/listings/${listing.id}`}
             className="text-primary inline-flex items-center gap-1 text-[11px] font-medium hover:underline"
           >
-            查看详情
+            {t("agentUi.viewDetail")}
             <ArrowUpRight className="size-3" />
           </Link>
           <span className="text-muted-foreground text-[11px]">·</span>

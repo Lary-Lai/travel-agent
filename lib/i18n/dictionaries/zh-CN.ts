@@ -278,6 +278,7 @@ export const zhCN = {
     wind: "风速",
     feelsLike: "体感",
     provider: "数据来自 Open-Meteo",
+    cached: " · 缓存",
     feelsLikeShort: "体感 {temp}°",
     kind: {
       clear: "晴",
@@ -353,6 +354,8 @@ export const zhCN = {
 
   searchResults: {
     titleIn: "{city}的房源",
+    metaTitle: "搜索房源",
+    metaDescription: "按目的地、日期、人数、价格与设施筛选真实房源。",
     titleAll: "全部房源",
     found: "共找到 {count} 套房源",
     searching: "正在搜索…",

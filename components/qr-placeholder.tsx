@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Decorative QR placeholder.
  *
@@ -7,7 +9,11 @@
  *
  * Being deterministic from `seed` means the same order always renders the same
  * pattern, so it looks stable across reloads.
+ *
+ * A client component only because its `aria-label` is translated with `useT()`;
+ * the drawing itself is pure.
  */
+import { useT } from "@/components/locale-provider";
 
 const MODULES = 25;
 /** Quiet zone, in modules, required around a real QR code. */
@@ -96,6 +102,7 @@ export function QrPlaceholder({
   children?: React.ReactNode;
   darkColor?: string;
 }) {
+  const t = useT();
   const grid = buildModules(seed);
   const total = MODULES + QUIET * 2;
 
@@ -104,7 +111,7 @@ export function QrPlaceholder({
       className={className}
       style={{ position: "relative", width: size, height: size }}
       role="img"
-      aria-label="演示用二维码（不可真实支付）"
+      aria-label={t("payment.qrAlt")}
     >
       <svg viewBox={`0 0 ${total} ${total}`} width={size} height={size} shapeRendering="crispEdges">
         <rect width={total} height={total} fill="#ffffff" />

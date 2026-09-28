@@ -4,6 +4,7 @@ import { Building2, Check, ChevronRight, TrendingUp } from "lucide-react";
 import { useState } from "react";
 
 import { AmenityIcon } from "@/components/amenity-icon";
+import { useT } from "@/components/locale-provider";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -33,9 +34,10 @@ export function AmenityList({
   cityListingCount: number;
 }) {
   const [selected, setSelected] = useState<ListingAmenityDetail | null>(null);
+  const t = useT();
 
   if (amenities.length === 0) {
-    return <p className="text-muted-foreground text-sm">该房源暂未登记设施信息。</p>;
+    return <p className="text-muted-foreground text-sm">{t("media.amenityEmpty")}</p>;
   }
 
   return (
@@ -55,7 +57,7 @@ export function AmenityList({
         ))}
       </div>
 
-      <p className="text-muted-foreground mt-3 text-xs">点击任意设施可查看说明与当地普及度</p>
+      <p className="text-muted-foreground mt-3 text-xs">{t("listing.amenityHint")}</p>
 
       <Dialog open={Boolean(selected)} onOpenChange={(open) => !open && setSelected(null)}>
         <DialogContent className="sm:max-w-md">
@@ -70,7 +72,7 @@ export function AmenityList({
                     <DialogTitle>{selected.name}</DialogTitle>
                     {selected.category ? (
                       <DialogDescription className="mt-0.5">
-                        分类：{selected.category}
+                        {t("media.amenityCategory", { category: selected.category })}
                       </DialogDescription>
                     ) : null}
                   </div>
@@ -78,12 +80,12 @@ export function AmenityList({
               </DialogHeader>
 
               <p className="text-sm leading-relaxed">
-                {selected.description ?? "该设施已包含在房源中。"}
+                {selected.description ?? t("media.amenityIncludedFallback")}
               </p>
 
               <div className="bg-muted/50 flex items-center gap-2 rounded-lg p-3 text-sm">
                 <Check className="size-4 shrink-0 text-emerald-600" />
-                <span>本房源提供此项设施</span>
+                <span>{t("media.amenityIncluded")}</span>
               </div>
 
               <Separator />
@@ -92,10 +94,13 @@ export function AmenityList({
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground flex items-center gap-1.5">
                     <TrendingUp className="size-3.5" />
-                    {cityLabel}当地的普及度
+                    {t("media.amenityUsage", { city: cityLabel })}
                   </span>
                   <span className="font-medium tabular-nums">
-                    {selected.cityUsage} / {cityListingCount} 套
+                    {t("media.amenityUsageCount", {
+                      usage: selected.cityUsage,
+                      count: cityListingCount,
+                    })}
                   </span>
                 </div>
 
@@ -114,13 +119,17 @@ export function AmenityList({
 
                 <p className="text-muted-foreground flex items-start gap-1.5 text-xs leading-relaxed">
                   <Building2 className="mt-0.5 size-3.5 shrink-0" />
-                  {cityLabel}共有 {cityListingCount} 套房源，其中 {selected.cityUsage} 套提供「
-                  {selected.name}」。
+                  {t("media.amenityListings", {
+                    city: cityLabel,
+                    count: cityListingCount,
+                    usage: selected.cityUsage,
+                    name: selected.name,
+                  })}
                   {selected.cityUsage <= cityListingCount * 0.4
-                    ? "属于相对少见的设施。"
+                    ? t("media.amenityRare")
                     : selected.cityUsage >= cityListingCount * 0.8
-                      ? "属于当地相当普遍的设施。"
-                      : "属于当地较为常见的设施。"}
+                      ? t("media.amenityCommon")
+                      : t("media.amenityUncommon")}
                 </p>
               </div>
             </>

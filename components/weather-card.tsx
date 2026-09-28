@@ -152,7 +152,7 @@ export function WeatherCard({
         </span>
         <span className="shrink-0 text-[10px]">
           {weather.provider}
-          {weather.stale ? " · 缓存" : weather.cached ? " · 缓存" : ""}
+          {weather.stale || weather.cached ? t("weather.cached") : ""}
         </span>
       </div>
     </section>

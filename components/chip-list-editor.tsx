@@ -5,6 +5,7 @@ import { useRef, useState, type KeyboardEvent } from "react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/components/locale-provider";
 import { MAX_CHIP_LENGTH, normaliseChips } from "@/lib/profile-options";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,7 @@ export function ChipListEditor({
 }: ChipListEditorProps) {
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const t = useT();
 
   const full = values.length >= max;
 
@@ -101,7 +103,7 @@ export function ChipListEditor({
                 <button
                   type="button"
                   onClick={() => onChange(values.filter((item) => item !== value))}
-                  aria-label={`移除 ${value}`}
+                  aria-label={t("globals.chipRemove", { value })}
                   className="hover:text-destructive -mr-0.5 rounded-full transition-colors"
                 >
                   <X className="size-3" />
@@ -123,14 +125,14 @@ export function ChipListEditor({
           disabled={full}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={full ? `已达上限 ${max} 项` : placeholder}
+          placeholder={full ? t("globals.chipLimit", { max }) : placeholder}
           className="h-8 text-sm"
         />
         <button
           type="button"
           disabled={full || !draft.trim()}
           onClick={() => commit(draft)}
-          aria-label={`添加${label}`}
+          aria-label={t("globals.chipAdd", { label })}
           className="border-input hover:bg-accent inline-flex size-8 shrink-0 items-center justify-center rounded-md border transition-colors disabled:opacity-40"
         >
           <Plus className="size-3.5" />

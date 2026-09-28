@@ -17,18 +17,26 @@ import Link from "next/link";
 
 import { AgentListingCard, type AgentListing } from "@/components/agent-listing-card";
 import { AgentMarkdown } from "@/components/agent-markdown";
+import { useT } from "@/components/locale-provider";
+import type { Translate, TranslationKey } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-/** Per-tool presentation: label + icon shown while the tool runs. */
-const TOOL_META: Record<string, { label: string; icon: typeof Search }> = {
-  searchListings: { label: "搜索房源", icon: Search },
-  getListingDetail: { label: "读取房源详情", icon: MapPinned },
-  recommendListings: { label: "生成推荐", icon: Sparkles },
-  compareListings: { label: "对比房源", icon: GitCompare },
-  getUserWishlists: { label: "读取心愿单", icon: Heart },
-  createWishlist: { label: "创建心愿单", icon: Heart },
-  addToWishlist: { label: "加入心愿单", icon: Heart },
-  removeFromWishlist: { label: "移出心愿单", icon: Trash2 },
+/**
+ * Per-tool presentation: label + icon shown while the tool runs.
+ *
+ * The record is keyed by the *server's* tool names, which are identifiers and
+ * are never translated — only the label each one points at is. Lookups happen at
+ * render time because the label depends on the active locale.
+ */
+const TOOL_META: Record<string, { labelKey: TranslationKey; icon: typeof Search }> = {
+  searchListings: { labelKey: "agentUi.toolSearch", icon: Search },
+  getListingDetail: { labelKey: "agentUi.toolGetListingDetail", icon: MapPinned },
+  recommendListings: { labelKey: "agentUi.toolRecommendListings", icon: Sparkles },
+  compareListings: { labelKey: "agentUi.toolCompareListings", icon: GitCompare },
+  getUserWishlists: { labelKey: "agentUi.toolGetUserWishlists", icon: Heart },
+  createWishlist: { labelKey: "agentUi.toolCreateWishlist", icon: Heart },
+  addToWishlist: { labelKey: "agentUi.toolAddToWishlist", icon: Heart },
+  removeFromWishlist: { labelKey: "agentUi.toolRemoveFromWishlist", icon: Trash2 },
 };
 
 /** Pull listing cards out of whichever shape the tool returned. */
@@ -46,7 +54,7 @@ function extractListings(output: unknown): AgentListing[] {
 }
 
 /** Human-readable success summary for a finished tool call. */
-function summarise(toolName: string, output: unknown): string | null {
+function summarise(t: Translate, toolName: string, output: unknown): string | null {
   if (!output || typeof output !== "object") return null;
   const record = output as Record<string, unknown>;
 
@@ -54,31 +62,43 @@ function summarise(toolName: string, output: unknown): string | null {
 
   switch (toolName) {
     case "searchListings":
-      return `找到 ${record.total ?? 0} 个房源`;
+      return t("agentUi.summarySearch", { count: Number(record.total ?? 0) });
     case "recommendListings":
-      return `生成 ${(record.recommendations as unknown[] | undefined)?.length ?? 0} 个推荐`;
+      return t("agentUi.summaryRecommend", {
+        count: (record.recommendations as unknown[] | undefined)?.length ?? 0,
+      });
     case "compareListings":
-      return `对比了 ${(record.compared as unknown[] | undefined)?.length ?? 0} 个房源`;
+      return t("agentUi.summaryCompare", {
+        count: (record.compared as unknown[] | undefined)?.length ?? 0,
+      });
     case "getListingDetail":
-      return "已读取房源详情";
+      return t("agentUi.summaryListingDetail");
     case "getUserWishlists":
-      return `读取到 ${record.count ?? 0} 个心愿单`;
+      return t("agentUi.summaryWishlists", { count: Number(record.count ?? 0) });
     case "createWishlist": {
       const wishlist = record.wishlist as { name?: string } | undefined;
-      return `已创建「${wishlist?.name ?? "心愿单"}」`;
+      return t("agentUi.summaryWishlistCreated", { name: wishlist?.name ?? t("nav.wishlist") });
     }
     case "addToWishlist":
-      return `已加入「${record.wishlistName ?? "心愿单"}」`;
+      return t("agentUi.summaryWishlistAdded", {
+        name: String(record.wishlistName ?? t("nav.wishlist")),
+      });
     case "removeFromWishlist":
-      return `已从「${record.wishlistName ?? "心愿单"}」移除`;
+      return t("agentUi.summaryWishlistRemoved", {
+        name: String(record.wishlistName ?? t("nav.wishlist")),
+      });
     default:
-      return "已完成";
+      return t("agentUi.summaryDone");
   }
 }
 
 function ToolStep({ part }: { part: { type: string; [key: string]: unknown } }) {
+  const t = useT();
   const toolName = getToolName(part as never);
-  const meta = TOOL_META[toolName] ?? { label: toolName, icon: Sparkles };
+  const meta = TOOL_META[toolName];
+  // An unknown tool keeps its raw identifier as the label: it is a name, not prose.
+  const Icon = meta?.icon ?? Sparkles;
+  const label = meta ? t(meta.labelKey) : toolName;
   const state = String(part.state ?? "");
   const output = part.output;
 
@@ -90,11 +110,11 @@ function ToolStep({ part }: { part: { type: string; [key: string]: unknown } }) 
     ? String(
         (part.errorText as string | undefined) ??
           (output as { error?: string } | undefined)?.error ??
-          "工具执行失败",
+          t("agentUi.toolError"),
       )
     : null;
 
-  const summary = done ? summarise(toolName, output) : null;
+  const summary = done ? summarise(t, toolName, output) : null;
   const listings = done && !errored ? extractListings(output).slice(0, 6) : [];
 
   return (
@@ -116,9 +136,13 @@ function ToolStep({ part }: { part: { type: string; [key: string]: unknown } }) 
         ) : (
           <Check className="size-3.5 shrink-0" />
         )}
-        <meta.icon className="size-3.5 shrink-0 opacity-70" />
+        <Icon className="size-3.5 shrink-0 opacity-70" />
         <span className="font-medium">
-          {running ? `正在${meta.label}…` : errored ? `${meta.label}失败` : (summary ?? meta.label)}
+          {running
+            ? t("agentUi.toolRunning", { label })
+            : errored
+              ? t("agentUi.toolFailed", { label })
+              : (summary ?? label)}
         </span>
       </div>
 
@@ -185,11 +209,13 @@ export function AgentMessage({ message }: { message: UIMessage }) {
 
 /** Shown when the visitor has not logged in but tries a wishlist action. */
 export function AgentLoginHint() {
+  const t = useT();
+
   return (
     <p className="text-muted-foreground px-1 text-[11px]">
-      需要登录后才能使用收藏相关功能，
+      {t("agent.loginHint")}
       <Link href="/login" className="text-primary hover:underline">
-        去登录
+        {t("agentUi.loginLink")}
       </Link>
     </p>
   );

@@ -1,0 +1,539 @@
+/**
+ * Profile page and its editor.
+ *
+ * Keys are flat and namespaced with this file's group name, e.g. `account.title`.
+ * Every locale must define exactly the same key set — `scripts/verify-i18n.ts`
+ * asserts that, and a missing key renders as the key itself so it is visible.
+ *
+ * A few keys carry a `{value}` placeholder that wraps data the app must not
+ * translate (the signed-in address, a formatted date, a count). Splitting the
+ * sentence around the value is what keeps the word order correct in Japanese and
+ * Korean, where the value has to precede the particle — a Chinese-style
+ * "登录邮箱 X 不可修改" template would read wrong in every other language.
+ */
+export const account = {
+  "zh-CN": {
+    // Page metadata.
+    "account.metaTitle": "个人主页",
+    "account.metaDescription": "编辑昵称与头像、查看账号信息、修改密码。",
+
+    // Signed-out state.
+    "account.loginTitle": "登录后编辑个人主页",
+    "account.loginBody": "修改昵称与头像、布置主页背景、记录心仪与去过的地方。",
+    "account.goLogin": "去登录",
+
+    // Page heading.
+    "account.title": "个人主页",
+    "account.subtitle": "管理你的公开资料与账号安全",
+
+    // Banner preview.
+    "account.coverBroken": "背景图加载失败，已改用预设背景",
+    "account.nameEmpty": "未填写昵称",
+
+    // Account stats.
+    "account.statWishlists": "心愿单",
+    "account.statWishlistsValue": "{value} 个",
+    "account.statSaved": "收藏房源",
+    "account.statSavedValue": "{value} 个",
+    "account.statTrips": "行程订单",
+    "account.statTripsValue": "{value} 笔",
+    "account.statJoined": "注册时间",
+
+    // Unsaved-change bar.
+    "account.unsaved": "有未保存的修改",
+    "account.undo": "撤销修改",
+    "account.save": "保存资料",
+
+    // Public profile.
+    "account.publicInfo": "公开资料",
+    "account.chooseAvatar": "选择头像",
+    "account.presetCount": "{count} 个预设",
+    "account.useAvatar": "使用该头像",
+    "account.nickname": "昵称",
+    "account.nicknamePlaceholder": "怎么称呼你？",
+    "account.avatarUrl": "头像地址（可选）",
+    "account.avatarPlaceholder": "https://… 或直接选择上面的预设",
+    "account.avatarHint": "可以粘贴任意图片链接，或点选上面的内置预设头像；清空则使用昵称首字。",
+    "account.cover": "主页背景",
+    "account.coverUse": "使用{name}背景",
+    "account.coverCustom": "或使用自定义背景图",
+    "account.coverPlaceholder": "https://… 留空则使用上面的预设背景",
+    "account.coverHint": "背景图加载失败时会自动回退到预设渐变，不会出现裂图。",
+    "account.emailFixed": "登录邮箱 {email} 不可修改",
+    "account.joinedAt": "加入于 {date}",
+
+    // Password.
+    "account.security": "账号安全",
+    "account.currentPassword": "当前密码",
+    "account.currentPasswordPlaceholder": "请输入当前密码",
+    "account.newPassword": "新密码",
+    "account.newPasswordPlaceholder": "至少 8 位字符",
+    "account.confirmPassword": "确认新密码",
+    "account.confirmPasswordPlaceholder": "再次输入新密码",
+    "account.passwordMismatch": "两次输入的新密码不一致",
+    "account.changePassword": "修改密码",
+    "account.passwordHint":
+      "修改密码需要验证当前密码，即使登录状态（Cookie）泄露，他人也无法直接改掉你的密码。本项目的会话使用 HttpOnly Cookie，有效期 30 天，因此下次访问无需重新登录。",
+
+    // Personalisation.
+    "account.personalisation": "个性化主页",
+    "account.personalisationHint": "都会显示在主页顶部，供其他旅行者了解你",
+    "account.tags": "自定义标签",
+    "account.tagsHint": "用几个词形容你的旅行风格。",
+    "account.tagsPlaceholder": "例如：摄影爱好者",
+    "account.tagsEmpty": "还没有标签，从下面的建议里挑几个。",
+    "account.hobbies": "生活爱好",
+    "account.hobbiesHint": "平时喜欢做什么。",
+    "account.hobbiesPlaceholder": "例如：徒步",
+    "account.hobbiesEmpty": "还没有填写爱好。",
+    "account.dreamDestinations": "心仪地点",
+    "account.dreamDestinationsHint": "想去但还没去的地方。",
+    "account.dreamDestinationsPlaceholder": "例如：冰岛",
+    "account.dreamDestinationsEmpty": "还没有心愿目的地。",
+    "account.visitedPlaces": "已旅行地点展柜",
+    "account.visitedPlacesHint": "去过的地方会在这里陈列出来。",
+    "account.visitedPlacesPlaceholder": "例如：东京",
+    "account.visitedPlacesEmpty": "展柜还是空的，添加第一个去过的地方吧。",
+
+    // Toasts.
+    "account.saved": "资料已更新",
+    "account.savedDetail": "昵称：{name}",
+    "account.saveFailed": "保存失败，请稍后重试",
+    "account.passwordChanged": "密码已修改",
+    "account.passwordChangedDetail": "下次登录请使用新密码",
+    "account.passwordFailed": "修改失败，请稍后重试",
+  },
+
+  "zh-TW": {
+    "account.metaTitle": "個人主頁",
+    "account.metaDescription": "編輯暱稱與頭像、查看帳號資訊、修改密碼。",
+
+    "account.loginTitle": "登入後編輯個人主頁",
+    "account.loginBody": "修改暱稱與頭像、佈置主頁背景、記錄心儀與去過的地方。",
+    "account.goLogin": "去登入",
+
+    "account.title": "個人主頁",
+    "account.subtitle": "管理你的公開資料與帳號安全",
+
+    "account.coverBroken": "背景圖載入失敗，已改用預設背景",
+    "account.nameEmpty": "未填寫暱稱",
+
+    "account.statWishlists": "心願清單",
+    "account.statWishlistsValue": "{value} 個",
+    "account.statSaved": "收藏房源",
+    "account.statSavedValue": "{value} 個",
+    "account.statTrips": "行程訂單",
+    "account.statTripsValue": "{value} 筆",
+    "account.statJoined": "註冊時間",
+
+    "account.unsaved": "有未儲存的修改",
+    "account.undo": "撤銷修改",
+    "account.save": "儲存資料",
+
+    "account.publicInfo": "公開資料",
+    "account.chooseAvatar": "選擇頭像",
+    "account.presetCount": "{count} 個預設",
+    "account.useAvatar": "使用該頭像",
+    "account.nickname": "暱稱",
+    "account.nicknamePlaceholder": "怎麼稱呼你？",
+    "account.avatarUrl": "頭像網址（選填）",
+    "account.avatarPlaceholder": "https://… 或直接選擇上面的預設",
+    "account.avatarHint": "可以貼上任意圖片連結，或點選上面的內建預設頭像；清空則使用暱稱首字。",
+    "account.cover": "主頁背景",
+    "account.coverUse": "使用{name}背景",
+    "account.coverCustom": "或使用自訂背景圖",
+    "account.coverPlaceholder": "https://… 留空則使用上面的預設背景",
+    "account.coverHint": "背景圖載入失敗時會自動回退到預設漸層，不會出現破圖。",
+    "account.emailFixed": "登入電子郵件 {email} 不可修改",
+    "account.joinedAt": "加入於 {date}",
+
+    "account.security": "帳號安全",
+    "account.currentPassword": "目前密碼",
+    "account.currentPasswordPlaceholder": "請輸入目前密碼",
+    "account.newPassword": "新密碼",
+    "account.newPasswordPlaceholder": "至少 8 個字元",
+    "account.confirmPassword": "確認新密碼",
+    "account.confirmPasswordPlaceholder": "再次輸入新密碼",
+    "account.passwordMismatch": "兩次輸入的新密碼不一致",
+    "account.changePassword": "修改密碼",
+    "account.passwordHint":
+      "修改密碼需要驗證目前密碼，即使登入狀態（Cookie）外洩，他人也無法直接改掉你的密碼。本專案的連線階段使用 HttpOnly Cookie，有效期 30 天，因此下次造訪無需重新登入。",
+
+    "account.personalisation": "個人化主頁",
+    "account.personalisationHint": "都會顯示在主頁頂部，供其他旅人了解你",
+    "account.tags": "自訂標籤",
+    "account.tagsHint": "用幾個詞形容你的旅行風格。",
+    "account.tagsPlaceholder": "例如：攝影愛好者",
+    "account.tagsEmpty": "還沒有標籤，從下面的建議裡挑幾個。",
+    "account.hobbies": "生活愛好",
+    "account.hobbiesHint": "平時喜歡做什麼。",
+    "account.hobbiesPlaceholder": "例如：健行",
+    "account.hobbiesEmpty": "還沒有填寫愛好。",
+    "account.dreamDestinations": "心儀地點",
+    "account.dreamDestinationsHint": "想去但還沒去的地方。",
+    "account.dreamDestinationsPlaceholder": "例如：冰島",
+    "account.dreamDestinationsEmpty": "還沒有心願目的地。",
+    "account.visitedPlaces": "已旅行地點展櫃",
+    "account.visitedPlacesHint": "去過的地方會在這裡陳列出來。",
+    "account.visitedPlacesPlaceholder": "例如：東京",
+    "account.visitedPlacesEmpty": "展櫃還是空的，加入第一個去過的地方吧。",
+
+    "account.saved": "資料已更新",
+    "account.savedDetail": "暱稱：{name}",
+    "account.saveFailed": "儲存失敗，請稍後重試",
+    "account.passwordChanged": "密碼已修改",
+    "account.passwordChangedDetail": "下次登入請使用新密碼",
+    "account.passwordFailed": "修改失敗，請稍後重試",
+  },
+
+  en: {
+    "account.metaTitle": "Profile",
+    "account.metaDescription":
+      "Edit your name and avatar, review your account details, and change your password.",
+
+    "account.loginTitle": "Log in to edit your profile",
+    "account.loginBody":
+      "Change your name and avatar, style your banner, and record the places you dream of and the ones you have seen.",
+    "account.goLogin": "Log in",
+
+    "account.title": "Profile",
+    "account.subtitle": "Manage your public details and account security",
+
+    "account.coverBroken": "The banner image failed to load, so a preset background is shown",
+    "account.nameEmpty": "No name yet",
+
+    "account.statWishlists": "Wishlists",
+    "account.statWishlistsValue": "{value} saved",
+    "account.statSaved": "Saved stays",
+    "account.statSavedValue": "{value} saved",
+    "account.statTrips": "Trips",
+    "account.statTripsValue": "{value} booked",
+    "account.statJoined": "Joined",
+
+    "account.unsaved": "You have unsaved changes",
+    "account.undo": "Discard changes",
+    "account.save": "Save profile",
+
+    "account.publicInfo": "Public details",
+    "account.chooseAvatar": "Choose an avatar",
+    "account.presetCount": "{count} presets",
+    "account.useAvatar": "Use this avatar",
+    "account.nickname": "Name",
+    "account.nicknamePlaceholder": "What should we call you?",
+    "account.avatarUrl": "Avatar URL (optional)",
+    "account.avatarPlaceholder": "https://… or pick a preset above",
+    "account.avatarHint":
+      "Paste any image link, or pick one of the built-in presets above. Leave it empty to use the first letter of your name.",
+    "account.cover": "Profile banner",
+    "account.coverUse": "Use the {name} background",
+    "account.coverCustom": "Or use a custom banner image",
+    "account.coverPlaceholder": "https://… leave empty to use the preset above",
+    "account.coverHint":
+      "If the banner image fails to load, the preset gradient takes over — you will never see a broken image.",
+    "account.emailFixed": "Sign-in email {email} cannot be changed",
+    "account.joinedAt": "Joined {date}",
+
+    "account.security": "Account security",
+    "account.currentPassword": "Current password",
+    "account.currentPasswordPlaceholder": "Enter your current password",
+    "account.newPassword": "New password",
+    "account.newPasswordPlaceholder": "At least 8 characters",
+    "account.confirmPassword": "Confirm new password",
+    "account.confirmPasswordPlaceholder": "Enter the new password again",
+    "account.passwordMismatch": "The two new passwords do not match",
+    "account.changePassword": "Change password",
+    "account.passwordHint":
+      "Changing your password requires your current one, so a leaked session cookie is not enough for someone to take over your account. Sessions here use a 30-day HttpOnly cookie, which is why you stay signed in between visits.",
+
+    "account.personalisation": "Personalise your profile",
+    "account.personalisationHint":
+      "All of this appears at the top of your profile, so other travellers can get to know you",
+    "account.tags": "Custom tags",
+    "account.tagsHint": "Sum up your travel style in a few words.",
+    "account.tagsPlaceholder": "e.g. photography lover",
+    "account.tagsEmpty": "No tags yet — pick a few from the suggestions below.",
+    "account.hobbies": "Hobbies",
+    "account.hobbiesHint": "What you enjoy doing.",
+    "account.hobbiesPlaceholder": "e.g. hiking",
+    "account.hobbiesEmpty": "No hobbies added yet.",
+    "account.dreamDestinations": "Dream destinations",
+    "account.dreamDestinationsHint": "Places you want to go but have not been to yet.",
+    "account.dreamDestinationsPlaceholder": "e.g. Iceland",
+    "account.dreamDestinationsEmpty": "No dream destinations yet.",
+    "account.visitedPlaces": "Places visited",
+    "account.visitedPlacesHint": "The places you have been to are displayed here.",
+    "account.visitedPlacesPlaceholder": "e.g. Tokyo",
+    "account.visitedPlacesEmpty":
+      "The showcase is still empty — add the first place you have visited.",
+
+    "account.saved": "Profile updated",
+    "account.savedDetail": "Name: {name}",
+    "account.saveFailed": "Could not save. Please try again.",
+    "account.passwordChanged": "Password changed",
+    "account.passwordChangedDetail": "Use your new password the next time you sign in",
+    "account.passwordFailed": "Could not change it. Please try again.",
+  },
+
+  ja: {
+    "account.metaTitle": "マイページ",
+    "account.metaDescription":
+      "ニックネームとアイコンの編集、アカウント情報の確認、パスワードの変更ができます。",
+
+    "account.loginTitle": "ログインするとマイページを編集できます",
+    "account.loginBody":
+      "ニックネームとアイコンの変更、背景の設定、行きたい場所や訪れた場所の記録ができます。",
+    "account.goLogin": "ログインする",
+
+    "account.title": "マイページ",
+    "account.subtitle": "公開プロフィールとアカウントの安全を管理します",
+
+    "account.coverBroken": "背景画像を読み込めなかったため、プリセット背景を表示しています",
+    "account.nameEmpty": "ニックネーム未設定",
+
+    "account.statWishlists": "ウィッシュリスト",
+    "account.statWishlistsValue": "{value} 件",
+    "account.statSaved": "保存した宿",
+    "account.statSavedValue": "{value} 件",
+    "account.statTrips": "予約",
+    "account.statTripsValue": "{value} 件",
+    "account.statJoined": "登録日",
+
+    "account.unsaved": "保存されていない変更があります",
+    "account.undo": "変更を元に戻す",
+    "account.save": "プロフィールを保存",
+
+    "account.publicInfo": "公開プロフィール",
+    "account.chooseAvatar": "アイコンを選択",
+    "account.presetCount": "プリセット {count} 種類",
+    "account.useAvatar": "このアイコンを使う",
+    "account.nickname": "ニックネーム",
+    "account.nicknamePlaceholder": "なんと呼べばいいですか？",
+    "account.avatarUrl": "アイコンの URL（任意）",
+    "account.avatarPlaceholder": "https://… または上のプリセットを選択",
+    "account.avatarHint":
+      "任意の画像リンクを貼り付けるか、上のプリセットから選べます。空欄の場合はニックネームの頭文字を使います。",
+    "account.cover": "プロフィール背景",
+    "account.coverUse": "{name}の背景を使う",
+    "account.coverCustom": "または独自の背景画像を使う",
+    "account.coverPlaceholder": "https://… 空欄の場合は上のプリセット背景を使います",
+    "account.coverHint":
+      "背景画像を読み込めないときはプリセットのグラデーションに自動で切り替わるので、画像が壊れて表示されることはありません。",
+    "account.emailFixed": "ログイン中のメールアドレス {email} は変更できません",
+    "account.joinedAt": "{date} に参加",
+
+    "account.security": "アカウントの安全",
+    "account.currentPassword": "現在のパスワード",
+    "account.currentPasswordPlaceholder": "現在のパスワードを入力",
+    "account.newPassword": "新しいパスワード",
+    "account.newPasswordPlaceholder": "8 文字以上",
+    "account.confirmPassword": "新しいパスワード（確認）",
+    "account.confirmPasswordPlaceholder": "新しいパスワードをもう一度入力",
+    "account.passwordMismatch": "新しいパスワードが一致しません",
+    "account.changePassword": "パスワードを変更",
+    "account.passwordHint":
+      "パスワードの変更には現在のパスワードの入力が必要です。ログイン状態（Cookie）が漏れても、第三者にパスワードを勝手に変更されることはありません。このアプリのセッションは HttpOnly Cookie を使い、有効期限は 30 日間なので、次回のアクセス時に再ログインは不要です。",
+
+    "account.personalisation": "プロフィールのカスタマイズ",
+    "account.personalisationHint":
+      "いずれもプロフィール上部に表示され、他の旅行者にあなたを知ってもらえます",
+    "account.tags": "カスタムタグ",
+    "account.tagsHint": "あなたの旅行スタイルをいくつかの言葉で表しましょう。",
+    "account.tagsPlaceholder": "例：写真愛好家",
+    "account.tagsEmpty": "まだタグがありません。下の候補からいくつか選んでください。",
+    "account.hobbies": "趣味",
+    "account.hobbiesHint": "普段楽しんでいること。",
+    "account.hobbiesPlaceholder": "例：ハイキング",
+    "account.hobbiesEmpty": "まだ趣味が登録されていません。",
+    "account.dreamDestinations": "行きたい場所",
+    "account.dreamDestinationsHint": "行ってみたいけれど、まだ行けていない場所。",
+    "account.dreamDestinationsPlaceholder": "例：アイスランド",
+    "account.dreamDestinationsEmpty": "行きたい場所はまだありません。",
+    "account.visitedPlaces": "訪れた場所の展示",
+    "account.visitedPlacesHint": "訪れた場所がここに並びます。",
+    "account.visitedPlacesPlaceholder": "例：東京",
+    "account.visitedPlacesEmpty": "展示はまだ空です。最初の訪れた場所を追加しましょう。",
+
+    "account.saved": "プロフィールを更新しました",
+    "account.savedDetail": "ニックネーム：{name}",
+    "account.saveFailed": "保存に失敗しました。しばらくしてからお試しください。",
+    "account.passwordChanged": "パスワードを変更しました",
+    "account.passwordChangedDetail": "次回のログインには新しいパスワードをお使いください",
+    "account.passwordFailed": "変更に失敗しました。しばらくしてからお試しください。",
+  },
+
+  ko: {
+    "account.metaTitle": "내 프로필",
+    "account.metaDescription":
+      "닉네임과 아바타를 수정하고, 계정 정보를 확인하고, 비밀번호를 변경하세요.",
+
+    "account.loginTitle": "로그인하면 프로필을 편집할 수 있습니다",
+    "account.loginBody":
+      "닉네임과 아바타를 바꾸고, 프로필 배경을 꾸미고, 가고 싶은 곳과 다녀온 곳을 기록하세요.",
+    "account.goLogin": "로그인하기",
+
+    "account.title": "내 프로필",
+    "account.subtitle": "공개 프로필과 계정 보안을 관리하세요",
+
+    "account.coverBroken": "배경 이미지를 불러오지 못해 기본 배경으로 표시합니다",
+    "account.nameEmpty": "닉네임 미입력",
+
+    "account.statWishlists": "위시리스트",
+    "account.statWishlistsValue": "{value}개",
+    "account.statSaved": "저장한 숙소",
+    "account.statSavedValue": "{value}개",
+    "account.statTrips": "예약",
+    "account.statTripsValue": "{value}건",
+    "account.statJoined": "가입일",
+
+    "account.unsaved": "저장하지 않은 변경 사항이 있습니다",
+    "account.undo": "변경 사항 되돌리기",
+    "account.save": "프로필 저장",
+
+    "account.publicInfo": "공개 프로필",
+    "account.chooseAvatar": "아바타 선택",
+    "account.presetCount": "기본 이미지 {count}종",
+    "account.useAvatar": "이 아바타 사용",
+    "account.nickname": "닉네임",
+    "account.nicknamePlaceholder": "어떻게 불러 드릴까요?",
+    "account.avatarUrl": "아바타 주소(선택)",
+    "account.avatarPlaceholder": "https://… 또는 위의 기본 이미지 선택",
+    "account.avatarHint":
+      "아무 이미지 링크나 붙여 넣거나 위의 기본 아바타를 선택하세요. 비워 두면 닉네임의 첫 글자를 사용합니다.",
+    "account.cover": "프로필 배경",
+    "account.coverUse": "{name} 배경 사용",
+    "account.coverCustom": "또는 직접 배경 이미지 사용",
+    "account.coverPlaceholder": "https://… 비워 두면 위의 기본 배경을 사용합니다",
+    "account.coverHint":
+      "배경 이미지를 불러오지 못하면 기본 그라데이션으로 자동 전환되므로 깨진 이미지가 표시되지 않습니다.",
+    "account.emailFixed": "로그인 이메일 {email}은(는) 변경할 수 없습니다",
+    "account.joinedAt": "{date} 가입",
+
+    "account.security": "계정 보안",
+    "account.currentPassword": "현재 비밀번호",
+    "account.currentPasswordPlaceholder": "현재 비밀번호를 입력하세요",
+    "account.newPassword": "새 비밀번호",
+    "account.newPasswordPlaceholder": "8자 이상",
+    "account.confirmPassword": "새 비밀번호 확인",
+    "account.confirmPasswordPlaceholder": "새 비밀번호를 다시 입력하세요",
+    "account.passwordMismatch": "새 비밀번호가 서로 다릅니다",
+    "account.changePassword": "비밀번호 변경",
+    "account.passwordHint":
+      "비밀번호를 변경하려면 현재 비밀번호를 확인해야 하므로, 로그인 상태(Cookie)가 유출되어도 다른 사람이 비밀번호를 바로 바꿀 수 없습니다. 이 프로젝트의 세션은 HttpOnly Cookie를 사용하고 유효 기간이 30일이라 다음 방문에는 다시 로그인하지 않아도 됩니다.",
+
+    "account.personalisation": "프로필 꾸미기",
+    "account.personalisationHint":
+      "모두 프로필 상단에 표시되어 다른 여행자가 회원님을 알 수 있습니다",
+    "account.tags": "사용자 태그",
+    "account.tagsHint": "여행 스타일을 몇 마디로 표현해 보세요.",
+    "account.tagsPlaceholder": "예: 사진 애호가",
+    "account.tagsEmpty": "아직 태그가 없습니다. 아래 추천에서 몇 개 골라 보세요.",
+    "account.hobbies": "취미",
+    "account.hobbiesHint": "평소 좋아하는 일.",
+    "account.hobbiesPlaceholder": "예: 등산",
+    "account.hobbiesEmpty": "아직 취미를 입력하지 않았습니다.",
+    "account.dreamDestinations": "가고 싶은 곳",
+    "account.dreamDestinationsHint": "가고 싶지만 아직 가보지 못한 곳.",
+    "account.dreamDestinationsPlaceholder": "예: 아이슬란드",
+    "account.dreamDestinationsEmpty": "아직 가고 싶은 곳이 없습니다.",
+    "account.visitedPlaces": "다녀온 곳 전시관",
+    "account.visitedPlacesHint": "다녀온 곳이 여기에 전시됩니다.",
+    "account.visitedPlacesPlaceholder": "예: 도쿄",
+    "account.visitedPlacesEmpty": "전시관이 비어 있습니다. 첫 번째 다녀온 곳을 추가해 보세요.",
+
+    "account.saved": "프로필이 업데이트되었습니다",
+    "account.savedDetail": "닉네임: {name}",
+    "account.saveFailed": "저장에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+    "account.passwordChanged": "비밀번호가 변경되었습니다",
+    "account.passwordChangedDetail": "다음 로그인에는 새 비밀번호를 사용하세요",
+    "account.passwordFailed": "변경에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+  },
+
+  es: {
+    "account.metaTitle": "Mi perfil",
+    "account.metaDescription":
+      "Edita tu nombre y tu avatar, consulta los datos de tu cuenta y cambia tu contraseña.",
+
+    "account.loginTitle": "Inicia sesión para editar tu perfil",
+    "account.loginBody":
+      "Cambia tu nombre y tu avatar, decora el fondo de tu perfil y guarda los lugares que sueñas y los que ya has visitado.",
+    "account.goLogin": "Iniciar sesión",
+
+    "account.title": "Mi perfil",
+    "account.subtitle": "Gestiona tus datos públicos y la seguridad de tu cuenta",
+
+    "account.coverBroken":
+      "No se pudo cargar la imagen de fondo, así que se muestra un fondo predefinido",
+    "account.nameEmpty": "Sin nombre",
+
+    "account.statWishlists": "Listas de deseos",
+    "account.statWishlistsValue": "{value} en total",
+    "account.statSaved": "Alojamientos guardados",
+    "account.statSavedValue": "{value} en total",
+    "account.statTrips": "Reservas",
+    "account.statTripsValue": "{value} en total",
+    "account.statJoined": "Registro",
+
+    "account.unsaved": "Tienes cambios sin guardar",
+    "account.undo": "Descartar cambios",
+    "account.save": "Guardar perfil",
+
+    "account.publicInfo": "Datos públicos",
+    "account.chooseAvatar": "Elige un avatar",
+    "account.presetCount": "{count} predefinidos",
+    "account.useAvatar": "Usar este avatar",
+    "account.nickname": "Nombre",
+    "account.nicknamePlaceholder": "¿Cómo te llamamos?",
+    "account.avatarUrl": "URL del avatar (opcional)",
+    "account.avatarPlaceholder": "https://… o elige un predefinido arriba",
+    "account.avatarHint":
+      "Pega el enlace de cualquier imagen o elige uno de los avatares predefinidos de arriba; si lo dejas vacío se usará la inicial de tu nombre.",
+    "account.cover": "Fondo del perfil",
+    "account.coverUse": "Usar el fondo {name}",
+    "account.coverCustom": "O usa una imagen de fondo propia",
+    "account.coverPlaceholder": "https://… déjalo vacío para usar el fondo predefinido de arriba",
+    "account.coverHint":
+      "Si la imagen de fondo no carga, se usará el degradado predefinido: nunca verás una imagen rota.",
+    "account.emailFixed": "El correo de acceso {email} no se puede cambiar",
+    "account.joinedAt": "Se unió en {date}",
+
+    "account.security": "Seguridad de la cuenta",
+    "account.currentPassword": "Contraseña actual",
+    "account.currentPasswordPlaceholder": "Introduce tu contraseña actual",
+    "account.newPassword": "Nueva contraseña",
+    "account.newPasswordPlaceholder": "Al menos 8 caracteres",
+    "account.confirmPassword": "Confirma la nueva contraseña",
+    "account.confirmPasswordPlaceholder": "Introduce de nuevo la nueva contraseña",
+    "account.passwordMismatch": "Las dos contraseñas nuevas no coinciden",
+    "account.changePassword": "Cambiar contraseña",
+    "account.passwordHint":
+      "Para cambiar la contraseña hay que verificar la actual, así que aunque se filtre la sesión (Cookie) nadie podrá cambiar tu contraseña sin más. Las sesiones de este proyecto usan una Cookie HttpOnly válida 30 días, por eso no hace falta volver a iniciar sesión en la próxima visita.",
+
+    "account.personalisation": "Personaliza tu perfil",
+    "account.personalisationHint":
+      "Todo esto aparece en la parte superior de tu perfil para que otros viajeros te conozcan",
+    "account.tags": "Etiquetas propias",
+    "account.tagsHint": "Resume tu estilo de viaje en unas pocas palabras.",
+    "account.tagsPlaceholder": "p. ej. aficionado a la fotografía",
+    "account.tagsEmpty": "Aún no hay etiquetas: elige algunas de las sugerencias de abajo.",
+    "account.hobbies": "Aficiones",
+    "account.hobbiesHint": "Lo que te gusta hacer.",
+    "account.hobbiesPlaceholder": "p. ej. senderismo",
+    "account.hobbiesEmpty": "Todavía no has añadido aficiones.",
+    "account.dreamDestinations": "Destinos soñados",
+    "account.dreamDestinationsHint": "Lugares que quieres visitar y aún no conoces.",
+    "account.dreamDestinationsPlaceholder": "p. ej. Islandia",
+    "account.dreamDestinationsEmpty": "Aún no hay destinos soñados.",
+    "account.visitedPlaces": "Lugares visitados",
+    "account.visitedPlacesHint": "Los lugares en los que has estado se exhiben aquí.",
+    "account.visitedPlacesPlaceholder": "p. ej. Tokio",
+    "account.visitedPlacesEmpty":
+      "La vitrina sigue vacía: añade el primer lugar que hayas visitado.",
+
+    "account.saved": "Perfil actualizado",
+    "account.savedDetail": "Nombre: {name}",
+    "account.saveFailed": "No se pudo guardar. Inténtalo de nuevo más tarde.",
+    "account.passwordChanged": "Contraseña cambiada",
+    "account.passwordChangedDetail": "Usa la nueva contraseña la próxima vez que inicies sesión",
+    "account.passwordFailed": "No se pudo cambiar. Inténtalo de nuevo más tarde.",
+  },
+} as const;

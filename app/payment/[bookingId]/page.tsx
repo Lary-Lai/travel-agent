@@ -4,14 +4,20 @@ import { connection } from "next/server";
 import { PaymentPanel } from "@/components/payment-panel";
 import { getCurrentUser } from "@/lib/auth";
 import { ApiError } from "@/lib/http";
+import { getTranslator } from "@/lib/i18n/server";
 import { getBooking } from "@/server/booking.service";
 
 type Props = { params: Promise<{ bookingId: string }> };
 
-export const metadata = {
-  title: "收银台",
-  description: "选择微信支付、支付宝或银行卡完成订单支付（演示环境，不产生真实扣款）。",
-};
+export async function generateMetadata() {
+  // A Server Component, so the translator is awaited rather than read from the
+  // client provider; a static `metadata` object cannot be translated at all.
+  const { t } = await getTranslator();
+  return {
+    title: t("payment.title"),
+    description: t("payment.description"),
+  };
+}
 
 export default async function PaymentPage({ params }: Props) {
   await connection();

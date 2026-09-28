@@ -2,13 +2,17 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { ListingGridSkeleton } from "@/components/listing-card";
+import { getTranslator } from "@/lib/i18n/server";
 import { SearchResults } from "@/components/search-results";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export const metadata = {
-  title: "搜索房源",
-  description: "按目的地、日期、人数、价格与设施筛选真实房源。",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslator();
+  return {
+    title: t("searchResults.metaTitle"),
+    description: t("searchResults.metaDescription"),
+  };
+}
 
 function SearchFallback() {
   return (

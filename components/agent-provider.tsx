@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
 
+import { useT } from "@/components/locale-provider";
 import { useAgentStore } from "@/lib/store";
 
 type AgentStatus = { configured: boolean; model: string; problem: string | null };
@@ -37,6 +38,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
   // would be wrong because it derives from tree position, which would make two
   // different visitors collide in the server's per-conversation memory.
   const consumePrompt = useAgentStore((state) => state.consumePrompt);
+  const t = useT();
   const open = useAgentStore((state) => state.open);
   const autoSentRef = useRef(false);
 
@@ -59,7 +61,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     queryFn: async (): Promise<AgentStatus> => {
       const response = await fetch("/api/agent");
       const payload = (await response.json()) as { data?: AgentStatus };
-      return payload.data ?? { configured: false, model: "", problem: "无法获取 AI 状态" };
+      return payload.data ?? { configured: false, model: "", problem: t("agentUi.modelUnavailable") };
     },
     staleTime: 60_000,
   });

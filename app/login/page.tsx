@@ -3,13 +3,17 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 
 import { LoginForm } from "@/components/login-form";
+import { getTranslator } from "@/lib/i18n/server";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCurrentUser } from "@/lib/auth";
 
-export const metadata = {
-  title: "登录",
-  description: "登录后即可收藏房源、管理心愿单与行程。",
-};
+export async function generateMetadata() {
+  const { t } = await getTranslator();
+  return {
+    title: t("auth.metaLogin"),
+    description: t("auth.metaLoginBody"),
+  };
+}
 
 export default async function LoginPage() {
   await connection();
