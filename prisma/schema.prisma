@@ -293,6 +293,13 @@ model Booking {
   listing Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   refunds Refund[]
 
+  /// Hidden from the user's list, but NOT deleted.
+  ///
+  /// A booking is a financial record: `Refund` rows reference it with
+  /// `onDelete: Cascade`, so deleting it would also delete the refund history.
+  /// Archiving keeps the audit trail while removing the row from `/trips`.
+  archivedAt DateTime?
+
   @@index([userId])
   @@index([listingId])
   @@index([userId, status])

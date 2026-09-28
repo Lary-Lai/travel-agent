@@ -193,7 +193,7 @@ export async function createBooking(
 
 export async function listBookings(userId: string): Promise<BookingDto[]> {
   const rows = await prisma.booking.findMany({
-    where: { userId },
+    where: { userId, archivedAt: null },
     include: BOOKING_INCLUDE,
     // Upcoming trips first, then most recently booked.
     orderBy: [{ checkIn: "asc" }, { createdAt: "desc" }],
@@ -399,4 +399,42 @@ export async function getBookingStats(userId: string) {
       .filter((refund) => refund.status === "SUCCEEDED")
       .reduce((sum, refund) => sum + refund.amount, 0),
   };
+}
+
+/**
+ * Hide a finished booking from the user's list.
+ *
+ * Deliberately not a hard delete: `Refund` rows cascade from `Booking`, so
+ * deleting the booking would delete the refund record too. Archiving keeps the
+ * financial trail intact and only removes it from `/trips`.
+ *
+ * Only CANCELLED bookings qualify. Archiving a PENDING or CONFIRMED one would
+ * release its dates without running cancellation — the user would lose money
+ * owed to them (or owe money) with no record of why.
+ */
+export async function archiveBooking(userId: string, bookingId: string): Promise<void> {
+  const booking = await prisma.booking.findFirst({
+    where: { id: bookingId, userId },
+    select: { id: true, status: true, archivedAt: true },
+  });
+  if (!booking) throw notFound("订单不存在");
+  if (booking.archivedAt) throw conflict("该订单已经删除");
+
+  if (booking.status !== "CANCELLED") {
+    throw badRequest("只能删除已取消的订单；进行中的订单请先取消");
+  }
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { archivedAt: new Date() },
+  });
+}
+
+/** Clear every cancelled booking at once. Returns how many were hidden. */
+export async function archiveCancelledBookings(userId: string): Promise<number> {
+  const result = await prisma.booking.updateMany({
+    where: { userId, archivedAt: null, status: "CANCELLED" },
+    data: { archivedAt: new Date() },
+  });
+  return result.count;
 }

@@ -12,6 +12,14 @@
  */
 export const trips = {
   "zh-CN": {
+    "trips.deleteRecord": "删除记录",
+    "trips.deleteRecordHint": "从列表中移除这条已取消的订单",
+    "trips.recordsDeleted": "已删除 {count} 条记录",
+    "trips.recordDeleted": "订单记录已删除",
+    "trips.recordDeletedBody": "已从列表移除；退款与支付记录仍会保留以备查询。",
+    "trips.deleteFailed": "删除失败，请稍后重试",
+    "trips.nothingToDelete": "没有可删除的已取消订单",
+    "trips.clearCancelled": "清理已取消订单",
     "trips.title": "我的行程",
     "trips.subtitle": "管理你的预订，查看入住信息、订单状态与退款进度",
     "trips.loginTitle": "登录后查看你的行程",
@@ -79,6 +87,14 @@ export const trips = {
   },
 
   "zh-TW": {
+    "trips.deleteRecord": "刪除紀錄",
+    "trips.deleteRecordHint": "從列表中移除這筆已取消的訂單",
+    "trips.recordsDeleted": "已刪除 {count} 筆紀錄",
+    "trips.recordDeleted": "訂單紀錄已刪除",
+    "trips.recordDeletedBody": "已從列表移除；退款與付款紀錄仍會保留以供查詢。",
+    "trips.deleteFailed": "刪除失敗，請稍後重試",
+    "trips.nothingToDelete": "沒有可刪除的已取消訂單",
+    "trips.clearCancelled": "清理已取消訂單",
     "trips.title": "我的行程",
     "trips.subtitle": "管理你的預訂，查看入住資訊、訂單狀態與退款進度",
     "trips.loginTitle": "登入後查看你的行程",
@@ -146,6 +162,14 @@ export const trips = {
   },
 
   en: {
+    "trips.deleteRecord": "Delete record",
+    "trips.deleteRecordHint": "Remove this cancelled order from the list",
+    "trips.recordsDeleted": "Deleted {count} records",
+    "trips.recordDeleted": "Order record deleted",
+    "trips.recordDeletedBody": "Removed from your list. The payment and refund records are kept for reference.",
+    "trips.deleteFailed": "Could not delete, please try again",
+    "trips.nothingToDelete": "No cancelled orders to delete",
+    "trips.clearCancelled": "Clear cancelled orders",
     "trips.title": "My trips",
     "trips.subtitle": "Manage your bookings and track check-in details, order status and refunds",
     "trips.loginTitle": "Sign in to see your trips",
@@ -218,6 +242,14 @@ export const trips = {
   },
 
   ja: {
+    "trips.deleteRecord": "記録を削除",
+    "trips.deleteRecordHint": "キャンセル済みの注文を一覧から削除します",
+    "trips.recordsDeleted": "{count} 件の記録を削除しました",
+    "trips.recordDeleted": "注文記録を削除しました",
+    "trips.recordDeletedBody": "一覧から削除しました。支払い・返金の記録は照会用に保持されます。",
+    "trips.deleteFailed": "削除できませんでした。しばらくしてからお試しください",
+    "trips.nothingToDelete": "削除できるキャンセル済みの注文はありません",
+    "trips.clearCancelled": "キャンセル済みを整理",
     "trips.title": "マイトリップ",
     "trips.subtitle": "予約を管理し、チェックイン情報・注文状況・返金の進捗を確認できます",
     "trips.loginTitle": "ログインすると旅程を確認できます",
@@ -290,6 +322,14 @@ export const trips = {
   },
 
   ko: {
+    "trips.deleteRecord": "기록 삭제",
+    "trips.deleteRecordHint": "취소된 주문을 목록에서 삭제합니다",
+    "trips.recordsDeleted": "기록 {count}건을 삭제했습니다",
+    "trips.recordDeleted": "주문 기록을 삭제했습니다",
+    "trips.recordDeletedBody": "목록에서 삭제했습니다. 결제 및 환불 기록은 조회용으로 보관됩니다.",
+    "trips.deleteFailed": "삭제하지 못했습니다. 잠시 후 다시 시도해 주세요",
+    "trips.nothingToDelete": "삭제할 취소된 주문이 없습니다",
+    "trips.clearCancelled": "취소된 주문 정리",
     "trips.title": "내 여행",
     "trips.subtitle": "예약을 관리하고 체크인 정보, 주문 상태, 환불 진행 상황을 확인하세요",
     "trips.loginTitle": "로그인하면 여행을 확인할 수 있습니다",
@@ -361,6 +401,14 @@ export const trips = {
   },
 
   es: {
+    "trips.deleteRecord": "Eliminar registro",
+    "trips.deleteRecordHint": "Quita este pedido cancelado de la lista",
+    "trips.recordsDeleted": "Se eliminaron {count} registros",
+    "trips.recordDeleted": "Registro del pedido eliminado",
+    "trips.recordDeletedBody": "Se quitó de tu lista. Los registros de pago y reembolso se conservan para consulta.",
+    "trips.deleteFailed": "No se pudo eliminar, inténtalo de nuevo",
+    "trips.nothingToDelete": "No hay pedidos cancelados que eliminar",
+    "trips.clearCancelled": "Borrar pedidos cancelados",
     "trips.title": "Mis viajes",
     "trips.subtitle":
       "Gestiona tus reservas y consulta el check-in, el estado del pedido y los reembolsos",

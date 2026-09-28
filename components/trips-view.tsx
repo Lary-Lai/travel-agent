@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CreditCard, LogIn, MapPin, Route, Undo2, Users, Wallet } from "lucide-react";
+import { CalendarDays, CreditCard, LogIn, MapPin, Route, Trash2, Undo2, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -11,11 +11,11 @@ import { SafeImage } from "@/components/safe-image";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
 import { useLocale } from "@/components/locale-provider";
+import { Button } from "@/components/ui/button";
 import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { localizedTitle } from "@/lib/i18n/listing-text";
 import { useSession } from "@/components/session-provider";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api, ApiClientError } from "@/lib/api";
@@ -39,6 +39,40 @@ export function TripsView() {
     void queryClient.invalidateQueries({ queryKey: ["bookings"] });
     void queryClient.invalidateQueries({ queryKey: ["listings"] });
   };
+
+  /**
+   * Remove a finished order from the list.
+   *
+   * This archives rather than deletes: `Refund` rows cascade from `Booking`, so
+   * a real delete would take the refund record with it. The confirm copy says so,
+   * because "删除" that secretly keeps a copy is exactly the kind of thing a user
+   * should be told about.
+   */
+  const archiveOne = useMutation({
+    mutationFn: (id: string) => api.archiveBooking(id),
+    onSuccess: () => {
+      toast.success(t("trips.recordDeleted"), { description: t("trips.recordDeletedBody") });
+      invalidate();
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiClientError ? error.message : t("trips.deleteFailed")),
+  });
+
+  const archiveAll = useMutation({
+    mutationFn: () => api.archiveCancelledBookings(),
+    onSuccess: (result) => {
+      if (result.count === 0) {
+        toast.info(t("trips.nothingToDelete"));
+        return;
+      }
+      toast.success(t("trips.recordsDeleted", { count: result.count }), {
+        description: t("trips.recordDeletedBody"),
+      });
+      invalidate();
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiClientError ? error.message : t("trips.deleteFailed")),
+  });
 
   const settleMutation = useMutation({
     mutationFn: (refundId: string) => api.settleRefund(refundId),
@@ -109,11 +143,33 @@ export function TripsView() {
       ].filter((tile) => tile.show)
     : [];
 
+  /** How many orders the bulk action would clear, so the button can say so. */
+  const cancelledCount = (data?.bookings ?? []).filter(
+    (booking) => booking.status === "CANCELLED",
+  ).length;
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{t("trips.title")}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t("trips.subtitle")}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t("trips.title")}</h1>
+          <p className="text-muted-foreground mt-1 text-sm">{t("trips.subtitle")}</p>
+        </div>
+
+        {/* One-click tidy-up, but only offered when there is something to clear. */}
+        {cancelledCount > 0 ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={archiveAll.isPending}
+            onClick={() => archiveAll.mutate()}
+          >
+            <Trash2 className="size-3.5" />
+            {t("trips.clearCancelled")}
+            <span className="text-muted-foreground">({cancelledCount})</span>
+          </Button>
+        ) : null}
       </div>
 
       {statTiles.length > 0 ? (
@@ -215,6 +271,21 @@ export function TripsView() {
                         <span className="text-muted-foreground text-[11px]">
                           {t("trips.paidVia", { method: booking.paymentMethodLabel })}
                         </span>
+                      ) : null}
+
+                      {/* Only terminal orders can be removed: archiving an active
+                          one would release its dates outside the refund flow. */}
+                      {isCancelled ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive h-7 gap-1 px-2 text-[11px]"
+                          disabled={archiveOne.isPending}
+                          onClick={() => archiveOne.mutate(booking.id)}
+                        >
+                          <Trash2 className="size-3" />
+                          {t("trips.deleteRecord")}
+                        </Button>
                       ) : null}
                     </div>
                   </div>

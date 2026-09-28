@@ -247,6 +247,19 @@ export const api = {
   cancelBooking: (id: string) =>
     request<{ booking: BookingDto }>(`/api/bookings/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
+  /**
+   * Hide a finished order from the list. Deliberately not a delete: the refund
+   * record cascades from the booking, so the row is archived and kept.
+   */
+  archiveBooking: (id: string) =>
+    request<{ archived: boolean }>(`/api/bookings/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+    }),
+
+  /** Clear every cancelled order at once; resolves with how many were hidden. */
+  archiveCancelledBookings: () =>
+    request<{ count: number }>("/api/bookings/archive-cancelled", { method: "POST" }),
+
   // --------------------------------------------------------------- reviews
   /** Public: reviews are readable without an account. */
   listReviews: (listingId: string) =>
