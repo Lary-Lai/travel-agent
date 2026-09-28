@@ -108,6 +108,10 @@ export async function getSearchInsights(userId: string): Promise<SearchInsights>
       // The label is looked up by callers that need it; findCity gives Chinese.
       cityLabel: findCity(city)?.nameZh ?? city,
       hits,
+      // The client renders a translated sentence; `reason` stays as prose for
+      // the API and the Agent, which have no request-level locale.
+      reasonKey: index === 0 ? "home.reasonTop" : "home.reasonOther",
+      reasonVars: { city: findCity(city)?.nameZh ?? city, count: hits },
       reason:
         index === 0
           ? `你最近搜索「${findCity(city)?.nameZh ?? city}」${hits} 次`

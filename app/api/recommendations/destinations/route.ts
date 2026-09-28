@@ -19,6 +19,8 @@ export const GET = handler(async () => {
     city: city.city,
     cityLabel: city.cityLabel,
     hits: 0,
+    reasonKey: "home.reasonPopular",
+    reasonVars: { count: city.count },
     reason: `${city.count} 套房源`,
   }));
 

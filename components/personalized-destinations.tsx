@@ -5,9 +5,10 @@ import { Compass, History, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { cityName } from "@/lib/i18n/cities";
 
 /**
  * Destination suggestions, personalised from the user's own search history.
@@ -18,7 +19,7 @@ import { api } from "@/lib/api";
  * signed-out visitors see a sensible row instead of an empty section.
  */
 export function PersonalizedDestinations() {
-  const t = useT();
+  const { locale, t } = useLocale();
   const { data, isLoading } = useQuery({
     queryKey: ["personalized-destinations"],
     queryFn: api.getPersonalizedDestinations,
@@ -76,9 +77,9 @@ export function PersonalizedDestinations() {
             href={`/search?location=${encodeURIComponent(destination.city)}`}
             className="surface-sheen edge-light hover:border-primary/40 group flex flex-col justify-between rounded-2xl border p-3 transition-all hover:-translate-y-0.5 hover:shadow-md"
           >
-            <span className="text-sm font-semibold">{destination.cityLabel}</span>
+            <span className="text-sm font-semibold">{cityName(locale, destination.city)}</span>
             <span className="text-muted-foreground mt-1 text-[11px] leading-snug">
-              {destination.reason}
+              {t(destination.reasonKey as never, destination.reasonVars)}
             </span>
           </Link>
         ))}

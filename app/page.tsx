@@ -21,6 +21,7 @@ import { StickySearchBar } from "@/components/sticky-search-bar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
+import { cityName } from "@/lib/i18n/cities";
 import { getTranslator } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 import { getCityStats, getRecommendedListings, type CityStat } from "@/server/listing.service";
@@ -57,7 +58,7 @@ export default async function HomePage() {
     loadFailed = true;
   }
 
-  const { t } = await getTranslator();
+  const { locale, t } = await getTranslator();
   const totalListings = cities.reduce((sum, city) => sum + city.count, 0);
 
   return (
@@ -97,7 +98,10 @@ export default async function HomePage() {
             <div className="relative mt-8">
               <div className="glow-primary pointer-events-none absolute inset-x-8 -inset-y-4 -z-10" aria-hidden />
               <StickySearchBar
-                destinations={cities.map((city) => ({ city: city.city, cityLabel: city.cityLabel }))}
+                destinations={cities.map((city) => ({
+                  city: city.city,
+                  cityLabel: cityName(locale, city.city),
+                }))}
               />
             </div>
 
@@ -181,7 +185,7 @@ export default async function HomePage() {
                     href={`/search?location=${encodeURIComponent(city.city)}`}
                     className="edge-light bg-secondary/60 hover:border-primary/40 hover:bg-secondary rounded-full border border-transparent px-3 py-1.5 text-xs font-medium transition-all hover:-translate-y-px"
                   >
-                    {city.cityLabel}
+                    {cityName(locale, city.city)}
                   </Link>
                 ))}
               </div>
@@ -207,7 +211,7 @@ export default async function HomePage() {
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent" />
                     </div>
                     <div className="absolute inset-x-0 bottom-0 p-3 text-white">
-                      <p className="text-sm font-semibold">{city.cityLabel}</p>
+                      <p className="text-sm font-semibold">{cityName(locale, city.city)}</p>
                       <p className="text-[11px] text-white/80">
                         {t("home.destinationCard", {
                           count: city.count,

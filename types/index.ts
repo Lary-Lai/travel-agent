@@ -211,7 +211,14 @@ export type PersonalizedDestination = {
   cityLabel: string;
   /** How many recorded searches mentioned this city. */
   hits: number;
+  /**
+   * Prose reason in the reference language, kept for the API and the Agent.
+   * The UI renders `reasonKey` + `reasonVars` instead, because a sentence the
+   * server composed cannot be translated after the fact.
+   */
   reason: string;
+  reasonKey: string;
+  reasonVars: Record<string, string | number>;
 };
 
 export type SearchInsights = {
