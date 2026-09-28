@@ -28,6 +28,7 @@ import { formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
 import { getTranslator } from "@/lib/i18n/server";
 import { propertyTypeLabel } from "@/lib/i18n/labels";
+import { localizedTitle } from "@/lib/i18n/listing-text";
 import { getListingDetail } from "@/server/listing.service";
 import { getCityWeather } from "@/server/weather.service";
 
@@ -63,7 +64,7 @@ export default async function ListingDetailPage({ params }: Props) {
 
   // Weather for the city this listing sits in. Resolves to null (card hidden)
   // if the provider is unreachable, so it can never break the page.
-  const { t } = await getTranslator();
+  const { locale, t } = await getTranslator();
   const weather = await getCityWeather(listing.city);
 
   const highlights = [
@@ -86,7 +87,9 @@ export default async function ListingDetailPage({ params }: Props) {
       {/* ------------------------------------------------------------- header */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{listing.title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+            {localizedTitle(locale, listing)}
+          </h1>
           <div className="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="flex items-center gap-1">
               <Star className="size-3.5 fill-current" />
@@ -104,7 +107,7 @@ export default async function ListingDetailPage({ params }: Props) {
         <div className="flex items-center gap-2">
           <FavoriteButton
             listingId={listing.id}
-            listingTitle={listing.title}
+            listingTitle={localizedTitle(locale, listing)}
             variant="plain"
             className="hover:bg-accent size-9 rounded-full border"
           />
@@ -119,7 +122,7 @@ export default async function ListingDetailPage({ params }: Props) {
       </div>
 
       {/* ------------------------------------------------------------ gallery */}
-      <ListingGallery gallery={listing.gallery} title={listing.title} />
+      <ListingGallery gallery={listing.gallery} title={localizedTitle(locale, listing)} />
 
       {/* -------------------------------------------------------------- body */}
       <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_380px]">
@@ -208,7 +211,11 @@ export default async function ListingDetailPage({ params }: Props) {
           {/* house rules */}
           <section className="space-y-3">
             <h2 className="text-base font-semibold">{t("houseRules.title")}</h2>
-            <HouseRulesPanel rules={listing.houseRules} title={listing.title} variant="inline" />
+            <HouseRulesPanel
+              rules={listing.houseRules}
+              title={localizedTitle(locale, listing)}
+              variant="inline"
+            />
           </section>
 
           {/* weather in the destination city */}

@@ -10,8 +10,9 @@ import { CancelBookingDialog } from "@/components/cancel-booking-dialog";
 import { SafeImage } from "@/components/safe-image";
 import { EmptyState } from "@/components/empty-state";
 import { ErrorState } from "@/components/error-state";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { propertyTypeLabel } from "@/lib/i18n/labels";
+import { localizedTitle } from "@/lib/i18n/listing-text";
 import { useSession } from "@/components/session-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 import type { BookingDto } from "@/types";
 
 export function TripsView() {
-  const t = useT();
+  const { locale, t } = useLocale();
   const queryClient = useQueryClient();
   const { user, isLoading: sessionLoading } = useSession();
   const [cancelling, setCancelling] = useState<BookingDto | null>(null);
@@ -172,7 +173,7 @@ export function TripsView() {
                 >
                   <SafeImage
                     src={booking.listing.image}
-                    alt={booking.listing.title}
+                    alt={localizedTitle(locale, booking.listing)}
                     sizes="220px"
                     className={cn(isCancelled && "opacity-70 grayscale")}
                   />
@@ -185,7 +186,7 @@ export function TripsView() {
                         href={`/listings/${booking.listing.id}`}
                         className="hover:text-primary line-clamp-1 text-base font-semibold transition-colors"
                       >
-                        {booking.listing.title}
+                        {localizedTitle(locale, booking.listing)}
                       </Link>
                       <p className="text-muted-foreground mt-1 flex items-center gap-1 text-xs">
                         <MapPin className="size-3" />

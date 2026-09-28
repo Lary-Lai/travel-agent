@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { AmenityIcon } from "@/components/amenity-icon";
 import { useT } from "@/components/locale-provider";
+import { amenityLabel } from "@/lib/i18n/labels";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -51,7 +52,7 @@ export function AmenityList({
             className="group hover:border-primary/40 hover:bg-accent/50 flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors"
           >
             <AmenityIcon name={amenity.icon} className="text-muted-foreground size-4 shrink-0" />
-            <span className="flex-1 text-sm">{amenity.name}</span>
+            <span className="flex-1 text-sm">{amenityLabel(t, amenity.name)}</span>
             <ChevronRight className="text-muted-foreground size-3.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
           </button>
         ))}

@@ -4,9 +4,10 @@ import { ArrowUpRight, Star } from "lucide-react";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
-import { useT } from "@/components/locale-provider";
+import { useLocale } from "@/components/locale-provider";
 import { SafeImage } from "@/components/safe-image";
 import { formatPrice, formatRating } from "@/lib/format";
+import { localizedTitle } from "@/lib/i18n/listing-text";
 
 /** Loose shape: tool outputs vary slightly between tools. */
 export type AgentListing = {
@@ -32,7 +33,7 @@ export type AgentListing = {
  * Supports the two actions the brief requires: view detail and save.
  */
 export function AgentListingCard({ listing }: { listing: AgentListing }) {
-  const t = useT();
+  const { locale, t } = useLocale();
   const city = listing.cityLabel ?? listing.city ?? "";
   const image = listing.image;
 
@@ -44,7 +45,7 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
       >
         <SafeImage
           src={image ?? ""}
-          alt={listing.title}
+          alt={localizedTitle(locale, listing)}
           sizes="80px"
           className="transition-transform duration-300 group-hover:scale-105"
         />
@@ -58,7 +59,9 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
                 {listing.rank}
               </span>
             ) : null}
-            <h4 className="line-clamp-1 text-xs font-semibold">{listing.title}</h4>
+            <h4 className="line-clamp-1 text-xs font-semibold">
+            {localizedTitle(locale, listing)}
+          </h4>
           </div>
 
           <p className="text-muted-foreground mt-0.5 line-clamp-1 text-[11px]">
@@ -103,7 +106,7 @@ export function AgentListingCard({ listing }: { listing: AgentListing }) {
           <span className="text-muted-foreground text-[11px]">·</span>
           <FavoriteButton
             listingId={listing.id}
-            listingTitle={listing.title}
+            listingTitle={localizedTitle(locale, listing)}
             variant="plain"
             className="hover:text-primary p-0 text-[11px]"
           />
