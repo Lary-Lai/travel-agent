@@ -1,3 +1,11 @@
+"use client";
+
+/**
+ * Client component: it reads the translator, and `useT` cannot be called while
+ * rendering on the server. It is rendered *from* the server-rendered listing
+ * page, so this file is the client boundary — the `CityWeather` DTO it receives
+ * is plain JSON and crosses that boundary fine.
+ */
 import {
   Cloud,
   CloudDrizzle,
@@ -14,8 +22,10 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 
-import { cn } from "@/lib/utils";
+import { useT } from "@/components/locale-provider";
+import { weatherAdviceLabel as adviceLabel, weatherKindLabel as kindLabel } from "@/lib/i18n/labels";
 import { weekdayLabel } from "@/lib/weather";
+import { cn } from "@/lib/utils";
 import type { CityWeather } from "@/types";
 
 /**
@@ -55,6 +65,9 @@ export function WeatherCard({
   variant?: "full" | "compact";
   className?: string;
 }) {
+  // Hooks must run unconditionally, so this sits above the early return.
+  const t = useT();
+
   if (!weather) return null;
 
   const { current } = weather;
@@ -72,11 +85,12 @@ export function WeatherCard({
           <WeatherIcon name={current.icon} className="size-4" />
           {weather.cityLabel} {current.temperature}°C
         </span>
-        <span className="text-muted-foreground">{current.description}</span>
+        <span className="text-muted-foreground">{kindLabel(t, current.kind, current.description)}</span>
         <span className="text-muted-foreground text-xs">
-          体感 {current.apparentTemperature}°C · 湿度 {current.humidity}%
+          {t("weather.feelsLike")} {current.apparentTemperature}°C · {t("weather.humidity")}{" "}
+          {current.humidity}%
         </span>
-        <span className="text-muted-foreground ml-auto text-xs">{weather.advice}</span>
+        <span className="text-muted-foreground ml-auto text-xs">{adviceLabel(t, weather)}</span>
       </div>
     );
   }
@@ -87,15 +101,17 @@ export function WeatherCard({
       <div className="from-primary/10 flex items-start justify-between gap-3 bg-gradient-to-br to-transparent p-4">
         <div>
           <p className="text-muted-foreground text-xs font-medium">
-            当前天气 · {weather.cityLabel}
+            {t("weather.current")} · {weather.cityLabel}
           </p>
           <div className="mt-1.5 flex items-end gap-2">
             <span className="text-3xl font-semibold tabular-nums">{current.temperature}°</span>
-            <span className="pb-1 text-sm">{current.description}</span>
+            <span className="pb-1 text-sm">
+              {kindLabel(t, current.kind, current.description)}
+            </span>
           </div>
           <p className="text-muted-foreground mt-1 text-xs">
-            体感 {current.apparentTemperature}°C · 湿度 {current.humidity}% · 风速{" "}
-            {current.windSpeed} km/h
+            {t("weather.feelsLike")} {current.apparentTemperature}°C · {t("weather.humidity")}{" "}
+            {current.humidity}% · {t("weather.wind")} {current.windSpeed} km/h
           </p>
         </div>
 

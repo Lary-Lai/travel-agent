@@ -1,19 +1,28 @@
+"use client";
+
 import { MapPin, Star } from "lucide-react";
 import Link from "next/link";
 
 import { FavoriteButton } from "@/components/favorite-button";
+import { useT } from "@/components/locale-provider";
 import { SafeImage } from "@/components/safe-image";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCount, formatPrice, formatRating } from "@/lib/format";
+import { formatPrice, formatRating } from "@/lib/format";
+import { propertyTypeLabel } from "@/lib/i18n/labels";
 import { cn } from "@/lib/utils";
 import type { ListingSummary } from "@/types";
 
 const SIZES = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw";
 
 /**
- * Presentational and server-renderable: no hooks, so it can be used inside both
- * Server Components and client lists. Only the heart is a client boundary.
+ * Presentational listing card.
+ *
+ * A client component because it reads the translator: the spec line
+ * ("1 bedroom · 2 beds · sleeps 3") is composed from several translated units, so
+ * it cannot be rendered on the server without threading a locale through every
+ * caller. The card is already adjacent to client boundaries (the heart and the
+ * image), so this costs little.
  */
 export function ListingCard({
   listing,
@@ -24,6 +33,8 @@ export function ListingCard({
   priority?: boolean;
   className?: string;
 }) {
+  const t = useT();
+
   return (
     <article className={cn("group relative", className)}>
       <Link href={`/listings/${listing.id}`} className="block focus:outline-none">
@@ -40,7 +51,7 @@ export function ListingCard({
               variant="secondary"
               className="bg-background/90 text-foreground border-0 backdrop-blur-sm"
             >
-              {listing.propertyTypeLabel}
+              {propertyTypeLabel(t, listing.propertyType)}
             </Badge>
           </div>
         </div>
@@ -60,14 +71,18 @@ export function ListingCard({
           </p>
 
           <p className="text-muted-foreground text-xs">
-            {listing.bedrooms} 间卧室 · {listing.beds} 张床 · 可住 {listing.maxGuests} 人
+            {t("listing.bedrooms", { count: listing.bedrooms })} ·{" "}
+            {t("listing.beds", { count: listing.beds })} ·{" "}
+            {t("listing.maxGuests", { count: listing.maxGuests })}
           </p>
 
-          <p className="text-muted-foreground text-xs">{formatCount(listing.reviewCount)} 条评价</p>
+          <p className="text-muted-foreground text-xs">
+            {t("common.reviews", { count: listing.reviewCount })}
+          </p>
 
           <p className="pt-1 text-sm">
             <span className="font-semibold">{formatPrice(listing.pricePerNight)}</span>
-            <span className="text-muted-foreground"> / 晚</span>
+            <span className="text-muted-foreground"> {t("common.perNight")}</span>
           </p>
         </div>
       </Link>

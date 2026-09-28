@@ -77,6 +77,42 @@ export function describeWeatherCode(code: number, isDay = true): WeatherDescript
   return descriptor;
 }
 
+/**
+ * The same advice as translation keys.
+ *
+ * The UI needs to render this in the reader's language, and a composed sentence
+ * cannot be translated after the fact — so the decision is returned as keys and
+ * the client looks them up in `weather.tip.*`. `weatherAdvice` below stays for
+ * the API and the Agent, which want prose.
+ */
+export function weatherTipKeys(input: {
+  temperature: number;
+  precipitationProbability: number;
+  windSpeed: number;
+  kind: WeatherKind;
+}): string[] {
+  const keys: string[] = [];
+
+  if (
+    input.precipitationProbability >= 50 ||
+    ["rain", "showers", "thunderstorm", "drizzle"].includes(input.kind)
+  ) {
+    keys.push("umbrella");
+  }
+  if (input.kind === "snow" || input.kind === "snow-showers") keys.push("slippery");
+  if (input.temperature <= 5) keys.push("cold");
+  else if (input.temperature >= 30) keys.push("hot");
+  if (input.windSpeed >= 30) keys.push("windy");
+
+  if (keys.length === 0) {
+    keys.push(
+      input.temperature >= 15 && input.temperature <= 26 ? "comfortable" : "okay",
+    );
+  }
+
+  return keys;
+}
+
 /** Short advice shown under the forecast, derived from the numbers we have. */
 export function weatherAdvice(input: {
   temperature: number;
@@ -84,22 +120,17 @@ export function weatherAdvice(input: {
   windSpeed: number;
   kind: WeatherKind;
 }): string {
-  const tips: string[] = [];
-
-  if (input.precipitationProbability >= 50 || ["rain", "showers", "thunderstorm", "drizzle"].includes(input.kind)) {
-    tips.push("记得带伞");
-  }
-  if (input.kind === "snow" || input.kind === "snow-showers") tips.push("注意保暖防滑");
-  if (input.temperature <= 5) tips.push("气温偏低，建议厚外套");
-  else if (input.temperature >= 30) tips.push("天气炎热，注意补水");
-  if (input.windSpeed >= 30) tips.push("风力较大");
-
-  if (tips.length === 0) {
-    return input.temperature >= 15 && input.temperature <= 26
-      ? "天气舒适，适合外出游玩"
-      : "天气尚可，适合出行";
-  }
-  return tips.join("，");
+  const keys = weatherTipKeys(input);
+  const prose: Record<string, string> = {
+    umbrella: "记得带伞",
+    slippery: "注意保暖防滑",
+    cold: "气温偏低，建议厚外套",
+    hot: "天气炎热，注意补水",
+    windy: "风力较大",
+    comfortable: "天气舒适，适合外出游玩",
+    okay: "天气尚可，适合出行",
+  };
+  return keys.map((key) => prose[key]).join("，");
 }
 
 /** `2026-09-24` -> `周三` */

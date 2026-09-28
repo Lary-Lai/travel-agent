@@ -9,7 +9,7 @@
  * failure we prefer a stale cached reading over showing nothing.
  */
 import { CITIES, countryLabel, findCity } from "../lib/cities";
-import { describeWeatherCode, weatherAdvice } from "../lib/weather";
+import { describeWeatherCode, weatherAdvice, weatherTipKeys } from "../lib/weather";
 import type { CityWeather, WeatherDay } from "../types";
 
 // Re-exported so callers can import the weather shapes from either place.
@@ -109,6 +109,13 @@ function shape(
     },
     forecast,
     advice: weatherAdvice({
+      temperature,
+      windSpeed,
+      kind: currentDescriptor.kind,
+      precipitationProbability: forecast[0]?.precipitationProbability ?? 0,
+    }),
+    // The same decision as keys, so the client can render it in any language.
+    adviceKeys: weatherTipKeys({
       temperature,
       windSpeed,
       kind: currentDescriptor.kind,

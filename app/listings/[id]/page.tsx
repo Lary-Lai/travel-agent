@@ -26,6 +26,7 @@ import { Separator } from "@/components/ui/separator";
 import { WeatherCard } from "@/components/weather-card";
 import { formatCount, formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
+import { getTranslator } from "@/lib/i18n/server";
 import { getListingDetail } from "@/server/listing.service";
 import { getCityWeather } from "@/server/weather.service";
 
@@ -59,6 +60,7 @@ export default async function ListingDetailPage({ params }: Props) {
 
   // Weather for the city this listing sits in. Resolves to null (card hidden)
   // if the provider is unreachable, so it can never break the page.
+  const { t } = await getTranslator();
   const weather = await getCityWeather(listing.city);
 
   const highlights = [
@@ -153,7 +155,7 @@ export default async function ListingDetailPage({ params }: Props) {
 
           {/* description */}
           <section className="space-y-3">
-            <h2 className="text-base font-semibold">房源介绍</h2>
+            <h2 className="text-base font-semibold">{t("listing.intro")}</h2>
             <p className="text-muted-foreground text-sm leading-relaxed">{listing.description}</p>
             <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <CalendarDays className="size-3.5" />
@@ -165,7 +167,7 @@ export default async function ListingDetailPage({ params }: Props) {
 
           {/* amenities */}
           <section className="space-y-4">
-            <h2 className="text-base font-semibold">房源设施</h2>
+            <h2 className="text-base font-semibold">{t("listing.amenities")}</h2>
             <AmenityList
               amenities={listing.amenities}
               cityLabel={listing.cityLabel}
@@ -177,7 +179,7 @@ export default async function ListingDetailPage({ params }: Props) {
 
           {/* location */}
           <section className="space-y-3">
-            <h2 className="text-base font-semibold">位置信息</h2>
+            <h2 className="text-base font-semibold">{t("listing.location")}</h2>
             <div className="text-muted-foreground space-y-1 text-sm">
               <p>
                 {listing.cityLabel} · {listing.location}
@@ -189,14 +191,17 @@ export default async function ListingDetailPage({ params }: Props) {
               label={listing.location}
             />
             <p className="text-muted-foreground text-xs tabular-nums">
-              经纬度 {listing.latitude.toFixed(4)}, {listing.longitude.toFixed(4)} ·
-              出于隐私考虑，地图显示的是街区位置而非门牌号
+              {t("listing.coordinates", {
+                lat: listing.latitude.toFixed(4),
+                lng: listing.longitude.toFixed(4),
+              })}{" "}
+              · {t("listing.locationPrivacy")}
             </p>
           </section>
 
           {/* house rules */}
           <section className="space-y-3">
-            <h2 className="text-base font-semibold">入住须知</h2>
+            <h2 className="text-base font-semibold">{t("houseRules.title")}</h2>
             <HouseRulesPanel rules={listing.houseRules} title={listing.title} variant="inline" />
           </section>
 
@@ -205,7 +210,7 @@ export default async function ListingDetailPage({ params }: Props) {
             <>
               <Separator />
               <section className="space-y-3">
-                <h2 className="text-base font-semibold">当地天气</h2>
+                <h2 className="text-base font-semibold">{t("weather.title")}</h2>
                 <WeatherCard weather={weather} />
               </section>
             </>

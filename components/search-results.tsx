@@ -27,11 +27,14 @@ import { formatDateShort } from "@/lib/format";
 import { buildSearchQuery, countActiveFilters, parseSearchParams } from "@/lib/search-params";
 import { useSearchDraftStore } from "@/lib/store";
 import type { ListingSearchInput, SortOption } from "@/types";
-import { PROPERTY_TYPE_LABELS, SORT_LABELS, SORT_OPTIONS } from "@/types";
+import { useT } from "@/components/locale-provider";
+import { propertyTypeLabel, sortLabel } from "@/lib/i18n/labels";
+import { SORT_OPTIONS } from "@/types";
 
 export function SearchResults() {
   const router = useRouter();
   const pathname = usePathname();
+  const t = useT();
   const urlParams = useSearchParams();
   const setDraft = useSearchDraftStore((state) => state.setDraft);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -87,17 +90,19 @@ export function SearchResults() {
     });
   }
   if (criteria.guests) {
-    chips.push({ label: `${criteria.guests} 位房客`, onRemove: () => updateCriteria({ guests: undefined }) });
+    chips.push({ label: t("searchResults.guestsChip", { count: criteria.guests }), onRemove: () => updateCriteria({ guests: undefined }) });
   }
   if (criteria.priceMin !== undefined || criteria.priceMax !== undefined) {
     chips.push({
-      label: `¥${criteria.priceMin ?? 0} – ¥${criteria.priceMax ?? "不限"}`,
+      label: criteria.priceMax
+        ? t("searchResults.priceChip", { min: criteria.priceMin ?? 0, max: criteria.priceMax })
+        : t("searchResults.priceChipAny", { min: criteria.priceMin ?? 0 }),
       onRemove: () => updateCriteria({ priceMin: undefined, priceMax: undefined }),
     });
   }
   if (criteria.propertyType) {
     chips.push({
-      label: PROPERTY_TYPE_LABELS[criteria.propertyType],
+      label: propertyTypeLabel(t, criteria.propertyType),
       onRemove: () => updateCriteria({ propertyType: undefined }),
     });
   }
@@ -157,11 +162,11 @@ export function SearchResults() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <h1 className="truncate text-lg font-semibold tracking-tight">
-                {criteria.location ? `${criteria.location} 的房源` : "全部房源"}
+                {criteria.location ? t("searchResults.titleIn", { city: criteria.location }) : t("searchResults.titleAll")}
               </h1>
               <p className="text-muted-foreground mt-0.5 text-sm">
-                {isLoading ? "正在搜索…" : `共找到 ${total} 套房源`}
-                {criteria.checkIn && criteria.checkOut ? "（已按可订日期筛选）" : ""}
+                {isLoading ? t("searchResults.searching") : t("searchResults.found", { count: total })}
+                {criteria.checkIn && criteria.checkOut ? t("searchResults.dateFiltered") : ""}
               </p>
             </div>
 
@@ -171,7 +176,7 @@ export function SearchResults() {
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2 lg:hidden">
                     <SlidersHorizontal className="size-4" />
-                    筛选
+                    {t("searchResults.filterTrigger")}
                     {activeCount > 0 ? (
                       <Badge className="ml-0.5 size-5 justify-center rounded-full p-0 text-[10px]">
                         {activeCount}
@@ -180,7 +185,7 @@ export function SearchResults() {
                   </Button>
                 </SheetTrigger>
                 <SheetContent side="left" className="w-80 overflow-y-auto p-6">
-                  <SheetTitle className="sr-only">筛选条件</SheetTitle>
+                  <SheetTitle className="sr-only">{t("filters.title")}</SheetTitle>
                   <FilterPanel value={criteria} onChange={updateCriteria} onReset={resetFilters} />
                 </SheetContent>
               </Sheet>
@@ -195,7 +200,7 @@ export function SearchResults() {
                 <SelectContent>
                   {SORT_OPTIONS.map((option) => (
                     <SelectItem key={option} value={option}>
-                      {SORT_LABELS[option]}
+                      {sortLabel(t, option)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -218,15 +223,15 @@ export function SearchResults() {
                 </button>
               ))}
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={resetFilters}>
-                清除全部
+                {t("searchResults.clearAll")}
               </Button>
             </div>
           ) : null}
 
           {isError ? (
             <ErrorState
-              title="搜索失败"
-              description="无法获取房源列表，请检查数据库连接后重试。"
+              title={t("searchResults.loadFailedTitle")}
+              description={t("searchResults.loadFailedBody")}
               onRetry={() => void refetch()}
             />
           ) : isLoading ? (
@@ -234,11 +239,11 @@ export function SearchResults() {
           ) : items.length === 0 ? (
             <EmptyState
               icon={Search}
-              title="没有找到符合条件的房源"
-              description="试试放宽价格区间、减少筛选条件，或者换一个目的地。"
+              title={t("searchResults.noResults")}
+              description={t("searchResults.noResultsHint")}
               action={
                 <Button variant="outline" onClick={resetFilters}>
-                  清除全部筛选
+                  {t("searchResults.clearAllFilters")}
                 </Button>
               }
             />
@@ -264,7 +269,7 @@ export function SearchResults() {
                     className="gap-1"
                   >
                     <ChevronLeft className="size-4" />
-                    上一页
+                    {t("searchResults.prev")}
                   </Button>
                   <span className="text-muted-foreground px-2 text-sm tabular-nums">
                     {page} / {totalPages}
@@ -276,7 +281,7 @@ export function SearchResults() {
                     onClick={() => updateCriteria({ page: page + 1 }, false)}
                     className="gap-1"
                   >
-                    下一页
+                    {t("searchResults.next")}
                     <ChevronRight className="size-4" />
                   </Button>
                 </div>
@@ -287,7 +292,7 @@ export function SearchResults() {
           {criteria.location ? (
             <p className="text-muted-foreground flex items-center gap-1.5 pt-2 text-xs">
               <MapPin className="size-3.5" />
-              提示：也可以直接让右下角的 AI 助手用一句话帮你找房
+              {t("searchResults.aiHint")}
             </p>
           ) : null}
         </div>

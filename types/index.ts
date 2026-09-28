@@ -345,7 +345,14 @@ export type CityWeather = {
   timezone: string;
   current: WeatherCurrent;
   forecast: WeatherDay[];
+  /** Prose advice in the reference language, kept for the API and the Agent. */
   advice: string;
+  /**
+   * The same advice as translation keys (`weather.tip.*`), so the UI can render
+   * it in the reader's language. `advice` alone cannot be translated — it is a
+   * sentence the server composed, not a value the client can look up.
+   */
+  adviceKeys: string[];
   fetchedAt: string;
   provider: string;
   /** True when served from the in-process cache. */

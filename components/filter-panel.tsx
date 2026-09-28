@@ -17,7 +17,8 @@ import { decreaseGuests, GUESTS_ANY, guestsLabel, increaseGuests } from "@/lib/g
 import { MAX_GUESTS } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type { ListingSearchInput, PropertyTypeValue } from "@/types";
-import { PROPERTY_TYPE_LABELS } from "@/types";
+import { useT } from "@/components/locale-provider";
+import { amenityLabel, propertyTypeLabel } from "@/lib/i18n/labels";
 
 const PROPERTY_TYPES: PropertyTypeValue[] = [
   "APARTMENT",
@@ -50,6 +51,7 @@ type Props = {
 };
 
 export function FilterPanel({ value, onChange, onReset, className }: Props) {
+  const t = useT();
   const { data, isLoading } = useQuery({
     queryKey: ["meta"],
     queryFn: api.getMeta,
@@ -105,17 +107,17 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
   return (
     <div className={cn("space-y-6", className)}>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">筛选条件</h2>
+        <h2 className="text-sm font-semibold">{t("filters.title")}</h2>
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={onReset}>
           <RotateCcw className="size-3.5" />
-          重置
+          {t("common.reset")}
         </Button>
       </div>
 
       {/* ---------------------------------------------------------- price */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-medium">每晚价格</Label>
+          <Label className="text-sm font-medium">{t("filters.price")}</Label>
           <span className="text-muted-foreground text-xs tabular-nums">
             {formatPrice(priceRange[0])} – {formatPrice(priceRange[1])}
             {priceRange[1] >= bounds.max ? "+" : ""}
@@ -144,7 +146,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
           <PriceInput
             key={`price-min-${priceRange[0]}`}
             id="price-min"
-            label="最低价"
+            label={t("filters.priceMin")}
             value={priceRange[0]}
             lower={bounds.min}
             upper={priceRange[1]}
@@ -154,7 +156,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
           <PriceInput
             key={`price-max-${priceRange[1]}`}
             id="price-max"
-            label="最高价"
+            label={t("filters.priceMax")}
             value={priceRange[1]}
             lower={priceRange[0]}
             upper={bounds.max}
@@ -172,7 +174,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
 
       {/* --------------------------------------------------------- guests */}
       <section className="space-y-3">
-        <Label className="text-sm font-medium">入住人数</Label>
+        <Label className="text-sm font-medium">{t("filters.guests")}</Label>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -184,7 +186,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
               onChange({ guests: next === GUESTS_ANY ? undefined : next });
             }}
             disabled={guests === GUESTS_ANY}
-            aria-label="减少人数"
+            aria-label={t("filters.decrease")}
           >
             <Minus className="size-3.5" />
           </Button>
@@ -196,7 +198,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
             className="size-8"
             onClick={() => onChange({ guests: increaseGuests(guests) })}
             disabled={guests >= MAX_GUESTS}
-            aria-label="增加人数"
+            aria-label={t("filters.increase")}
           >
             <Plus className="size-3.5" />
           </Button>
@@ -207,7 +209,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
 
       {/* -------------------------------------------------- property type */}
       <section className="space-y-3">
-        <Label className="text-sm font-medium">房源类型</Label>
+        <Label className="text-sm font-medium">{t("filters.propertyType")}</Label>
         <div className="flex flex-wrap gap-2">
           {PROPERTY_TYPES.map((type) => {
             const active = value.propertyType === type;
@@ -223,7 +225,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
                     : "hover:border-primary/40 hover:bg-accent",
                 )}
               >
-                {PROPERTY_TYPE_LABELS[type]}
+                {propertyTypeLabel(t, type)}
               </button>
             );
           })}
@@ -234,7 +236,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
 
       {/* ------------------------------------------------------ amenities */}
       <section className="space-y-3">
-        <Label className="text-sm font-medium">设施与服务</Label>
+        <Label className="text-sm font-medium">{t("filters.amenities")}</Label>
         {isLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -256,7 +258,8 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
                     htmlFor={`amenity-${name}`}
                     className="cursor-pointer text-sm font-normal"
                   >
-                    {name}
+                    {/* The stored name is the filter value; only the label is translated. */}
+                    {amenityLabel(t, name)}
                   </Label>
                 </div>
               );

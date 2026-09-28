@@ -6,6 +6,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { SaveToWishlistDialog } from "@/components/save-to-wishlist-dialog";
+import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { cn } from "@/lib/utils";
 import { useSavedStore } from "@/lib/store";
@@ -20,6 +21,7 @@ type Props = {
 
 export function FavoriteButton({ listingId, listingTitle, variant = "overlay", className }: Props) {
   const { user, isLoading } = useSession();
+  const t = useT();
   const saved = useSavedStore((state) => state.ids.has(listingId));
   const [open, setOpen] = useState(false);
   const router = useRouter();
@@ -50,7 +52,7 @@ export function FavoriteButton({ listingId, listingTitle, variant = "overlay", c
       <button
         type="button"
         onClick={handleClick}
-        aria-label={saved ? "管理收藏" : "收藏房源"}
+        aria-label={saved ? t("listing.manageSave") : t("listing.save")}
         aria-pressed={saved}
         className={cn(
           "group/heart inline-flex items-center justify-center transition-all active:scale-90",

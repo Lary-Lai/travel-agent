@@ -263,11 +263,107 @@ export const zhCN = {
 
   weather: {
     title: "当地天气",
+    current: "当前天气",
     forecast: "未来 5 天",
     humidity: "湿度",
     wind: "风速",
     feelsLike: "体感",
     provider: "数据来自 Open-Meteo",
+    feelsLikeShort: "体感 {temp}°",
+    kind: {
+      clear: "晴",
+      mostlyClear: "大部晴朗",
+      partlyCloudy: "多云",
+      overcast: "阴",
+      fog: "有雾",
+      drizzle: "毛毛雨",
+      rain: "雨",
+      freezingRain: "冻雨",
+      snow: "雪",
+      showers: "阵雨",
+      snowShowers: "阵雪",
+      thunderstorm: "雷阵雨",
+      unknown: "未知",
+    },
+    tip: {
+      umbrella: "记得带伞",
+      slippery: "注意保暖防滑",
+      cold: "气温偏低，建议厚外套",
+      hot: "天气炎热，注意补水",
+      windy: "风力较大",
+      comfortable: "天气舒适，适合外出游玩",
+      okay: "天气尚可，适合出行",
+    },
+    day: {
+      today: "今天",
+      tomorrow: "明天",
+      sun: "周日",
+      mon: "周一",
+      tue: "周二",
+      wed: "周三",
+      thu: "周四",
+      fri: "周五",
+      sat: "周六",
+    },
+  },
+
+  /**
+   * Amenity labels, keyed by a slug. The mapping from the stored name (which is
+   * the Chinese string in `lib/amenities.ts`) to these slugs lives in that same
+   * module, and a test asserts the two sets match — so adding an amenity without
+   * a label fails the build rather than rendering an untranslated name.
+   */
+  amenities: {
+    wifi: "无线网络",
+    kitchen: "厨房",
+    airConditioning: "空调",
+    heating: "暖气",
+    washer: "洗衣机",
+    tv: "电视",
+    workspace: "专用办公区",
+    iron: "熨斗",
+    hairDryer: "吹风机",
+    hotWater: "热水",
+    bathtub: "浴缸",
+    pool: "游泳池",
+    gym: "健身房",
+    balcony: "阳台",
+    garden: "花园",
+    bbq: "烧烤设备",
+    freeParking: "免费停车",
+    elevator: "电梯",
+    nearSubway: "地铁附近",
+    breakfast: "含早餐",
+    selfCheckIn: "自助入住",
+    petsAllowed: "可带宠物",
+    longTermStays: "长租可议",
+    crib: "婴儿床",
+    smokeAlarm: "烟雾报警器",
+    carbonMonoxideAlarm: "一氧化碳报警器",
+  },
+
+  searchResults: {
+    titleIn: "{city}的房源",
+    titleAll: "全部房源",
+    found: "共找到 {count} 套房源",
+    searching: "正在搜索…",
+    dateFiltered: "（已按可订日期筛选）",
+    clearAll: "清除全部",
+    clearAllFilters: "清除全部筛选",
+    removeFilter: "移除筛选条件 {name}",
+    sortLabel: "排序方式",
+    activeFilters: "已选筛选",
+    filterTrigger: "筛选",
+    guestsChip: "{count} 位房客",
+    priceChip: "¥{min} – ¥{max}",
+    priceChipAny: "¥{min} 以上",
+    loadFailedTitle: "搜索失败",
+    loadFailedBody: "无法获取房源列表，请检查数据库连接后重试。",
+    noResults: "没有找到符合条件的房源",
+    noResultsHint: "试试放宽价格区间、减少筛选条件，或者换一个目的地。",
+    prev: "上一页",
+    next: "下一页",
+    aiHint: "提示：也可以直接让右下角的 AI 助手用一句话帮你找房",
   },
 
   footer: {
@@ -292,20 +388,36 @@ export const zhCN = {
     send: "发送",
     thinking: "思考中…",
     loginHint: "登录后可以使用收藏类工具",
+    promoTitle: "用一句话说清需求，剩下的交给 AI",
+    promoBody:
+      "Agent 会调用真实的工具：查询 PostgreSQL、比较房源、写入心愿单。它不是聊天机器人，而是真正参与业务流程的一环。",
+    promoStart: "开始对话",
+    promoExamples: "看看它能做什么",
+    exampleSearch: "自然语言搜索",
+    exampleSearchPrompt: "国庆想去东京玩 5 天，4 个人，每晚预算 800 元左右，希望离地铁近一点。",
+    exampleRecommend: "AI 智能推荐",
+    exampleRecommendPrompt: "我和三个朋友去东京，预算每晚 800 元，希望交通方便，帮我选三个。",
+    exampleCompare: "房源对比",
+    exampleComparePrompt: "帮我比较刚才这几个房源，哪个更适合四个人？",
+    exampleWishlist: "操作心愿单",
+    exampleWishlistPrompt: "把刚才推荐的第一个房源加入「东京旅行」心愿单。",
   },
 } as const;
 
 /**
  * The dictionary *shape*: the same key tree as zh-CN, but every leaf widened to
- * `string`.
+ * `string`, recursively.
  *
  * `typeof zhCN` without this would carry literal types (`"搜索"`), so no
  * translation could ever satisfy it. Widening keeps the two properties that
  * matter: a locale missing a key is a compile error, and a locale with an extra
  * key is too.
+ *
+ * The recursion is required — a one-level mapping breaks as soon as a namespace
+ * nests (`weather.kind.*`), because the intermediate object is not a `string`.
  */
-export type Dictionary = {
-  [K in keyof typeof zhCN]: {
-    [P in keyof (typeof zhCN)[K]]: string;
-  };
+type DeepString<T> = {
+  [K in keyof T]: T[K] extends string ? string : DeepString<T[K]>;
 };
+
+export type Dictionary = DeepString<typeof zhCN>;

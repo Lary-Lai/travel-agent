@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Languages } from "lucide-react";
+import { Check, Languages, Loader2 } from "lucide-react";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
  * mark and `aria-checked` make the active one unambiguous.
  */
 export function LocaleSwitcher({ className }: { className?: string }) {
-  const { locale, setLocale, t } = useLocale();
+  const { locale, setLocale, t, isSwitching } = useLocale();
 
   return (
     <DropdownMenu>
@@ -33,8 +33,13 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           size="sm"
           className={cn("gap-1.5 px-2", className)}
           aria-label={t("locale.label")}
+          disabled={isSwitching}
         >
-          <Languages className="size-4" />
+          {isSwitching ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Languages className="size-4" />
+          )}
           <span className="text-xs font-medium">{LOCALE_META[locale].nativeLabel}</span>
         </Button>
       </DropdownMenuTrigger>
