@@ -8,6 +8,7 @@ import type { DateRange } from "react-day-picker";
 import { toast } from "sonner";
 
 import { HouseRulesPanel } from "@/components/house-rules-panel";
+import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -27,6 +28,7 @@ import type { ListingDetail } from "@/types";
  */
 export function BookingWidget({ listing }: { listing: ListingDetail }) {
   const router = useRouter();
+  const t = useT();
   const { user, isLoading: sessionLoading } = useSession();
 
   const [range, setRange] = useState<DateRange | undefined>();
@@ -55,14 +57,17 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
   const booking = useMutation({
     mutationFn: () => api.createBooking({ listingId: listing.id, checkIn, checkOut, guests }),
     onSuccess: (result) => {
-      toast.success("房源已为你保留，请完成支付", {
-        description: `${result.booking.nights} 晚 · 待支付 ${formatCurrency(result.booking.totalPrice)}`,
+      toast.success(t("booking.reserved"), {
+        description: t("booking.reservedDetail", {
+          nights: t("common.nights", { count: result.booking.nights }),
+          price: formatCurrency(result.booking.totalPrice),
+        }),
       });
       // Hand off to checkout; the booking stays PENDING until it is paid.
       router.push(`/payment/${result.booking.id}`);
     },
     onError: (error) => {
-      const message = error instanceof ApiClientError ? error.message : "预订失败，请稍后重试";
+      const message = error instanceof ApiClientError ? error.message : t("booking.bookFailed");
       setErrorMessage(message);
       toast.error(message);
     },
@@ -72,17 +77,17 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
     setErrorMessage(null);
 
     if (!sessionLoading && !user) {
-      toast.error("请先登录后再预订");
+      toast.error(t("booking.loginFirst"));
       router.push(`/login?redirect=${encodeURIComponent(`/listings/${listing.id}`)}`);
       return;
     }
 
     if (!checkIn || !checkOut || nights < 1) {
-      setErrorMessage("请先选择入住与退房日期");
+      setErrorMessage(t("booking.pickDatesFirst"));
       return;
     }
     if (guests > listing.maxGuests) {
-      setErrorMessage(`该房源最多可住 ${listing.maxGuests} 人`);
+      setErrorMessage(t("booking.tooManyGuests", { max: listing.maxGuests }));
       return;
     }
 
@@ -94,12 +99,12 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
       <div className="flex items-baseline justify-between">
         <p className="text-xl font-semibold">
           {formatCurrency(listing.pricePerNight)}
-          <span className="text-muted-foreground text-sm font-normal"> / 晚</span>
+          <span className="text-muted-foreground text-sm font-normal"> {t("common.perNight")}</span>
         </p>
         <span className="flex items-center gap-1 text-sm">
           <Star className="size-3.5 fill-current" />
           {listing.rating.toFixed(1)}
-          <span className="text-muted-foreground">· {listing.reviewCount} 条评价</span>
+          <span className="text-muted-foreground">· {t("common.reviews", { count: listing.reviewCount })}</span>
         </span>
       </div>
 
@@ -114,15 +119,15 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
               <CalendarIcon className="text-muted-foreground size-4 shrink-0" />
               <span className="grid flex-1 grid-cols-2 gap-2 text-sm">
                 <span>
-                  <span className="text-muted-foreground block text-[11px] font-semibold">入住</span>
+                  <span className="text-muted-foreground block text-[11px] font-semibold">{t("booking.checkIn")}</span>
                   <span className={checkIn ? "" : "text-muted-foreground"}>
-                    {checkIn ? formatDateShort(checkIn) : "选择日期"}
+                    {checkIn ? formatDateShort(checkIn) : t("booking.selectDates")}
                   </span>
                 </span>
                 <span>
-                  <span className="text-muted-foreground block text-[11px] font-semibold">退房</span>
+                  <span className="text-muted-foreground block text-[11px] font-semibold">{t("booking.checkOut")}</span>
                   <span className={checkOut ? "" : "text-muted-foreground"}>
-                    {checkOut ? formatDateShort(checkOut) : "选择日期"}
+                    {checkOut ? formatDateShort(checkOut) : t("booking.selectDates")}
                   </span>
                 </span>
               </span>
@@ -140,7 +145,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
             />
             <div className="flex items-center justify-between gap-2 border-t p-3">
               <span className="text-muted-foreground text-xs">
-                {nights > 0 ? `共 ${nights} 晚` : "请选择入住与退房日期"}
+                {nights > 0 ? t("booking.totalNights", { count: nights }) : t("booking.pickDatesFirst")}
               </span>
               <Button
                 size="sm"
@@ -148,7 +153,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
                 onClick={() => setDatesOpen(false)}
                 type="button"
               >
-                确定
+                {t("common.confirm")}
               </Button>
             </div>
           </PopoverContent>
@@ -159,9 +164,9 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
         {/* Guests */}
         <div className="flex items-center justify-between px-4 py-3">
           <div>
-            <p className="text-[11px] font-semibold">房客</p>
+            <p className="text-[11px] font-semibold">{t("booking.guests")}</p>
             <p className="text-sm">
-              {guests} 位 · 最多 {listing.maxGuests} 人
+              {t("booking.guestsMax", { count: guests, max: listing.maxGuests })}
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -172,7 +177,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
               className="size-8"
               onClick={() => setGuests((value) => Math.max(1, value - 1))}
               disabled={guests <= 1}
-              aria-label="减少人数"
+              aria-label={t("filters.decrease")}
             >
               <Minus className="size-3.5" />
             </Button>
@@ -183,7 +188,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
               className="size-8"
               onClick={() => setGuests((value) => Math.min(listing.maxGuests, value + 1))}
               disabled={guests >= listing.maxGuests}
-              aria-label="增加人数"
+              aria-label={t("filters.increase")}
             >
               <Plus className="size-3.5" />
             </Button>
@@ -200,12 +205,12 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
         {booking.isPending ? (
           <>
             <Loader2 className="size-4 animate-spin" />
-            正在预订…
+            {t("booking.reserving")}
           </>
         ) : nights > 0 ? (
-          "确认预订"
+          t("booking.reserve")
         ) : (
-          "选择日期后预订"
+          t("booking.reserveWithDates")
         )}
       </Button>
 
@@ -213,7 +218,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
         <p className="text-destructive mt-2 text-center text-xs">{errorMessage}</p>
       ) : (
         <p className="text-muted-foreground mt-2 text-center text-xs">
-          演示项目，不会产生真实扣款
+          {t("booking.demoNotice")}
         </p>
       )}
 
@@ -222,21 +227,21 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
         <div className="mt-5 space-y-2.5 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground underline decoration-dotted">
-              {formatCurrency(listing.pricePerNight)} × {nights} 晚
+              {t("booking.roomLine", { price: formatCurrency(listing.pricePerNight), nights })}
             </span>
             <span className="tabular-nums">{formatCurrency(price.roomPrice)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground underline decoration-dotted">清洁费</span>
+            <span className="text-muted-foreground underline decoration-dotted">{t("booking.cleaningFee")}</span>
             <span className="tabular-nums">{formatCurrency(price.cleaningFee)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground underline decoration-dotted">服务费</span>
+            <span className="text-muted-foreground underline decoration-dotted">{t("booking.serviceFee")}</span>
             <span className="tabular-nums">{formatCurrency(price.serviceFee)}</span>
           </div>
           <Separator />
           <div className="flex justify-between font-semibold">
-            <span>总价</span>
+            <span>{t("booking.total")}</span>
             <span className="tabular-nums">{formatCurrency(price.totalPrice)}</span>
           </div>
         </div>
@@ -244,7 +249,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
 
       <p className="text-muted-foreground mt-4 flex items-center justify-center gap-1.5 text-xs">
         <ShieldCheck className="size-3.5" />
-        价格由服务端重新计算，保证安全
+        {t("booking.serverPriced")}
       </p>
 
       {/* Check-in logistics live here so they are reachable at the moment of

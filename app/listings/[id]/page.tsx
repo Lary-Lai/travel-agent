@@ -24,7 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { WeatherCard } from "@/components/weather-card";
-import { formatCount, formatDate, formatRating } from "@/lib/format";
+import { formatDate, formatRating } from "@/lib/format";
 import { ApiError } from "@/lib/http";
 import { getTranslator } from "@/lib/i18n/server";
 import { getListingDetail } from "@/server/listing.service";
@@ -41,7 +41,9 @@ export async function generateMetadata({ params }: Props) {
       description: listing.description.slice(0, 140),
     };
   } catch {
-    return { title: "房源详情" };
+    // A separate function, so it needs its own translator.
+    const { t } = await getTranslator();
+    return { title: t("listing.detailTitle") };
   }
 }
 
@@ -64,10 +66,10 @@ export default async function ListingDetailPage({ params }: Props) {
   const weather = await getCityWeather(listing.city);
 
   const highlights = [
-    { icon: Users, label: `可住 ${listing.maxGuests} 人` },
-    { icon: Building2, label: `${listing.bedrooms} 间卧室` },
-    { icon: BedDouble, label: `${listing.beds} 张床` },
-    { icon: Bath, label: `${listing.bathrooms} 间卫生间` },
+    { icon: Users, label: t("listing.maxGuests", { count: listing.maxGuests }) },
+    { icon: Building2, label: t("listing.bedrooms", { count: listing.bedrooms }) },
+    { icon: BedDouble, label: t("listing.beds", { count: listing.beds }) },
+    { icon: Bath, label: t("listing.bathrooms", { count: listing.bathrooms }) },
   ];
 
   return (
@@ -77,7 +79,7 @@ export default async function ListingDetailPage({ params }: Props) {
         className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-1.5 text-sm transition-colors"
       >
         <ArrowLeft className="size-4" />
-        返回搜索结果
+        {t("listing.backToResults")}
       </Link>
 
       {/* ------------------------------------------------------------- header */}
@@ -88,7 +90,7 @@ export default async function ListingDetailPage({ params }: Props) {
             <span className="flex items-center gap-1">
               <Star className="size-3.5 fill-current" />
               <span className="text-foreground font-medium">{formatRating(listing.rating)}</span>
-              <span>· {formatCount(listing.reviewCount)} 条评价</span>
+              <span>· {t("common.reviews", { count: listing.reviewCount })}</span>
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="size-3.5" />
@@ -108,7 +110,7 @@ export default async function ListingDetailPage({ params }: Props) {
           <button
             type="button"
             className="hover:bg-accent text-muted-foreground inline-flex size-9 items-center justify-center rounded-full border transition-colors"
-            aria-label="分享"
+            aria-label={t("listing.share")}
           >
             <Share2 className="size-4" />
           </button>
@@ -131,9 +133,12 @@ export default async function ListingDetailPage({ params }: Props) {
                 <AvatarFallback>{listing.host.name.slice(0, 1)}</AvatarFallback>
               </Avatar>
               <div>
-                <p className="text-sm font-medium">房东 · {listing.host.name}</p>
+                <p className="text-sm font-medium">{t("listing.host")} · {listing.host.name}</p>
                 <p className="text-muted-foreground text-xs">
-                  共 {listing.host.listingCount} 套房源 · 加入于 {formatDate(listing.host.joinedAt)}
+                  {t("listing.hostStats", {
+                    count: listing.host.listingCount,
+                    date: formatDate(listing.host.joinedAt),
+                  })}
                 </p>
               </div>
             </div>
@@ -159,7 +164,7 @@ export default async function ListingDetailPage({ params }: Props) {
             <p className="text-muted-foreground text-sm leading-relaxed">{listing.description}</p>
             <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
               <CalendarDays className="size-3.5" />
-              发布于 {formatDate(listing.createdAt)}
+              {t("listing.published", { date: formatDate(listing.createdAt) })}
             </p>
           </section>
 
