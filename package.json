@@ -17,6 +17,7 @@
     "db:reset": "node scripts/db.mjs reset",
     "db:psql": "node scripts/db.mjs sql",
     "db:ping": "node scripts/db.mjs ping",
+    "db:doctor": "node scripts/db.mjs doctor",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",

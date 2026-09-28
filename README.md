@@ -329,7 +329,43 @@ npm run dev
 双击 start.cmd
 ```
 
-它会先启动数据库，再前台运行 dev server，并打印访问地址与演示账号。
+它会**逐步校验**，任何一步失败都会停下来并打印**该跑哪条命令去修**，而不再是静默地卡住：
+
+```
+ [1/3] Database (embedded PostgreSQL, port 55432) ...
+       database is accepting connections.
+ [2/3] Web server ...
+ [3/3] Waiting for the app to answer on http://localhost:3001 ...
+  waiting.
+  server responded after 2 attempt(s) — HTTP 200
+
+ ============================================================
+   Ready:  http://localhost:3001
+   Login:  demo@travel-agent.dev / Demo1234
+ ============================================================
+```
+
+结束后的状态：
+
+| 窗口 | 内容 |
+| --- | --- |
+| `AI Travel Agent (web)` | Next.js dev server（**关掉它就停止网站**） |
+| 你双击的那个窗口 | 启动结果与错误诊断，可以安全关闭 |
+| PostgreSQL | 以 detached 方式运行在 55432，用 `npm run db:stop` 停止 |
+
+三条设计上的取舍：
+
+- **启动成功后才打开浏览器**。以前是先打印地址、让浏览器去撞 `ERR_CONNECTION_REFUSED`；现在 `scripts/wait-for-server.mjs` 会真的轮询 `/api/meta` 直到拿到 **HTTP 200** 才打开（Next 首次编译通常需要几秒，冷启动更久，所以期间会每秒打一个点表示在进展而不是卡死）。
+- **数据库用「真连一次」来判定，而不是看 `pg_ctl status`**。`pg_ctl status` 只检查 postmaster.pid 里的 PID 还活着，所以对一个"进程在、但已经无法派生 backend"的 postmaster 依然会报 running。启动前改用一次真实的 `select 1` 往返 + `db:ping` 复核。
+- **不再有无限等待**。`pg_ctl` 的每一次调用都有超时（启动 75s、停止 60s、状态 20s、initdb 180s），随后还有 30s 的真实连接等待。之前正是无超时的 `spawnSync` 让脚本永远停在 "starting PostgreSQL ..."。
+
+出问题时可以先手动跑一次体检：
+
+```bash
+npm run db:doctor
+```
+
+它会逐项检查：二进制是否存在、集群是否初始化、`postmaster.pid` 是否已失效、**数据库是否真的能连上**、`travel_agent` 库里有没有数据、以及 3001 端口是否有服务在应答。最后给出 `no problems found` 或列出每条 FAIL 对应的修复命令。
 
 #### ⚠️ 请在你自己的终端里启动服务
 
@@ -373,6 +409,7 @@ npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
 | `npm run db:start` / `db:stop` / `db:status` | 启动 / 停止 / 查看嵌入式 PostgreSQL |
 | `npm run db:serve` | 前台守护模式启动数据库（父进程常驻，适合受进程管理器约束的环境） |
 | `npm run db:ping` | 测试数据库连通性 |
+| `npm run db:doctor` | 一键体检：二进制 / 集群 / 连接 / 数据 / 3001 端口逐项检查并给出修复命令 |
 | `npm run db:psql -- "select 1"` | 执行一条 SQL（注意：该发行包不含 psql.exe，此命令走 `pg` 驱动） |
 | `npm run db:reset` | **删除**全部本地数据 |
 | `npm run db:seed` | 重新生成演示数据 |
@@ -523,6 +560,7 @@ travel-agent/
 ├── scripts/                      # db.mjs / verify-db.ts / smoke-api.mjs / verify-tools.ts
 │                                 # smoke-agent.mjs / verify-ai.mjs / test-vision.mjs / inspect.ts
 │                                 # fetch-listing-images.mjs / diagnose-images.mjs / bench-images.mjs
+│                                 # wait-for-server.mjs（start.cmd 的就绪轮询）
 ├── public/
 │   ├── avatars/                  # 12 个内置预设头像 SVG（由 make-avatars.mjs 生成）
 │   └── listings/                 # 45 张房源照片 + manifest.json（images:fetch 下载）
@@ -1035,6 +1073,44 @@ Barcelona→ 18  cities: Barcelona      Spain → 18  cities: Barcelona
 
 这个 bug 在只有 6 座城市、且每国只有一座城市时**完全看不出来**（伦敦、巴黎、纽约、首尔、新加坡各自独占一个国家，只有东京+京都同属日本才暴露）——是"增加数据量"这个动作把它逼出来的。
 
+**27. 双击 `start.cmd` 后浏览器一直"拒绝连接"**
+
+用户反馈双击启动后 `localhost:3001` 仍然 `ERR_CONNECTION_REFUSED`。截图显示终端停在：
+
+```
+[1/2] Starting PostgreSQL (embedded, port 55432) ...
+> node scripts/db.mjs start
+[db] starting PostgreSQL on 127.0.0.1:55432 ...
+_
+```
+
+也就是说**它卡在数据库这一步，从来没走到启动 Web 服务那一步**。用 `db:doctor` 一看就清楚了：
+
+```
+OK    database accepts connections — 127.0.0.1:55432
+OK    database "travel_agent" has tables — 180 listings / 22 users
+FAIL  web server — nothing answering on port 3001 (run: npm run dev)
+```
+
+数据库是好的，**Web 服务根本没起来**——于是浏览器拒绝连接。
+
+三个真正的缺陷：
+
+1. **`isRunning()` 只信 `pg_ctl status`**。它只检查 `postmaster.pid` 里的 PID 还活着，所以对一个"进程在、但已无法派生 backend"的 postmaster 依然报 running（也就是 README 里早写过的 `0xC0000142` 那种状态）。判断"数据库能不能用"必须靠**一次真实的 `select 1` 往返**。
+2. **有无限等待**。`scripts/db.mjs` 里所有 `spawnSync` 都没有 `timeout`。`pg_ctl status` / `start` / `stop` 任何一次卡住，脚本就永远停在那里，用户只看到一个光标。
+3. **失败即静默**。数据库没起来，脚本就不再往下走，既不告诉用户 Web 服务没启动，也不说为什么；浏览器那句"拒绝连接"是用户能得到的唯一线索。
+
+修法：
+
+- `run()` 强制带超时（db:start 时给 `pg_ctl` 75s、stop 60s、status 20s、initdb 180s），并用 `timedOut` 区分"超时被杀"与"正常失败"。
+- 新增 `probe()` / `waitUntilReachable()`：**用真实连接**判断可用性，启动后再等最多 30s 拿到一次成功往返，否则报错退出。
+- `start()` 现在能识别"端口在听但连不上"这一具体状态，并直接打印修复步骤（`npm run db:stop` → `npm run db:serve`）。
+- 新增 `npm run db:doctor`：逐项体检并输出每条 FAIL 对应的修复命令。
+- 新增 `scripts/wait-for-server.mjs`：轮询 `/api/meta` 直到 **HTTP 200**，每秒打一个点。`start.cmd` 用它**确认网站真的能访问之后才打开浏览器、才打印 Ready**。
+- 重写 `start.cmd`：三步进度 + `db:ping` 复核 + 就绪轮询；Web 服务放到独立窗口（关掉它即停止网站，启动窗口可安全关闭）；任何一步失败都会 `pause` 并自动跑一次 `db:doctor`，而不是让窗口一闪而过。
+
+顺带说明为什么 `pg_ctl status` 不能被当作真相——这也是这次最值得记的一点：**"进程还在"和"服务可用"是两件事**。凡是做健康检查，就要检查那个真正被依赖的能力（能不能连上、能不能查），而不是检查它的代理指标（进程在不在、端口听没听）。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -1067,6 +1143,10 @@ Barcelona→ 18  cities: Barcelona      Spain → 18  cities: Barcelona
 | 首页层次感用分层低对比渐变，而不是重阴影 | 用 `color-mix()` 从主题 token 混出渐变，浅色/深色自动各自成立、不必写两份规则；对比度刻意压低，做到"感觉得到但看不出来"，仍然是简约风 |
 | 深色模式的搜索框抬到 `--secondary` 而非 `--card` | Hero 的暖色光晕让卡片背后的区域比中性背景更亮，只抬一档实测对比度仅 1.07（几乎看不见），抬两档后达到 1.255 |
 | 城市名与国家名分开处理 | 按城市查询时不应连带返回同国其他城市；只有输入确实指向国家（`Japan` / `日本`）时才放宽到全国 |
+| 健康检查连一次数据库，而不是看 `pg_ctl status` | `pg_ctl status` 只证明 PID 还活着，对一个无法派生 backend 的 postmaster 依然报 running。被依赖的能力是"能查询"，那就直接查一次 |
+| `db.mjs` 里每次 `pg_ctl` 调用都带超时 | 无超时的 `spawnSync` 会让 `start.cmd` 永远停在 "starting PostgreSQL ..."，用户只看到光标和一个拒绝连接的浏览器 |
+| `start.cmd` 确认 HTTP 200 之后才打开浏览器 | 先打印地址再让浏览器去撞 `ERR_CONNECTION_REFUSED`，是把"没启动成功"伪装成"地址打错了"；轮询到 200 再打开才是确定的 |
+| Web 服务放在独立窗口 | 启动窗口要腾出来做就绪检查与错误报告，而且独立窗口意味着关闭启动窗口不会连带把网站停掉 |
 | 头像用普通 `<img>` 而非 `next/image` | 用户可填任意图片 URL，走 `next/image` 需要把每个域名加进 `remotePatterns`，对用户自定义地址不现实 |
 | 嵌入式 PostgreSQL 而非 SQLite | 需求要求 PostgreSQL。真实 PG 才能用原生枚举、`@db.Date`、数组与完整事务语义；嵌入式方案无需管理员权限，`schema.prisma` 保持 `provider = "postgresql"` |
 | 自研 `jose` 会话而非 Auth.js | 见第二节说明；Agent 必须在服务端确定身份，自研链路更短更可审计 |
