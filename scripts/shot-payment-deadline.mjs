@@ -14,13 +14,41 @@
  * already installed, so no browser-automation package is needed.
  */
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 const BASE = process.argv[2] ?? "http://localhost:3001";
 const PORT = 9333;
-const CHROME = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+
+/**
+ * Any Chromium will do, and Chrome is not always where it first appears to be.
+ * `TA_CHROME` overrides the search for unusual installs.
+ */
+function findBrowser() {
+  const candidates = [
+    process.env.TA_CHROME,
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+    path.join(process.env.LOCALAPPDATA ?? "", "Google\\Chrome\\Application\\chrome.exe"),
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+  ].filter(Boolean);
+
+  const found = candidates.find((candidate) => existsSync(candidate));
+  if (!found) {
+    throw new Error(
+      `No Chrome/Edge found. Set TA_CHROME to the executable path.\nTried:\n  ${candidates.join("\n  ")}`,
+    );
+  }
+  return found;
+}
+
+const CHROME = findBrowser();
 /**
  * Throwaway browser state belongs in the system temp dir, not in `data/`.
  * Chrome unpacks its extensions there, and a profile inside the repo makes
