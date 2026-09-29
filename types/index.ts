@@ -343,6 +343,8 @@ export type SessionUserDto = {
   hobbies: string[];
   /** 已旅行地点 — the display case. */
   visitedPlaces: string[];
+  /** Who may open this profile at `/u/[id]`. Editable from the profile page. */
+  profileVisibility: ProfileVisibilityValue;
 };
 
 /** Uniform API envelope. */
@@ -405,3 +407,186 @@ export type ApiFailure = {
   error: { code: string; message: string; details?: unknown };
 };
 export type ApiResponse<T> = ApiSuccess<T> | ApiFailure;
+
+// --------------------------------------------------------------------- media
+
+/**
+ * A file stored by this app, served back from `/api/media/<name>`.
+ *
+ * Uploads land on disk under `data/uploads/` rather than `public/`: `public/` is
+ * snapshotted into the build, so a file written after `next build` would 404 in
+ * production, and user uploads would be mixed in with the repository's own
+ * assets.
+ */
+export type UploadedMediaDto = {
+  /** Same-origin path to render, e.g. `/api/media/avatar-3f2a1b.png`. */
+  url: string;
+  kind: UploadKindValue;
+  mimeType: string;
+  bytes: number;
+  width: number | null;
+  height: number | null;
+};
+
+export const UPLOAD_KINDS = ["avatar", "cover"] as const;
+export type UploadKindValue = (typeof UPLOAD_KINDS)[number];
+
+// -------------------------------------------------------------------- social
+
+export const PROFILE_VISIBILITIES = ["PUBLIC", "FRIENDS", "SELECTED", "PRIVATE"] as const;
+export type ProfileVisibilityValue = (typeof PROFILE_VISIBILITIES)[number];
+
+export const PROFILE_ACCESS_KINDS = ["ALLOW", "DENY"] as const;
+export type ProfileAccessKindValue = (typeof PROFILE_ACCESS_KINDS)[number];
+
+export const FRIENDSHIP_STATUSES = ["PENDING", "ACCEPTED"] as const;
+export type FriendshipStatusValue = (typeof FRIENDSHIP_STATUSES)[number];
+
+/** The minimum needed to render a person anywhere in the UI. */
+export type PublicUserBrief = {
+  id: string;
+  name: string;
+  avatar: string | null;
+};
+
+/**
+ * How the signed-in viewer relates to another user.
+ *
+ * `REQUEST_SENT` / `REQUEST_RECEIVED` are distinguished because the button that
+ * makes sense differs: "cancel my request" versus "accept theirs".
+ */
+export const FRIEND_RELATIONS = [
+  "SELF",
+  "FRIEND",
+  "REQUEST_SENT",
+  "REQUEST_RECEIVED",
+  "NONE",
+] as const;
+export type FriendRelationValue = (typeof FRIEND_RELATIONS)[number];
+
+/**
+ * Why the viewer can (or cannot) see a profile.
+ *
+ * Returned rather than a bare boolean so the UI can explain the denial instead
+ * of showing an empty page, and so the server's decision is testable without
+ * reading the rendered output.
+ */
+export const PROFILE_ACCESS_REASONS = [
+  "SELF",
+  "PUBLIC",
+  "FRIEND",
+  "ALLOWED",
+  "DENIED",
+  "FRIENDS_ONLY",
+  "SELECTED_ONLY",
+  "PRIVATE",
+] as const;
+export type ProfileAccessReason = (typeof PROFILE_ACCESS_REASONS)[number];
+
+export type PublicProfileDto = {
+  /** Always present: you navigated to this person, so their name is not a secret. */
+  user: PublicUserBrief;
+  /** The mode the owner chose. */
+  visibility: ProfileVisibilityValue;
+  canView: boolean;
+  access: ProfileAccessReason;
+  relation: FriendRelationValue;
+  /** The pending friendship row, so the UI can cancel/accept it in place. */
+  requestId: string | null;
+  mutualFriendCount: number;
+  /** Detailed sections, present only when `canView`. */
+  profile: {
+    coverPreset: string | null;
+    coverImage: string | null;
+    tags: string[];
+    hobbies: string[];
+    dreamDestinations: string[];
+    visitedPlaces: string[];
+    joinedAt: string;
+  } | null;
+  stats: { friends: number; posts: number } | null;
+};
+
+export type FriendDto = {
+  /** The friendship row id — what accept / remove operate on. */
+  friendshipId: string;
+  user: PublicUserBrief;
+  relation: FriendRelationValue;
+  status: FriendshipStatusValue;
+  /** For incoming requests, so the sender can be told apart from the recipient. */
+  direction: "INCOMING" | "OUTGOING";
+  createdAt: string;
+};
+
+export type FriendsPayload = {
+  friends: FriendDto[];
+  incoming: FriendDto[];
+  outgoing: FriendDto[];
+};
+
+export type ProfilePrivacyDto = {
+  visibility: ProfileVisibilityValue;
+  allow: PublicUserBrief[];
+  deny: PublicUserBrief[];
+};
+
+// --------------------------------------------------------------------- forum
+
+export type BoardDto = {
+  id: string;
+  slug: string;
+  /** Authored Chinese name / blurb — what the API and the Agent read. */
+  name: string;
+  description: string;
+  /** Per-locale overrides, same shape as `Listing.titleI18n`. */
+  nameI18n: Record<string, string> | null;
+  descriptionI18n: Record<string, string> | null;
+  icon: string | null;
+  emoji: string | null;
+  position: number;
+  postCount: number;
+  /** Most recent post or reply time, for "latest activity" sorting. */
+  latestAt: string | null;
+};
+
+export type PostAuthorDto = PublicUserBrief;
+
+export type PostSummaryDto = {
+  id: string;
+  boardSlug: string;
+  title: string;
+  /** First ~160 characters of the body, for list cards. */
+  excerpt: string;
+  city: string | null;
+  image: string | null;
+  pinned: boolean;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  author: PostAuthorDto;
+  isMine: boolean;
+};
+
+export type PostDetailDto = PostSummaryDto & { body: string; boardName: string };
+
+export type ReplyDto = {
+  id: string;
+  postId: string;
+  body: string;
+  createdAt: string;
+  author: PostAuthorDto;
+  isMine: boolean;
+};
+
+export type ForumPostsPayload = {
+  posts: PostSummaryDto[];
+  total: number;
+};
+
+export type PostDetailPayload = {
+  post: PostDetailDto;
+  replies: ReplyDto[];
+};
+
+export const FORUM_SORTS = ["latest", "new", "popular"] as const;
+export type ForumSortValue = (typeof FORUM_SORTS)[number];

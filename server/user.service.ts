@@ -5,7 +5,8 @@ import { presetAvatarFor, isPresetAvatar } from "../lib/avatars";
 import { prisma } from "../lib/db";
 import { badRequest, conflict, unauthorized } from "../lib/http";
 import { isCoverPreset, MAX_CHIPS, normaliseChips } from "../lib/profile-options";
-import type { SessionUserDto } from "../types";
+import { isUploadedMediaPath } from "../lib/uploads";
+import type { ProfileVisibilityValue, SessionUserDto } from "../types";
 
 /** bcrypt cost. 10 is the usual balance of safety and login latency. */
 const BCRYPT_ROUNDS = 10;
@@ -25,6 +26,7 @@ const userSelect = {
   dreamDestinations: true,
   hobbies: true,
   visitedPlaces: true,
+  profileVisibility: true,
 } as const;
 
 type SelectedUser = {
@@ -39,6 +41,7 @@ type SelectedUser = {
   dreamDestinations: string[];
   hobbies: string[];
   visitedPlaces: string[];
+  profileVisibility: ProfileVisibilityValue;
 };
 
 const toDto = (user: SelectedUser): SessionUserDto => ({
@@ -53,6 +56,7 @@ const toDto = (user: SelectedUser): SessionUserDto => ({
   dreamDestinations: user.dreamDestinations,
   hobbies: user.hobbies,
   visitedPlaces: user.visitedPlaces,
+  profileVisibility: user.profileVisibility,
 });
 
 export const normaliseEmail = (email: string) => email.trim().toLowerCase();
@@ -142,14 +146,23 @@ export async function updateProfile(
   // `undefined` means "the caller did not send this field" — leave the stored
   // value untouched. `null`/"" means "clear it". The editor saves in sections,
   // so a request that only edits hobbies must not wipe the banner.
+  //
+  // Three shapes are accepted: a bundled preset avatar, an uploaded file served
+  // from `/api/media/...`, or an absolute http(s) URL (a profile that was filled
+  // in before uploads existed still has to render).
   const avatar = input.avatar === undefined ? undefined : input.avatar?.trim() || null;
-  if (avatar && !isPresetAvatar(avatar) && !/^https?:\/\//i.test(avatar)) {
-    throw badRequest("头像地址必须是有效的图片链接，或选择内置预设头像");
+  if (
+    avatar &&
+    !isPresetAvatar(avatar) &&
+    !isUploadedMediaPath(avatar) &&
+    !/^https?:\/\//i.test(avatar)
+  ) {
+    throw badRequest("头像必须是内置预设、本地上传的图片，或有效的图片链接");
   }
 
   const coverImage = input.coverImage === undefined ? undefined : input.coverImage?.trim() || null;
-  if (coverImage && !/^https?:\/\//i.test(coverImage)) {
-    throw badRequest("背景图地址必须以 http:// 或 https:// 开头");
+  if (coverImage && !isUploadedMediaPath(coverImage) && !/^https?:\/\//i.test(coverImage)) {
+    throw badRequest("背景图必须是本地上传的图片，或以 http:// 或 https:// 开头的链接");
   }
 
   if (input.coverPreset && !isCoverPreset(input.coverPreset)) {

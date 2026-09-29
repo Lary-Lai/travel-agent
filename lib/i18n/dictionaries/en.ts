@@ -49,6 +49,8 @@ export const en = {
     search: "Search stays",
     wishlist: "Wishlist",
     trips: "Trips",
+    forum: "Community",
+    friends: "Friends",
     aiAgent: "AI assistant",
     aiAgentTitle: "AI stay assistant",
   },

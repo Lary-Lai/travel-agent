@@ -435,6 +435,423 @@ const REVIEW_WITH_SCORES = Object.entries(REVIEW_TEMPLATES).flatMap(([rating, co
   comments.map((comment) => ({ rating: Number(rating), comment })),
 );
 
+/**
+ * Forum boards (板块).
+ *
+ * `slug` is the stable identity — it is what the seed upserts on and what the UI
+ * puts in the URL (`/forum?board=ski`), so renaming a board's Chinese `name`
+ * never breaks a shared link. `name` / `description` are the authored Chinese
+ * values that the API and the Agent read; `nameI18n` / `descriptionI18n` are what
+ * the UI renders, exactly like `Listing.titleI18n`.
+ *
+ * `position` is the display order of the rail and is deliberately explicit
+ * rather than alphabetical: the first two boards are what most people come for.
+ */
+type BoardSeed = {
+  slug: string;
+  name: string;
+  description: string;
+  /** Lucide icon name, so the UI can render an icon where an emoji would not fit. */
+  icon: string;
+  emoji: string;
+  position: number;
+};
+
+const BOARDS: BoardSeed[] = [
+  {
+    slug: "ski",
+    name: "滑雪旅行",
+    description: "雪季开板、雪场选择与装备经验，从北海道到阿尔卑斯。",
+    icon: "MountainSnow",
+    emoji: "🎿",
+    position: 1,
+  },
+  {
+    slug: "beach",
+    name: "海滨度假",
+    description: "海岛、海滩与潜水，聊季节、潮汐和住哪里最舒服。",
+    icon: "Waves",
+    emoji: "🏖️",
+    position: 2,
+  },
+  {
+    slug: "city",
+    name: "城市探索",
+    description: "城市漫步、博物馆与街区生活，把一座城走成自己的路线。",
+    icon: "Building2",
+    emoji: "🏙️",
+    position: 3,
+  },
+  {
+    slug: "food",
+    name: "美食之旅",
+    description: "市集、路边摊与本地餐厅，按口味规划一座城市的行程。",
+    icon: "UtensilsCrossed",
+    emoji: "🍜",
+    position: 4,
+  },
+  {
+    slug: "outdoors",
+    name: "徒步与自然",
+    description: "徒步路线、国家公园与露营准备，海拔、天气和体力都要算进去。",
+    icon: "Trees",
+    emoji: "🥾",
+    position: 5,
+  },
+  {
+    slug: "budget",
+    name: "省钱攻略",
+    description: "怎么在预算内住得好、走得远，交通与订房省钱的真实经验。",
+    icon: "PiggyBank",
+    emoji: "💰",
+    position: 6,
+  },
+  {
+    slug: "companions",
+    name: "结伴同行",
+    description: "找人一起走一段路，说清时间、预算和节奏再出发。",
+    icon: "Users",
+    emoji: "🤝",
+    position: 7,
+  },
+];
+
+/** Per-locale board text. `zh-CN` is absent on purpose: the authored Chinese
+ *  columns above are the zh-CN values, and duplicating them would let the two
+ *  drift apart. */
+const BOARD_I18N: Record<
+  string,
+  { name: Record<string, string>; description: Record<string, string> }
+> = {
+  ski: {
+    name: {
+      "zh-TW": "滑雪旅行",
+      en: "Ski trips",
+      ja: "スキー旅行",
+      ko: "스키 여행",
+      es: "Viajes de esquí",
+    },
+    description: {
+      "zh-TW": "雪季開板、雪場選擇與裝備經驗，從北海道到阿爾卑斯。",
+      en: "Season openings, resort picks and gear notes, from Hokkaido to the Alps.",
+      ja: "シーズン初滑り、ゲレンデ選び、装備の経験談。北海道からアルプスまで。",
+      ko: "시즌 개장, 슬로프 선택, 장비 노하우. 홋카이도부터 알프스까지.",
+      es: "Aperturas de temporada, elección de estación y material, de Hokkaido a los Alpes.",
+    },
+  },
+  beach: {
+    name: {
+      "zh-TW": "海濱度假",
+      en: "Beach holidays",
+      ja: "ビーチリゾート",
+      ko: "해변 휴양",
+      es: "Vacaciones de playa",
+    },
+    description: {
+      "zh-TW": "海島、海灘與潛水，聊季節、潮汐和住哪裡最舒服。",
+      en: "Islands, beaches and diving — seasons, tides and where it is nicest to stay.",
+      ja: "島、ビーチ、ダイビング。季節や潮汐、泊まって快適な場所の話。",
+      ko: "섬, 해변, 다이빙. 계절과 물때, 어디에 묵으면 편한지 이야기합니다.",
+      es: "Islas, playas y buceo: temporadas, mareas y dónde alojarse mejor.",
+    },
+  },
+  city: {
+    name: {
+      "zh-TW": "城市探索",
+      en: "City exploring",
+      ja: "街歩き",
+      ko: "도시 탐험",
+      es: "Explorar ciudades",
+    },
+    description: {
+      "zh-TW": "城市漫步、博物館與街區生活，把一座城走成自己的路線。",
+      en: "Walks, museums and neighbourhood life — turn a city into your own route.",
+      ja: "散歩、博物館、街の暮らし。自分だけのルートに作り替える。",
+      ko: "도시 산책, 박물관, 동네 생활. 도시를 나만의 경로로 만들어 보세요.",
+      es: "Paseos, museos y vida de barrio: convierte una ciudad en tu propia ruta.",
+    },
+  },
+  food: {
+    name: {
+      "zh-TW": "美食之旅",
+      en: "Food travel",
+      ja: "食の旅",
+      ko: "미식 여행",
+      es: "Viajes gastronómicos",
+    },
+    description: {
+      "zh-TW": "市集、路邊攤與本地餐廳，按口味規劃一座城市的行程。",
+      en: "Markets, street stalls and local restaurants — plan a city around what you eat.",
+      ja: "市場、屋台、地元の店。食べたいものから街の旅程を組む。",
+      ko: "시장, 노점, 현지 식당. 먹고 싶은 것을 기준으로 도시 일정을 짭니다.",
+      es: "Mercados, puestos y restaurantes locales: planifica la ciudad según lo que comes.",
+    },
+  },
+  outdoors: {
+    name: {
+      "zh-TW": "徒步與自然",
+      en: "Hiking & nature",
+      ja: "トレッキングと自然",
+      ko: "트레킹과 자연",
+      es: "Senderismo y naturaleza",
+    },
+    description: {
+      "zh-TW": "徒步路線、國家公園與露營準備，海拔、天氣和體力都要算進去。",
+      en: "Trails, national parks and camping prep — altitude, weather and stamina all count.",
+      ja: "トレイル、国立公園、キャンプ準備。標高・天気・体力まで計算に入れる。",
+      ko: "트레일, 국립공원, 캠핑 준비. 고도와 날씨, 체력까지 계산합니다.",
+      es: "Rutas, parques nacionales y preparación de acampada: altitud, clima y fuerzas.",
+    },
+  },
+  budget: {
+    name: {
+      "zh-TW": "省錢攻略",
+      en: "Budget travel",
+      ja: "節約の知恵",
+      ko: "알뜰 여행",
+      es: "Viajar con poco",
+    },
+    description: {
+      "zh-TW": "怎麼在預算內住得好、走得遠，交通與訂房省錢的真實經驗。",
+      en: "How to stay well and go far on a budget — real notes on transport and booking.",
+      ja: "予算内で快適に、遠くへ。交通と宿予約で節約した実体験。",
+      ko: "예산 안에서 편하게, 멀리까지. 교통과 숙소 예약 절약 경험담.",
+      es: "Alojarse bien y llegar lejos con poco: experiencia real con transporte y reservas.",
+    },
+  },
+  companions: {
+    name: {
+      "zh-TW": "結伴同行",
+      en: "Find companions",
+      ja: "同行者募集",
+      ko: "동행 구하기",
+      es: "Buscar compañeros",
+    },
+    description: {
+      "zh-TW": "找人一起走一段路，說清時間、預算和節奏再出發。",
+      en: "Find someone to travel a stretch with — agree on dates, budget and pace first.",
+      ja: "一緒に歩く人を探す。日程・予算・ペースを先に決めてから出発。",
+      ko: "함께 걸을 사람을 찾습니다. 일정과 예산, 속도를 먼저 맞추고 출발하세요.",
+      es: "Encuentra con quién compartir un tramo: acordad fechas, presupuesto y ritmo.",
+    },
+  },
+};
+
+/** The locale keys each board's JSON columns must carry. */
+const BOARD_LOCALES = ["zh-TW", "en", "ja", "ko", "es"] as const;
+
+/**
+ * Sample forum posts.
+ *
+ * `daysAgo` is a *relative* offset, turned into a real `createdAt` at insert
+ * time, so the seeded forum always has a plausible recency spread instead of
+ * every post sharing the moment the seed ran. `replies` are authored in the
+ * thread's voice; their own timestamps are derived per post in `buildReplies`.
+ *
+ * The set is not uniform: `outdoors` gets the newest post while `city` gets the
+ * most-replied one, and both a pinned and an unpinned post live in `ski`. That
+ * is what makes the three sorts visibly different on first load — a demo where
+ * every sort looks identical teaches the reader nothing.
+ */
+type PostSeed = {
+  board: string;
+  /** Index into the pool of seeded author accounts. */
+  author: number;
+  title: string;
+  body: string;
+  city?: string;
+  pinned?: boolean;
+  daysAgo: number;
+  replies: string[];
+};
+
+const POSTS: PostSeed[] = [
+  {
+    board: "ski",
+    author: 0,
+    title: "北海道二世谷 12 月雪况怎么样？第一次去需要注意什么",
+    body: "计划 12 月中旬去二世谷待 6 天，第一次在日本滑雪，完全没经验。\n想问三件事：一是这个时间雪够不够厚，会不会遇到雪场只开部分缆车；二是从新千岁机场到比罗夫怎么走最省事，租车还是坐巴士；三是第一次滑粉雪，需不需要专门请教练。\n我和朋友都是中级水平，在国内雪场滑了大概三年。",
+    city: "Tokyo",
+    daysAgo: 21,
+    replies: [
+      "12 月中旬二世谷一般已经开了大半，但每年不一样。前年我 12 月 18 号到，山顶还没完全开，山下雪很好。建议出发前一周再看一次雪场官网的缆车运行图。",
+      "从新千岁坐巴士最省心，直接到比罗夫欢迎中心，行李也好放。租车的话雪胎是必须的，第一次开雪路压力会比较大。",
+      "粉雪和机压雪道完全是两种滑法，建议第一天请半天教练，主要学重心和换刃，后面几天会轻松很多。",
+    ],
+  },
+  {
+    board: "ski",
+    author: 1,
+    title: "滑雪装备：第一次买板，租还是买更划算？",
+    body: "滑了三年一直租板，今年想自己买一套。算了一下，一套入门板加固定器加雪鞋大概 6000 左右，国内雪场租一天 150。\n但问题是买了我还得带着走，托运一次不便宜，日本现在好像也开始收超规行李费了。\n想听听大家都是怎么权衡的，尤其是常住南方、一年只滑三四次的情况。",
+    daysAgo: 9,
+    replies: [
+      "一年滑三四次还是租吧，尤其是雪鞋合脚比板重要，租的时候可以让店里帮你调。等你能感觉到不同板的差别了再买。",
+      "我的做法是：雪鞋买自己的，板和固定器到了雪场再租。雪鞋合脚是最影响体验的，板反而没那么挑。",
+    ],
+  },
+  {
+    board: "ski",
+    author: 2,
+    title: "崇礼太舞滑雪场周末人多吗？带小孩住哪比较方便",
+    body: "想周末带 7 岁的小孩去崇礼玩两天。\n主要顾虑是周末人多，缆车排队会不会很久；另外太舞和云顶哪个对小孩更友好，雪道难度和雪具租赁哪个更省事。\n住宿想住在能走到雪场的地方，预算一晚 800 以内，有没有推荐的镇上或雪场内的酒店。",
+    city: "Kyoto",
+    pinned: true,
+    daysAgo: 13,
+    replies: [
+      "周六上午人最多，建议早点上山，或者干脆周日下午再滑，人会少很多。带小孩的话太舞的初级道更宽，教练资源也多。",
+      "雪场内的酒店一般贵一些但省事，孩子累了可以直接回房间。太舞小镇上走 10 分钟能到雪具大厅的民宿不少，800 以内能挑到不错的。",
+      "提醒一句，1 月的崇礼风大，给小孩准备面罩和防风镜，不然一下午就冻回去了。",
+    ],
+  },
+  {
+    board: "beach",
+    author: 3,
+    title: "普吉岛还是苏梅岛？第一次去泰国海岛求推荐",
+    body: "明年 2 月有一个 8 天的假期，第一次去泰国海岛。\n普吉和苏梅在纠结：普吉航班多、方便，但担心太商业化；苏梅要转机、贵一些，据说海水更干净。\n我们主要想浮潜、看日落，不太需要夜生活，住一个不吵的沙滩附近就好。",
+    city: "Bangkok",
+    daysAgo: 16,
+    replies: [
+      "只看浮潜和日落，苏梅的查汶北边或波普会更合适，安静也有日落。普吉的话建议避开芭东，去卡塔或奈涵。",
+      "2 月是旺季，两边都会涨价。苏梅的机酒组合通常比普吉贵 30% 左右，但岛上节奏确实慢一些。",
+    ],
+  },
+  {
+    board: "beach",
+    author: 4,
+    title: "巴厘岛雨季真的不能去吗？",
+    body: "看到很多攻略说 1 月是巴厘岛雨季不要去，但我们的假期只有 1 月中旬。\n想确认一下：雨季是整天都在下雨，还是下午雷阵雨那种？会不会影响出海和浮潜？\n如果只是短暂阵雨，我觉得还是可以去，毕竟机票酒店都便宜不少。",
+    daysAgo: 11,
+    replies: [
+      "通常是一阵一阵的，早上常常是大晴天，下午两三点来一场大雨，下一两个小时就停。带把伞基本能应付。",
+      "出海要看船家怎么判断，风浪大的时候确实会取消，建议把出海安排在行程前半段，留出改期的余地。",
+      "1 月去的人不少，酒店价格低是真的。唯一要注意的是乌布那边路上会积水，穿防滑的鞋。",
+    ],
+  },
+  {
+    board: "city",
+    author: 5,
+    title: "东京市区 4 天怎么安排？不想每天都在赶路",
+    body: "第一次去东京，4 天 3 晚，住在浅草附近。\n主要想去的地方有：浅草寺、上野公园、筑地、涩谷、新宿。\n知道这样安排会很赶，所以想问问怎么分组最合理，最好一天只走一个区域，晚上还能逛逛附近的小店。",
+    city: "Tokyo",
+    daysAgo: 18,
+    replies: [
+      "按区域分是对的：第一天浅草加上野（一条线），第二天筑地加银座，第三天涩谷加代官山，第四天新宿。这样每天换乘不超过两次。",
+      "浅草晚上去隅田川边走走很舒服，人比白天少很多，还能看到晴空塔亮灯。",
+      "筑地要早上去，10 点以后好吃的店就排队很长了。如果起不来，可以放到第二天的早上。",
+      "补充一句，涩谷和代官山之间走路要 20 分钟左右，不算近但沿路有意思，走着去比坐车舒服。",
+    ],
+  },
+  {
+    board: "city",
+    author: 0,
+    title: "巴黎博物馆通票值不值得买？",
+    body: "在巴黎待 5 天，打算去卢浮宫、奥赛、橘园和凡尔赛。\n算了一下 4 天的通票大概 70 欧，单买的话卢浮宫 22、奥赛 16、凡尔赛 21，加起来差不多。\n主要想知道通票能不能省排队时间，以及凡尔赛是不是必须提前订时段。",
+    city: "Paris",
+    pinned: true,
+    daysAgo: 24,
+    replies: [
+      "通票最大的价值是省排队，尤其是旺季。卢浮宫和奥赛走通票通道会快很多，但安检还是所有人都要排。",
+      "凡尔赛现在进宫殿要预约时段，通票也要单独预约，别以为有票就能直接进。花园不预约也可以进。",
+      "橘园很小，一个小时够了，建议放在奥赛同一天，两个地方走路 10 分钟。",
+    ],
+  },
+  {
+    board: "food",
+    author: 1,
+    title: "京都的早市和锦市场，早上去真的值吗？",
+    body: "看攻略说锦市场要早上 9 点前去，人少还能吃到刚做好的玉子烧。\n但也有人说现在锦市场早上也很挤，价格偏游客。\n想问问有没有更本地一点的替代选择，比如居民区的商店街，我住在京都站附近。",
+    city: "Kyoto",
+    daysAgo: 14,
+    replies: [
+      "锦市场 9 点前去确实舒服，11 点之后就变成人流了。价格确实偏游客，玉子烧 300 日元一串，吃起来主要是氛围。",
+      "推荐出町柳的商店街，本地人买菜的地方，有几家老铺的豆饼和饭团非常好吃，价格是锦市场的一半。",
+      "如果想吃正经的早餐，京都站附近的咖啡店早上有厚切吐司套餐，500 日元左右，安静又好吃。",
+    ],
+  },
+  {
+    board: "food",
+    author: 2,
+    title: "曼谷路边摊怎么挑才不踩坑，求一点实用的判断方法",
+    body: "很喜欢曼谷的路边摊，但肠胃比较敏感，上次去拉了两天。\n想请教一些具体的判断标准，比如看什么信号能判断这家摊子干净、食材新鲜。\n另外想知道哪些菜相对安全、哪些尽量不要在摊子上点。",
+    city: "Bangkok",
+    daysAgo: 7,
+    replies: [
+      "最实用的信号是看本地人排不排队，尤其是下班时间来买的人。人多的摊子食材周转快，不容易放坏。",
+      "尽量点现场明火现做的，比如炒粉、烤串、冬阴功；少点提前做好摆着卖的凉菜和切好的水果。",
+      "冰要留意，正规摊子的冰是工厂冰块，中间有孔；那种一整块敲碎的尽量别加。",
+    ],
+  },
+  {
+    board: "outdoors",
+    author: 3,
+    title: "巴塞罗那周边的徒步路线，一天往返的有推荐吗？",
+    body: "在巴塞罗那待一周，想抽一天去山里走走，不想太硬核。\n看到蒙特塞拉特可以坐缆车上去再走，也有人说提比达波山就能走到。\n想找一条 4 到 5 小时、交通方便、风景好的路线，最好是能自己走不用请向导的。",
+    city: "Barcelona",
+    daysAgo: 19,
+    replies: [
+      "蒙特塞拉特最省事，火车加缆车直接到山顶，上面有几条标注清楚的步道，2 到 4 小时都有。风景是那种奇石山，很特别。",
+      "提比达波从市区坐缆车上山，然后沿着山脊往下走到巴尔迪维德罗修道院，再坐公交下山，大概 4 小时，能看到整座城市和海。",
+      "提醒一下，夏天那边下午很晒，山上没有太多树荫，水要带够。",
+    ],
+  },
+  {
+    board: "outdoors",
+    author: 4,
+    title: "悉尼蓝山一日徒步，怎么坐车最顺？",
+    body: "住在悉尼市中心，想去蓝山走一天，看三姐妹峰和瀑布。\n查了一下火车大概两个小时到卡通巴，但到了之后去各个观景点的交通不太清楚。\n想问问有没有公交或者步道可以从火车站直接走到主要观景点，以及一天时间够不够走完。",
+    city: "Sydney",
+    daysAgo: 6,
+    replies: [
+      "卡通巴站出来有 686 路公交，直接到回声角和景观世界，买一张日票可以随便坐，很方便。",
+      "一天走完三姐妹峰加景观世界的步道是可以的，但会很满。建议只选一条长步道，比如大阶梯下到谷底再坐缆车上来。",
+    ],
+  },
+  {
+    board: "budget",
+    author: 5,
+    title: "长住一个月怎么订房最省钱？有没有比酒店更好的选择",
+    body: "明年打算在东京住一个月，边远程办公边旅行。\n在平台上看整月订的公寓，价格比按周订便宜一些，但还是要 8000 左右。\n想知道有没有更省的方式，比如周租公寓、share house，或者直接联系房东谈月租。这种谈价一般怎么开口比较自然？",
+    city: "Tokyo",
+    daysAgo: 23,
+    replies: [
+      "月租最省的是周租公寓和 share house，东京有不少专门做月租的公司，比平台便宜 30% 到 40%，但通常要押金和简单审核。",
+      "直接问房东是可以的，尤其是淡季。开口就说清楚住一个月、日期确定、会自己打扫，很多房东愿意给九折或者免清洁费。",
+      "远程办公记得确认网速，有些老房子的网络是共享的，白天开会会卡。看房时问一句是不是光纤独享。",
+    ],
+  },
+  {
+    board: "companions",
+    author: 0,
+    title: "11 月有人一起去尼泊尔走 ABC 吗？行程大概 10 天",
+    body: "计划 11 月初走安纳普尔纳大本营线，10 天左右，从博卡拉出发。\n今年的打算是请一个向导但不背夫，自己背包，节奏偏慢，每天走 5 到 6 小时就停。\n想找一两个同伴，最好是走过高原徒步、能接受山上住宿条件一般的人。预算和装备可以私聊细聊。",
+    daysAgo: 5,
+    replies: [
+      "11 月天气很稳，是那条线最好的时间。建议把行程多留一天当机动，山上因为天气延误很常见。",
+      "我在尼泊尔走过 EBC，提醒一下 11 月早晚温差非常大，睡袋建议标温 -10 度的，客栈的被子不太够。",
+    ],
+  },
+];
+
+/**
+ * Reply timestamps for one post, derived from the post's own age.
+ *
+ * The offsets are deterministic (first reply soonest, later replies later) and
+ * never exceed the post's age, so a reply can never be older than the post it
+ * answers — which would make the "latest activity" sort quietly wrong on the
+ * seeded data. The first offset is large enough that the newest reply *inside* a
+ * post still lands after some other post's `createdAt`, which is what makes the
+ * `latest` and `new` sorts distinguishable at all.
+ */
+function buildReplies(post: PostSeed): Array<{ body: string; createdAt: Date }> {
+  const offsets = [4, 3, 2, 4, 3, 2];
+
+  return post.replies.map((body, index) => {
+    const offset = Math.max(1, Math.min(post.daysAgo - 1, offsets[index % offsets.length]));
+    return { body, createdAt: new Date(Date.now() - offset * 86_400_000) };
+  });
+}
+
 async function main() {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
@@ -728,6 +1145,248 @@ async function main() {
   const tokyoResult = await ensureWishlist("东京旅行", tokyoListings);
   const europeResult = await ensureWishlist("欧洲之旅", europeListings);
   console.log(`[seed] demo wishlists: 东京旅行=${tokyoResult}, 欧洲之旅=${europeResult}`);
+
+  // ----------------------------------------------------------------- forum
+  //
+  // Boards are upserted by `slug`, the same way listings are upserted by
+  // `seedKey`: the row's id — and therefore every post's `boardId` — survives a
+  // re-seed, so refreshing a board's wording never orphans a discussion.
+  console.log("[seed] forum boards (upsert by slug) ...");
+  for (const board of BOARDS) {
+    const text = BOARD_I18N[board.slug];
+    const nameI18n: Record<string, string> = { "zh-CN": board.name };
+    const descriptionI18n: Record<string, string> = { "zh-CN": board.description };
+    for (const locale of BOARD_LOCALES) {
+      const name = text?.name[locale];
+      const description = text?.description[locale];
+      // A missing translation would render the key's absence as Chinese in an
+      // English UI, so fail the seed loudly instead of writing a half-filled map.
+      if (!name || !description) {
+        throw new Error(`[seed] board "${board.slug}" is missing the ${locale} translation`);
+      }
+      nameI18n[locale] = name;
+      descriptionI18n[locale] = description;
+    }
+
+    await prisma.board.upsert({
+      where: { slug: board.slug },
+      create: {
+        slug: board.slug,
+        name: board.name,
+        description: board.description,
+        nameI18n,
+        descriptionI18n,
+        icon: board.icon,
+        emoji: board.emoji,
+        position: board.position,
+      },
+      update: {
+        name: board.name,
+        description: board.description,
+        nameI18n,
+        descriptionI18n,
+        icon: board.icon,
+        emoji: board.emoji,
+        position: board.position,
+      },
+    });
+  }
+  const boardRows = await prisma.board.findMany({ select: { id: true, slug: true } });
+  const boardIdBySlug = new Map(boardRows.map((board) => [board.slug, board.id]));
+
+  /**
+   * Sample posts — **idempotency, and why it looks like this.**
+   *
+   * `Post` has no unique key to upsert on, so a re-run has to decide for itself
+   * what "already seeded" means. Two rules, applied in this order:
+   *
+   *  1. A board that already holds **any** post is skipped entirely, and a post
+   *     that already holds **any** reply is skipped for replies. So a second run
+   *     inserts nothing at all: no duplicate threads, and `replyCount` cannot be
+   *     driven up by re-seeding.
+   *  2. A **missing** board is refilled. A freshly migrated database has no
+   *     boards, and a forum that stays empty after `npm run db:seed` would be a
+   *     broken demo — so "the board does not exist" is treated as "never seeded
+   *     here", not as "the user deleted these posts".
+   *
+   * The consequence, stated plainly: deleting every post in a board and then
+   * re-seeding brings that board's samples back. Posts are demo content with no
+   * owner and no way to mark them as seeded, and this is the trade-off that keeps
+   * both "never duplicate" and "never empty" true at the same time. Nothing is
+   * ever *deleted* by this section.
+   */
+  const authorEmails = [
+    ...HOSTS.map((host) => host.email),
+    ...REVIEWERS.map((reviewer) => reviewer.email),
+    DEMO_EMAIL,
+  ];
+  const authorRows = await prisma.user.findMany({
+    where: { email: { in: authorEmails } },
+    select: { id: true, email: true },
+  });
+  const authorIdByEmail = new Map(authorRows.map((user) => [user.email, user.id]));
+  const authors = authorEmails
+    .map((email) => authorIdByEmail.get(email))
+    .filter((id): id is string => Boolean(id));
+  if (authors.length === 0) throw new Error("[seed] no seeded accounts available to author posts");
+
+  const seededBoards = await prisma.post.findMany({
+    select: { boardId: true },
+    distinct: ["boardId"],
+  });
+  const boardsWithPosts = new Set(seededBoards.map((post) => post.boardId));
+
+  console.log("[seed] forum sample posts ...");
+  let createdPosts = 0;
+  const samplesByBoard = new Map<string, PostSeed[]>();
+  for (const post of POSTS) {
+    const bucket = samplesByBoard.get(post.board) ?? [];
+    bucket.push(post);
+    samplesByBoard.set(post.board, bucket);
+  }
+
+  for (const [slug, samples] of samplesByBoard) {
+    const boardId = boardIdBySlug.get(slug);
+    if (!boardId) {
+      // A typo in POSTS would otherwise show up as a silently smaller forum.
+      throw new Error(`[seed] post references unknown board "${slug}"`);
+    }
+    if (boardsWithPosts.has(boardId)) continue;
+
+    await prisma.post.createMany({
+      data: samples.map((post) => ({
+        boardId,
+        authorId: authors[post.author % authors.length],
+        title: post.title,
+        body: post.body,
+        city: post.city ?? null,
+        pinned: post.pinned ?? false,
+        createdAt: new Date(Date.now() - post.daysAgo * 86_400_000),
+      })),
+    });
+    createdPosts += samples.length;
+  }
+
+  // Replies next, matched by (boardId, title) — unique among the samples — so the
+  // rows above can carry the thread's text while the denormalised `replyCount` is
+  // written from the number of replies that were actually inserted.
+  console.log("[seed] forum sample replies ...");
+  let createdReplies = 0;
+  const allBoardIds = [...boardIdBySlug.values()];
+  const samplePosts = await prisma.post.findMany({
+    where: {
+      boardId: { in: allBoardIds },
+      title: { in: POSTS.map((post) => post.title) },
+    },
+    select: { id: true, boardId: true, title: true, replyCount: true },
+  });
+
+  // A post that already has replies is left alone: it has either been seeded
+  // before or been answered by a real user, and neither should be added to.
+  const answeredIds = new Set(
+    (
+      await prisma.reply.findMany({ where: { postId: { in: samplePosts.map((p) => p.id) } }, select: { postId: true } })
+    ).map((reply) => reply.postId),
+  );
+
+  // The samples are keyed by (board slug, title) — unique among them — so the
+  // thread's own text stays the lookup key and nothing depends on insertion order.
+  // The reverse map lets a row's `boardId` be turned back into its slug.
+  const sampleByTitleAndBoard = new Map(
+    POSTS.map((post) => [`${post.board}:${post.title}`, post]),
+  );
+  const slugByBoardId = new Map([...boardIdBySlug.entries()].map(([slug, id]) => [id, slug]));
+
+  for (const row of samplePosts) {
+    if (answeredIds.has(row.id)) continue;
+    const sample = sampleByTitleAndBoard.get(`${slugByBoardId.get(row.boardId)}:${row.title}`);
+    if (!sample) continue;
+
+    const replies = buildReplies(sample);
+    await prisma.$transaction(async (tx) => {
+      await tx.reply.createMany({
+        data: replies.map((reply) => ({
+          postId: row.id,
+          authorId: authors[(sample.author + 1) % authors.length],
+          body: reply.body,
+          createdAt: reply.createdAt,
+        })),
+      });
+      // Written as an absolute value, not an increment: this is a fresh insert
+      // whose exact size is known, so the counter ends up equal to the number of
+      // rows just created even if the column started out wrong.
+      await tx.post.update({ where: { id: row.id }, data: { replyCount: replies.length } });
+    });
+    createdReplies += replies.length;
+  }
+
+  const [boardCount, postCount, replyTotal] = await Promise.all([
+    prisma.board.count(),
+    prisma.post.count(),
+    prisma.reply.count(),
+  ]);
+  console.log(
+    `[seed] forum: ${boardCount} boards, ${postCount} posts (+${createdPosts} this run), ` +
+      `${replyTotal} replies (+${createdReplies} this run)`,
+  );
+
+  // ------------------------------------------------------------------ social
+  /**
+   * A small, deliberate social graph around the demo account.
+   *
+   * Without this the Friends page and every profile are empty on a fresh
+   * database, so the feature can only be demoed by registering a second account
+   * by hand. Seeded as: two accepted friends, one request waiting for the demo
+   * user to answer, and one the demo user has sent — which is exactly the three
+   * sections the page renders.
+   *
+   * Idempotent: the pair is upserted on the unique (requester, addressee), and
+   * the reverse direction is checked first so a re-run cannot create a mirrored
+   * duplicate of the same friendship.
+   */
+  const [friendA, friendB, asker, target] = hosts;
+  if (friendA && friendB && asker && target) {
+    const pairs: Array<{ requesterId: string; addresseeId: string; status: "ACCEPTED" | "PENDING"; respondedAt: Date | null }> = [
+      { requesterId: demoUser.id, addresseeId: friendA.id, status: "ACCEPTED", respondedAt: new Date() },
+      { requesterId: friendB.id, addresseeId: demoUser.id, status: "ACCEPTED", respondedAt: new Date() },
+      // Incoming: the demo user is the addressee, so it shows up as "accept or
+      // decline" rather than as something already done.
+      { requesterId: asker.id, addresseeId: demoUser.id, status: "PENDING", respondedAt: null },
+      // Outgoing: still pending, so the demo user can also see the waiting state.
+      { requesterId: demoUser.id, addresseeId: target.id, status: "PENDING", respondedAt: null },
+    ];
+
+    let createdFriendships = 0;
+    for (const pair of pairs) {
+      const mirrored = await prisma.friendship.findUnique({
+        where: {
+          requesterId_addresseeId: {
+            requesterId: pair.addresseeId,
+            addresseeId: pair.requesterId,
+          },
+        },
+        select: { id: true },
+      });
+      if (mirrored) continue;
+
+      const existing = await prisma.friendship.findUnique({
+        where: {
+          requesterId_addresseeId: {
+            requesterId: pair.requesterId,
+            addresseeId: pair.addresseeId,
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      await prisma.friendship.create({ data: pair });
+      createdFriendships++;
+    }
+
+    const friendTotal = await prisma.friendship.count();
+    console.log(`[seed] social: ${friendTotal} friendship row(s) (+${createdFriendships} this run)`);
+  }
 
   const [listingCount, wishlistCount, itemCount, accountCount, realAccounts] = await Promise.all([
     prisma.listing.count(),

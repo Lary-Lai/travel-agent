@@ -267,6 +267,58 @@ GET /api/weather?all=1           → 全部 10 座城市
 
 记录动作发生在搜索页上一个**显式的 POST**（`components/search-recorder.tsx`），而不是在页面渲染时写库：GET 里写数据库本身就是坏味道，而且预取也会误触发。
 
+### 从头像到背景：本地文件上传
+
+个人主页的头像与背景图原本是「粘贴一个图片链接」。现在改成**从本机选文件上传**，因为让用户先把图片传到别处再回来贴链接，等于把「换个头像」变成一件需要先有图床的事；而一旦头像依赖第三方主机，那个主机某天开始返回 403，页面就烂了——预设头像服务 `i.pravatar.cc` 就是这么死的。
+
+实现上的几个决定：
+
+| 决定 | 原因 |
+| --- | --- |
+| 文件存到 `data/uploads/`，通过 `/api/media/<name>` 提供 | `public/` 会在 `next build` 时被快照进产物，构建之后写进去的文件在生产环境直接 404；而且用户上传和仓库自带素材混在一起，之后就分不清谁是谁了 |
+| 存盘名由**服务端生成**（`avatar-<16位随机>.<ext>`） | 上传的文件名是客户端给的字符串。用它落盘就等于把 `../../` 和 `avatar.png.html` 这类双扩展名一起请进来 |
+| 格式靠**魔术字节**判断，不信任 `file.type` | 声明类型是客户端说了算的；一个自称 `image/png` 的 HTML 文件不该被当成图片存下来 |
+| **明确拒绝 SVG** | SVG 是能内嵌脚本的图片格式。把攻击者可控的 SVG 放在自己域名下提供，是加了步骤的 XSS。仓库自带的预设头像确实是 SVG，但那批文件来自代码库而不是浏览器 |
+| 回传时固定白名单 `Content-Type` + `X-Content-Type-Options: nosniff` | 否则浏览器可以按内容猜类型，把一张"图片"当 HTML 执行 |
+| 同时读出头像尺寸（PNG/JPEG/GIF/WebP 各写一段头解析） | 只有字节数的话，界面分不清 4MB 的 40×40 头像和 2000px 的横幅，"上传成功"就是用户能得到的全部信息 |
+
+`smoke-uploads.mjs` 的 33 项断言里，大多数是**敌对输入**：SVG、伪装成 PNG 的 shell 脚本、HTML、空文件、超限文件、`../../../evil.png`，以及 `/api/media/..%2F.env` 这类路径穿越——文件上传是唯一一个"浏览器把字节和文件名都交给服务器"的接口，所以"我的 JPEG 传上去了"恰恰是信息量最小的一条。
+
+### 主页可见性与好友
+
+`/u/<id>` 是任何人的公开主页。**谁能打开它**由主页主人在设置弹窗里决定：
+
+| 模式 | 谁能看 |
+| --- | --- |
+| 所有用户可查看 | 所有人，含未登录访客 |
+| 仅好友可查看 | 互为好友的人，加上白名单里的人 |
+| 指定用户可查看 | 只有白名单里的人（好友也不行） |
+| 仅自己可查看 | 只有本人，好友与白名单都不例外 |
+
+另外两张**例外名单**凌驾于模式之上：黑名单里的人永远进不来，白名单的人按上面的表生效。
+
+判定写成一个可单测的纯函数 `decideProfileAccess`，顺序在代码里逐条注释，因为顺序本身就是这个功能的规格：
+
+```
+本人 → 黑名单 → 仅自己 → 白名单 → 好友（仅"所有用户/仅好友"两种模式）→ 模式兜底
+```
+
+> 第一版把「好友」和「白名单」放在模式判断之前，结果是 `仅自己可查看` 和 `指定用户可查看` 放行的是同一批人（好友 ∪ 白名单）——四个模式里有两个行为完全相同，"仅自己可查看"这个标签等于说谎。测试当时全绿，因为断言也是照着错误的顺序写的。这是本项目里"测试通过 ≠ 需求正确"最典型的一次。
+
+好友关系用**一行记录一对人**（`requesterId` / `addresseeId` + 状态），不是两行互为镜像：双向镜像需要在每次通过/删除时同步两条记录，任何一次写失败都会留下"只有一边是好友"的状态。申请支持通过、拒绝（删除该行）、撤回与删除好友，并且每个接口都会**从数据行重新推导调用方是否属于这段关系**——客户端传来的 id 不构成授权。
+
+`/friends` 把三种状态分开呈现：我的好友、收到的好友申请（就地通过/拒绝）、已发出的申请（可撤回）。种子数据给演示账号预置了 2 位好友 + 1 条待处理申请，否则新库里这个页面永远是空的，功能只能靠手动注册第二个账号才能演示。
+
+### 自由讨论区
+
+`/forum` 是一个按板块组织的讨论区。板块是**数据库里的一行**（`Board`，`slug` 唯一）而不是一个枚举值：加一个板块是种子数据的事，不需要迁移 + 改 UI switch。七个板块：滑雪旅行、海滨度假、城市探索、美食之旅、徒步与自然、省钱攻略、结伴同行。
+
+- 板块名与简介走 `nameI18n` / `descriptionI18n`，和 `Listing.titleI18n` 同一套办法——中文是作者写下的源文本，界面按语言读对应版本，因此**加一个板块不必改六份字典**。
+- 列表支持板块筛选、排序（最新回复 / 最新发布 / 回复最多）、关键词搜索（标题 + 正文）与「我的帖子」；这些条件全部放在 URL 查询参数里，所以刷新和分享链接都能复现同一个视图。
+- **读是公开的，写要登录**：未登录访问能正常浏览帖子，点发帖则显示「登录后即可发帖」并给出带 `redirect` 的登录链接，而不是一个点了没反应的按钮。
+- 帖子的 `replyCount` 是冗余字段，增删回复都在**同一个事务**里改它（删除时对该行 `FOR UPDATE`，避免并发删除互相覆盖）。代价是任何绕过服务层直接写 `Reply` 表都会让它漂移，所以 smoke 脚本里有一项全局漂移检查盯着这件事。
+- 作者名可点进 `/u/<authorId>`，把讨论区和好友功能接在一起——这也是"能访问其他用户主页"的实际入口。
+
 ### 多语言（6 种）
 
 顶栏有语言切换器，支持 **简体中文、繁体中文、English、日本語、한국어、Español**。
@@ -289,6 +341,7 @@ GET /api/weather?all=1           → 全部 10 座城市
 | 搜索栏（目的地 / 日期 / 人数 / 按钮 / 提示） | **设施说明文案**（26 项字典内容） |
 | **房源标题、地址、城市与国家名**（`titleI18n` / `locationI18n` / `cityName` / `countryName`，180 个房源 × 6 种语言） | **用户自己的昵称与标签**（用户数据） |
 | **收银台 / 支付结果 / 超时取消页**、行程页、心愿单、个人主页、页脚 | **服务端返回的错误文案**（请求级没有 locale，见下） |
+| **讨论区**（板块名走 `Board.nameI18n`、帖子界面全量）、**好友与公开主页**（含四种可见性模式与例外名单文案） | **用户发布的帖子与回复正文**（用户生成内容） |
 | 通用单位与按钮（晚 / 位 / 条评价 / 查看全部…） | |
 | **日期**（`Intl.DateTimeFormat`，见下） | |
 
@@ -555,6 +608,8 @@ npm run db:serve     # 前台运行，保持父进程存活；Ctrl+C 退出
 | `npm run images:fetch` | 下载房源图片到 `public/listings/`（可续跑；已有文件会跳过） |
 | `npm run avatars:make` | 重新生成 12 个内置预设头像 SVG |
 | `npm run db:studio` | 打开 Prisma Studio |
+| `node scripts/clean-test-data.mjs [--apply]` | 清掉测试遗留的 `@example.com` 账号（含级联数据），默认只报告 |
+| `node scripts/check-pages.mjs` | 用真实浏览器巡检各路由 + 检查运行时错误，并截图到 `data/shots/` |
 | `node scripts/shot-payment-deadline.mjs` | 用本地 Chrome 截图关键页面，并报告每个页面的运行时错误（无需安装 Playwright） |
 
 ### 回归测试
@@ -571,12 +626,17 @@ node scripts/smoke-profile-fields.mjs   # 个性化主页字段 + 预设头像�
 node scripts/smoke-new-features.mjs     # 评论持久化 + 搜索记录推荐 + 入住须知 + 地图：63 项断言
 node scripts/smoke-archive-booking.mjs   # 归档已取消订单：15 项断言
 node scripts/smoke-payment-deadline.mjs  # ★30 分钟支付时限：19 项断言（含"到期是否真的释放日期"）
+node scripts/smoke-uploads.mjs          # ★本地图片上传：33 项断言（含 SVG / 伪装文件 / 路径穿越）
+node scripts/smoke-social.mjs           # ★主页可见性 + 好友：126 项断言（含越权与优先级）
+node scripts/smoke-forum.mjs            # ★讨论区：89 项断言（板块 / 发帖 / 回复 / 排序 / 计数漂移）
 npx tsx scripts/verify-guests.ts        # 入住人数步进：21 项断言（纯逻辑单测 + 标签随语言变化）
 npx tsx scripts/verify-tiles.ts         # 地图瓦片数学：25 项断言（纯逻辑单测）
-npx tsx scripts/verify-i18n.ts          # 6 种语言字典 + 日期本地化：103 项断言（键覆盖/占位符/单复数）
+npx tsx scripts/verify-i18n.ts          # 6 种语言字典 + 日期本地化：118 项断言（键覆盖/占位符/单复数）
 npx tsx scripts/verify-listing-i18n.ts  # 房源标题与地址的 6 语言版本：29 项断言
 npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 node scripts/shot-payment-deadline.mjs  # ★真实浏览器截图 + 逐页运行时错误检查（7 个页面）
+node scripts/check-pages.mjs            # ★真实浏览器巡检 11 条路由 + 上传交互 + 可见性弹窗：26 项断言
+node scripts/clean-test-data.mjs        # 清理测试遗留的 @example.com 账号（默认只报告，--apply 才删除）
 npx tsx scripts/inspect.ts       # 查看种子数据分布
 node scripts/diagnose-images.mjs # 诊断房源图片：区分"上游挂了 / 上游太慢 / 优化器坏了"
 node scripts/bench-images.mjs    # 实测图片加载耗时（中位数 / 最慢 / 失败数）
@@ -599,12 +659,16 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `smoke-new-features.mjs` | ✅ **63 / 63** |
 | `smoke-archive-booking.mjs` | ✅ **15 / 15** |
 | `smoke-payment-deadline.mjs` | ✅ **19 / 19** |
+| `smoke-uploads.mjs` | ✅ **33 / 33**（含 SVG / 伪装文件 / 路径穿越等敌对输入） |
+| `smoke-social.mjs` | ✅ **126 / 126**（可见性矩阵 + 好友生命周期 + 越权） |
+| `smoke-forum.mjs` | ✅ **89 / 89**（板块、发帖、回复、排序、筛选、replyCount 漂移） |
 | `verify-guests.ts` | ✅ **21 / 21** |
 | `verify-tiles.ts` | ✅ **25 / 25** |
-| `verify-i18n.ts` | ✅ **103 / 103**（6 种语言键覆盖 + 占位符 + 单复数 + 日期本地化） |
+| `verify-i18n.ts` | ✅ **118 / 118**（6 种语言键覆盖 + 占位符 + 单复数 + 日期本地化） |
 | `verify-listing-i18n.ts` | ✅ **29 / 29**（180 个房源 × 6 种语言的标题与地址） |
 | `verify-markdown.ts` | ✅ **21 / 21** |
 | `shot-payment-deadline.mjs` | ✅ 7 个页面渲染无运行时错误 |
+| `check-pages.mjs` | ✅ **26 / 26**（11 条路由的真实页面文本 + 上传交互 + 可见性弹窗） |
 | `bench-images.mjs` | ✅ **12 / 12 张加载成功**，中位数 4ms |
 
 ---
@@ -619,7 +683,11 @@ travel-agent/
 │   ├── listings/[id]/page.tsx    # 房源详情：画廊、设施、房东、预订面板
 │   ├── wishlist/page.tsx         # 我的心愿单
 │   ├── trips/page.tsx            # 我的行程
-│   ├── profile/page.tsx          # 个人主页：资料编辑 + 修改密码
+│   ├── profile/page.tsx          # 个人主页：资料编辑 + 上传头像/背景 + 可见性 + 修改密码
+│   ├── u/[id]/page.tsx           # ★他人公开主页（可见性不足时显示「未公开」而非 404）
+│   ├── friends/page.tsx          # ★好友 / 收到与发出的申请
+│   ├── forum/page.tsx            # ★讨论区列表（板块 / 排序 / 搜索 / 我的帖子）
+│   ├── forum/[postId]/page.tsx   # ★帖子详情 + 回复
 │   ├── login/ · register/        # 登录 / 注册
 │   ├── error.tsx · not-found.tsx # 错误边界
 │   └── api/                      # Route Handlers
@@ -629,8 +697,12 @@ travel-agent/
 │       │                         #   [id]/refund-quote 退款报价
 │       ├── refunds/              #   [id]/settle 模拟退款到账
 │       ├── auth/                 #   register / login / logout / session
+│       ├── uploads/ · media/     #   ★POST 本机图片上传；GET /media/[name] 回传
+│       ├── users/                #   me（资料/密码）、★search、★[id] 公开主页、★me/privacy
+│       ├── friends/              #   ★列表与发起申请；[id] 通过/拒绝/删除
+│       ├── forum/                #   ★boards、posts（列表/发帖）、posts/[id]（详情/删除）
+│       │                         #   posts/[id]/replies、replies/[id]
 │       ├── saved/                #   当前用户已收藏的房源 id
-│       ├── users/me/             #   PATCH 资料；POST /password 修改密码
 │       ├── weather/              #   GET 城市实时天气与预报（Open-Meteo）
 │       ├── meta/                 #   目的地、设施字典、价格区间
 │       └── agent/                #   POST 流式 Agent；upload 解析 PDF
@@ -664,6 +736,11 @@ travel-agent/
 │   ├── agent-provider.tsx        #   承载会话状态（关闭抽屉不丢历史）
 │   ├── session-provider.tsx      #   当前用户上下文
 │   ├── save-to-wishlist-dialog.tsx
+│   ├── image-upload-field.tsx    #   ★本机图片上传（头像 / 背景图）
+│   ├── profile-privacy-dialog.tsx #  ★主页可见性：四种模式 + 白/黑名单
+│   ├── friend-button.tsx         #   ★加好友 / 待通过 / 通过 / 删除
+│   ├── public-profile-view.tsx · friends-view.tsx   # ★他人主页 · 好友页
+│   ├── forum-view.tsx · post-card.tsx · post-composer.tsx · post-detail-view.tsx  # ★讨论区
 │   ├── wishlist-view.tsx · trips-view.tsx
 │   ├── providers.tsx             #   QueryClient + Session + Agent + Toaster
 │   └── ui/                       #   shadcn/ui 组件
@@ -671,13 +748,15 @@ travel-agent/
 ├── server/                       # Service 层（唯一允许访问数据库的地方）
 │   ├── listing.service.ts        #   搜索、详情、推荐、城市统计
 │   ├── wishlist.service.ts       #   心愿单 CRUD + 归属校验
-│   ├── booking.service.ts        #   订单创建、可用性、价格重算、支付、取消退款
+│   ├── booking.service.ts        #   订单创建、可用性、价格重算、支付、取消退款、支付时限结算
 │   ├── refund.service.ts         #   退款查询与模拟到账（归属校验）
 │   ├── travel-plan.service.ts    #   旅行计划取文：PDF 文字层 / 扫描件栅格化 OCR / 图片 OCR
 │   ├── weather.service.ts        #   城市天气（Open-Meteo，带 15 分钟缓存与兜底）
 │   ├── review.service.ts         #   评价读写（(listing,user) 唯一，upsert 即编辑）
 │   ├── personalization.service.ts #  搜索历史记录 + 时间衰减加权的目的地推荐
-│   └── user.service.ts           #   注册、登录校验
+│   ├── social.service.ts         #   ★可见性判定（纯函数 decideProfileAccess）+ 好友关系
+│   ├── forum.service.ts          #   ★板块 / 帖子 / 回复（replyCount 在同事务内维护）
+│   └── user.service.ts           #   注册、登录校验、资料更新
 │
 ├── agent/                        # AI Agent
 │   ├── agent.ts                  #   streamText + 多步工具循环
@@ -698,9 +777,11 @@ travel-agent/
 │       └── index.ts
 │
 ├── prisma/
-│   ├── schema.prisma             # 9 张表：User, Listing, ListingImage, Amenity,
-│   │                             #        ListingAmenity, Wishlist, WishlistItem, Booking
-│   ├── seed.ts                   # 确定性种子脚本（固定随机种子）
+│   ├── schema.prisma             # 16 张表：User, Listing, ListingImage, Amenity,
+│   │                             #        ListingAmenity, Wishlist, WishlistItem, Booking,
+│   │                             #        Refund, Review, SearchEvent, Friendship,
+│   │                             #        ProfileAccess, Board, Post, Reply
+│   ├── seed.ts                   # 确定性种子脚本（固定随机种子；板块与示例帖、演示账号的好友关系）
 │   └── migrations/
 │
 ├── lib/
@@ -837,21 +918,28 @@ LLM 生成中文回答 + 界面渲染房源卡片
 
 ## 七、数据库设计
 
-9 张表，含枚举、外键、唯一约束与索引。原生枚举四个：`PropertyType`、`BookingStatus`（PENDING / CONFIRMED / CANCELLED）、`PaymentMethod`（WECHAT / ALIPAY / CARD）、`RefundStatus`（PROCESSING / SUCCEEDED / FAILED）。
+16 张表，含枚举、外键、唯一约束与索引。原生枚举七个：`PropertyType`、`BookingStatus`（PENDING / CONFIRMED / CANCELLED）、`PaymentMethod`（WECHAT / ALIPAY / CARD）、`RefundStatus`（PROCESSING / SUCCEEDED / FAILED）、`ProfileVisibility`（PUBLIC / FRIENDS / SELECTED / PRIVATE）、`ProfileAccessKind`（ALLOW / DENY）、`FriendshipStatus`（PENDING / ACCEPTED）。
 
 | 表 | 关键字段 | 约束 / 索引 |
 | --- | --- | --- |
-| `User` | id, email, password, name, avatar, createdAt | `email` 唯一 |
+| `User` | id, email, password, name, avatar, createdAt, coverPreset, coverImage, tags[], hobbies[], visitedPlaces[], dreamDestinations[], **profileVisibility** | `email` 唯一；`profileVisibility` 索引（公开主页按模式过滤） |
 | `Listing` | title, description, location, city, country, lat/lng, pricePerNight, propertyType, rating, reviewCount, maxGuests, bedrooms, beds, bathrooms, hostId, **seedKey** | `city` / `propertyType` / `pricePerNight` 索引，`(city, propertyType, pricePerNight)` 复合索引，`seedKey` 唯一（让种子可重复执行） |
 | `ListingImage` | listingId, url, position, **caption（拍摄角度/房间）** | 级联删除 |
 | `Amenity` | name, icon, category, **description** | `name` 唯一 |
 | `ListingAmenity` | listingId, amenityId | 复合主键（多对多） |
 | `Wishlist` | name, userId | `(userId, name)` 唯一 —— 同一用户不能有同名心愿单 |
 | `WishlistItem` | wishlistId, listingId | `(wishlistId, listingId)` 唯一 —— 同一房源不能重复收藏 |
-| `Booking` | userId, listingId, checkIn, checkOut, guests, nights, roomPrice, cleaningFee, serviceFee, totalPrice, status, **paymentMethod, paidAt, paymentTradeNo** | `(listingId, checkIn, checkOut)` 索引用于可用性查询 |
+| `Booking` | userId, listingId, checkIn, checkOut, guests, nights, roomPrice, cleaningFee, serviceFee, totalPrice, status, paymentMethod, paidAt, paymentTradeNo, **paymentDueAt** | `(listingId, checkIn, checkOut)` 索引用于可用性查询；`paymentDueAt` 为 `timestamptz` |
 | `Refund` | bookingId, amount, status, reason, tier, method, tradeNo, note, requestedAt, completedAt | `bookingId` / `status` 索引；随订单级联删除 |
+| `SearchEvent` | userId, query, city, guests, priceMin/Max, propertyType | `(userId, createdAt)` / `(userId, city)` 索引 |
+| `Review` | listingId, userId, rating, comment | `(listingId, userId)` 唯一 —— 一人一房源一条评价 |
+| **`Friendship`** | requesterId, addresseeId, status, createdAt, respondedAt | **`(requesterId, addresseeId)` 唯一** —— 一对人一行，方向记录在字段里（不做双向镜像） |
+| **`ProfileAccess`** | ownerId, viewerId, kind（ALLOW/DENY） | **`(ownerId, viewerId)` 唯一** —— 一对人只有一个裁定；`(ownerId, kind)` 索引 |
+| **`Board`** | slug, name, description, nameI18n, descriptionI18n, icon, emoji, position | `slug` 唯一（种子按它 upsert）；`position` 索引 |
+| **`Post`** | boardId, authorId, title, body, city, image, pinned, **replyCount** | `(boardId, pinned, createdAt)` / `authorId` / `city` 索引 |
+| **`Reply`** | postId, authorId, body | `(postId, createdAt)` 索引；随帖子级联删除 |
 
-关系：`User 1—N Listing`（房东）、`User 1—N Wishlist`、`Wishlist N—M Listing`（经 `WishlistItem`）、`Listing N—M Amenity`（经 `ListingAmenity`）、`User 1—N Booking`。
+关系：`User 1—N Listing`（房东）、`User 1—N Wishlist`、`Wishlist N—M Listing`（经 `WishlistItem`）、`Listing N—M Amenity`（经 `ListingAmenity`）、`User 1—N Booking`、**`User N—M User`（经 `Friendship`，一行一对）、`User 1—N ProfileAccess`（作为 owner 与 viewer 两条外键）、`Board 1—N Post 1—N Reply`**。
 
 ### 订单状态流转
 
@@ -901,6 +989,13 @@ LLM 生成中文回答 + 界面渲染房源卡片
 | Cookie 窃取 | HttpOnly + SameSite=Lax + 生产环境 Secure |
 | 账号枚举 | 邮箱不存在与密码错误返回同一条消息 |
 | 密码泄露 | bcrypt（cost 10）哈希；查询一律 `select` 白名单字段，DTO 中没有 password |
+| 上传文件变成存储型 XSS | 类型按**魔术字节**判定而非 `file.type`；**拒收 SVG**（可内嵌脚本）；回传时固定白名单 `Content-Type` + `X-Content-Type-Options: nosniff` |
+| 上传文件名做路径穿越 | 落盘名由服务端生成（`<kind>-<16位随机>.<ext>`），客户端文件名只被读取、从不参与路径；回传路由先做 `^(avatar\|cover)-[0-9a-f]{16}\.(png\|jpg\|webp\|gif)$` 白名单匹配再碰磁盘 |
+| 上传接口被滥用写入磁盘 | `POST /api/uploads` 必须登录；大小上限 4MB；`kind` 取自固定枚举 |
+| 越权读取他人主页 | 可见性判定集中在一个纯函数 `decideProfileAccess`，服务端先判定再决定返回哪些字段（不是前端隐藏） |
+| 越权操作他人好友关系 | 每个好友接口都从数据行重新推导调用方是否为该关系的一方（`requesterId`/`addresseeId`），客户端传来的 friendship id 不构成授权 |
+| 伪造他人发帖/删帖 | 作者一律取自会话；删除校验 `authorId === userId`，否则 403 |
+| 冗余计数被并发改坏 | `replyCount` 的增删在同事务内完成，删除时对该行 `FOR UPDATE`，避免并发删除丢失更新 |
 | 参数注入 | zod 校验 + Prisma 参数化查询 |
 
 `scripts/smoke-api.mjs` 中有 8 项专门验证跨用户隔离的断言（User B 读/写/删 User A 的资源全部被拒）。
@@ -1323,6 +1418,47 @@ FAIL  web server — nothing answering on port 3001 (run: npm run dev)
 
 　　**教训：API 断言全绿不等于界面对。** 上面 (5) 的两个问题都是**截图**里一眼看出来的，任何 HTTP 断言都测不到。所以新增了 `shot-payment-deadline.mjs`：用 DevTools 协议驱动本地已装的 Chrome（Node 24 自带 `WebSocket`，不需要装 Playwright），逐页截图**并收集未捕获异常与 console error**——服务端组件渲染失败时页面仍返回 200，只有真实浏览器能证明"它是好的"。
 
+**31. 加了迁移，但 Prisma 客户端没重新生成**
+
+给社交与讨论区加完迁移后，代码在开发服务器上继续跑得好好的——直到有请求真的去 select 新字段才开始 500。原因很具体：
+
+```bash
+npx prisma migrate dev --name social_and_forum   # 迁移建好、库已同步
+# → 但 lib/generated/prisma 仍然停留在迁移之前的时间戳，没有 Board / Post / Reply
+```
+
+`migrate dev` 在 Prisma 7 的这套配置下**没有**顺带重新生成客户端（生成物是 gitignore 的 `lib/generated/prisma`），于是出现一个很有欺骗性的状态：数据库里表都在、迁移文件也齐全，但 `prisma.board` 是 `undefined`，而 `userSelect` 里多出来的 `profileVisibility` 会让每个读取会话的接口抛 `Unknown field`。
+
+这次是**并行工作的子代理先发现的**——它的整个工作流因此一条也编译不过。它没有绕过规则偷偷乱来，而是先报告再申请，我做了一个决定：让它停手、由我从主会话执行一次 `npx prisma generate`（两个进程同时往同一个输出目录写会更糟）。
+
+**现在固定的顺序是：迁移 → `npx prisma generate` → 重启 dev server。** 三步缺一不可，前两步都有过"看起来成功"的假象：迁移成功不代表客户端更新，客户端更新不代表运行中的 dev server 会重新加载（它把旧的 `lib/generated/prisma` 缓存在内存里，所以生成之后必须重启进程，否则仍然报 `Unknown field`）。
+
+**32. 四个可见性模式里有两个是同一件事**
+
+主页可见性的规则第一版写成这个顺序：本人 → 黑名单 → 白名单 → 好友 → 模式兜底。测试 118 项全绿，断言也是照着这个顺序写的。
+
+问题在于把「好友」和「白名单」放在模式判断**之前**：`仅自己可查看` 与 `指定用户可查看` 最终放行的是同一批人（好友 ∪ 白名单），**四个模式里有两个行为完全一致**，"仅自己可查看"这个标签于是在说谎。这不是实现 bug 而是**规格 bug**，而且测试是照着错误规格写的，所以测试越全绿越有欺骗性。
+
+改成：本人 → 黑名单 → 仅自己（直接拒绝，好友与白名单都不例外）→ 白名单 → 好友（只在"所有用户/仅好友"两种模式下生效）→ 模式兜底。四个模式这才各自成立。原来的断言没有删掉，而是**翻转**成"好友在仅自己模式下被拒绝""白名单在仅自己模式下不生效"，并补了"指定用户模式下好友被拒绝"这一条钉住新的边界。
+
+　　**教训：测试通过只能证明实现与断言一致，不能证明断言与需求一致。** 发现它的方式是把实现的顺序逐条念一遍——"第 4 步在第 9 步前面意味着什么"——而不是再跑一次测试。
+
+**33. 一次"看起来是 bug"的视觉误报**
+
+用视觉模型复查界面时，它报了一个很像真问题的问题：讨论区的板块计数加起来是 15，而总计写着 13，「数字不一致」。直接从 DOM 里取文本核对后，实际是 13 与 13 —— 模型把「海滨度假 2」读成了 4。
+
+同样被误报的还有「收到的友好申请」（字典里其实是「收到的好友申请」）和"城市标签中英混杂"（确实存在，已修）。所以视觉复查的正确用法是**用它找可疑点，再回到 DOM/API 去证实**：它很擅长发现"这里读起来很怪"，不擅长保证读得准。
+
+同一次复查里真正成立的三个问题：讨论区卡片的城市标签渲染的是数据库里的英文规范名（应为 `cityName(locale, …)`，与之前修过的城市名是同一类漏网）；可见性弹窗把搜索候选渲染成和"已添加的人"一模一样的小圆标签，紧挨着「还没有添加任何人」——功能上没错，读起来自相矛盾，于是给候选加了 `+` 图标和一行说明；自己主页上显示「2 位共同好友」（对自己而言每个好友都是共同好友），改为只在看别人主页时显示。
+
+**34. 测试脚本自己在污染演示数据**
+
+做可见性弹窗时发现，候选列表里全是 `路人甲`、`搜索测试`、`Bob` 这种名字。查库后确认：**56 个 `@example.com` 账号**是历次 smoke 脚本注册后没有删除的临时账号（`reviewer-…` / `history-…` / `archive-…` / `avatar-check-…`）。它们不影响功能，但演示库里有 56 个假用户，而且因为弹窗默认列出最新注册的用户，这些垃圾直接出现在界面上。
+
+处理方式是新增 `scripts/clean-test-data.mjs`：规则很窄，只删 `@example.com`（保留域，真实注册不可能命中），默认只报告、加 `--apply` 才真删，删用户时按外键级联清掉其订单/评价/帖子/好友关系。执行后 45 个账号（44 个种子账号 + 1 个真实注册）完好，13 篇帖子、36 条回复、180 套房源、4 条好友关系都未受影响。
+
+　　**教训：测试数据的清理应该和测试写在一起。** 这一轮的两个新套件（social / forum）都自带清理，而这个坑是更早的套件留下的——清理不是"以后再说"的事，因为"以后"就是演示前一天。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
@@ -1407,10 +1543,11 @@ FAIL  web server — nothing answering on port 3001 (run: npm run dev)
 - ~~**待支付订单不会自动过期**~~ —— **已修复**：PENDING 现在带 30 分钟支付时限，到期后由 `expireStaleBookings` 自动取消并释放日期，迟到支付会被服务端拒绝（见「支付时限：30 分钟不付款就自动取消」）。仍然留白的部分：没有给时限做**提醒通知**（到期前 5 分钟没有邮件/站内信），时限长度也还是常量而非按房源配置。
 - **退款的「到账」是手动模拟的**。真实渠道退款是异步回调驱动的（1-3 个工作日），演示环境用「模拟退款到账」按钮推进 `PROCESSING → SUCCEEDED`，没有真实资金流动，也没有接入渠道退款回调。
 - 会话记忆是**进程内**的，重启服务即清空；生产环境应换成 Redis。
-- **个性化主页的内容没有长度之外的内容审核**。标签、爱好、地点都是自由文本，只做了去空格、去重、截断和数量上限；这是一个单机演示，没有其他用户能看到你的主页，所以未接入敏感词过滤。
-- **主页仅为本人可编辑、无法被他人浏览**。数据模型与接口都已就绪（`GET /api/auth/session` 会返回全部字段），但没有做"查看他人主页"的路由。
-- 未接入真实支付（需求明确不要求）。
-- 改了 `prisma/schema.prisma` 之后，**跑完迁移还要重启 `next dev`**：开发服务器会把 Prisma Client 常驻在内存里，否则会报 `Unknown field ... for select statement`。
+- **个性化主页的内容没有长度之外的内容审核**。标签、爱好、地点都是自由文本，只做了去空格、去重、截断和数量上限；讨论区的帖子与回复同样只做了长度与空值校验。这是一个单机演示，未接入敏感词过滤或举报机制。
+- ~~**主页仅为本人可编辑、无法被他人浏览**~~ —— **已修复**：`/u/<id>` 可访问任何人的主页，可见性由主页主人在弹窗里设置（所有用户 / 仅好友 / 指定用户 / 仅自己 + 两张例外名单），并配套好友申请与好友列表。仍然留白的部分：**没有"拉黑某人不让他加我好友"**——黑名单只影响主页可见性与搜索结果，不影响对方发来的好友申请；这属于独立的「屏蔽用户」功能，与其半做不如不做。
+- **上传的图片不会自动清理**。`data/uploads/` 里的文件在换头像后仍然留在磁盘上（URL 含随机串、永不复用），没有做孤儿文件回收；演示规模下无影响，长期运行需要一个 sweep 任务。
+- ~~**跑完迁移还要重启 `next dev`**~~ —— 实际比这更麻烦，**完整顺序是：迁移 → `npx prisma generate` → 重启 dev server**。`migrate dev` 并不会重新生成客户端，只重启不生成、或只生成不重启，都会继续报 `Unknown field ... for select statement`（见开发记录第 31 条）。
+- **讨论区的 `Post.replyCount` 是冗余计数**，只有走服务层的事务才会保持正确。若日后有别的写入路径直接改 `Reply` 表，计数会漂移；`smoke-forum.mjs` 里有一项全局漂移检查兜底，但它只能在跑测试时发现问题。
 - `@prisma/adapter-pg` 会打印一条 `pg` 的弃用警告（`client.query() when the client is already executing a query`），来自依赖内部，不影响功能。
 
 ---
@@ -1422,15 +1559,18 @@ FAIL  web server — nothing answering on port 3001 (run: npm run dev)
 | ① | 打开首页 | Hero、搜索组件、房源类型分类、热门目的地、推荐房源、Agent 入口 |
 | ② | 搜索东京，4 人 | 筛选面板、URL 同步（刷新后状态保持）、房源卡片信息完整 |
 | ③ | 进入房源详情 | **多视角图片画廊（带 客厅/主卧/厨房… 角度标签 + 灯箱缩略图）**、房东、**点开任一设施查看说明与当地普及度**、**当地实时天气与 5 日预报**、价格明细 |
-| ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234`；右上角头像菜单 → **个人主页**：换背景、加标签、填心仪地点与已旅行地点展柜、改昵称/头像/密码 |
+| ④ | 登录 | 使用演示账号 `demo@travel-agent.dev` / `Demo1234`；右上角头像菜单 → **个人主页**：**从本机上传头像与背景图**、加标签、填心仪地点与已旅行地点展柜、改昵称/密码、**主页可见性弹窗（四种模式 + 两张例外名单）** |
 | ⑤ | 收藏房源 | 爱心 → 选择/新建心愿单 → Toast 反馈 |
 | ⑥ | 完成一次预订并支付 | 选日期人数 → 价格实时计算 → 确认 → **跳转收银台** → 依次展示微信 / 支付宝 / 银行卡 → **30 分钟支付时限倒计时（服务端同样认这条时限）** → 模拟支付成功 |
 | ⑦ | 取消并退款 | Trips 点「取消订单」→ 弹窗展示**取消政策与逐项退款金额** → 确认 → 订单取消、退款处理中 → 点「模拟退款到账」 |
-| ⑧ | 打开 AI 助手，输入自然语言需求 | 流式输出 + **"正在搜索房源…"→"✓ 找到 N 个房源"** 工具执行状态 + 房源卡片 |
-| ⑨ | "帮我选三个" | 调用 `recommendListings`，返回带推荐理由的 3 张卡片 |
-| ⑩ | "比较刚才这三个" | 调用 `compareListings`，输出结构化对比与结论 |
-| ⑪ | "把第一个加入东京旅行心愿单" | 调用 `addToWishlist` **真实写库** → 打开心愿单页面看到该房源 |
-| ⑫ | 上传旅行计划 PDF | 解析出目的地/天数/人数/预算/景点 → Agent 继续推荐住宿 |
+| ⑧ | 打开讨论区 | 七个板块（滑雪旅行 / 海滨度假 / 城市探索…）、按板块筛选、排序、搜索、「我的帖子」；点进一篇帖子看回复 |
+| ⑨ | 点帖子作者的名字 → 进他的主页 | **`/u/<id>` 公开主页**：标签、爱好、足迹、好友数、帖子数 → 点「加为好友」发申请 |
+| ⑩ | 回到「好友」页 | 看到刚发出的申请、以及预置的待处理申请 → 点「通过」→ 变成好友；再到自己的主页把可见性改成「仅好友可查看」 |
+| ⑪ | 打开 AI 助手，输入自然语言需求 | 流式输出 + **"正在搜索房源…"→"✓ 找到 N 个房源"** 工具执行状态 + 房源卡片 |
+| ⑫ | "帮我选三个" | 调用 `recommendListings`，返回带推荐理由的 3 张卡片 |
+| ⑬ | "比较刚才这三个" | 调用 `compareListings`，输出结构化对比与结论 |
+| ⑭ | "把第一个加入东京旅行心愿单" | 调用 `addToWishlist` **真实写库** → 打开心愿单页面看到该房源 |
+| ⑮ | 上传旅行计划 PDF | 解析出目的地/天数/人数/预算/景点 → Agent 继续推荐住宿 |
 
 **演示重点**：`AI Agent → Tool → Service → Database → UI` 这一完整链路，以及"AI 的推荐来自真实数据库、AI 的操作真实落库"。
 

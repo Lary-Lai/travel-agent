@@ -14,9 +14,11 @@
 import { account } from "./account";
 import { auth } from "./auth";
 import { agentUi } from "./agentUi";
+import { forum } from "./forum";
 import { globals } from "./globals";
 import { media } from "./media";
 import { payment } from "./payment";
+import { social } from "./social";
 import { trips } from "./trips";
 import { wishlist } from "./wishlist";
 import type { Locale } from "../locales";
@@ -30,6 +32,8 @@ export const MESSAGE_MODULES = {
   media,
   agentUi,
   globals,
+  social,
+  forum,
 } as const;
 
 export type ModuleName = keyof typeof MESSAGE_MODULES;

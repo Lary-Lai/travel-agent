@@ -10,6 +10,7 @@ import { z } from "zod";
 
 import { badRequest } from "./http";
 import { isPresetAvatar } from "./avatars";
+import { isUploadedMediaPath } from "./uploads";
 import { MAX_GUESTS } from "./pricing";
 import { isCoverPreset, MAX_CHIPS, normaliseChips } from "./profile-options";
 import { SORT_OPTIONS, type ListingSearchInput, type PropertyTypeValue } from "../types";
@@ -148,8 +149,12 @@ export const loginSchema = z.object({
 });
 
 /**
- * An avatar may be: cleared (""), one of the bundled presets, or an absolute
- * http(s) URL. Presets are same-origin paths, so a bare `z.url()` rejects them.
+ * An avatar may be: cleared (""), one of the bundled presets, a file this app
+ * stored (`/api/media/...`), or an absolute http(s) URL.
+ *
+ * A bare `z.url()` is not enough: presets and uploads are same-origin paths, so
+ * it would reject the two shapes the UI actually produces. Absolute URLs stay
+ * accepted because a profile saved before local uploads existed still holds one.
  */
 const avatarValueSchema = z
   .string()
@@ -158,22 +163,25 @@ const avatarValueSchema = z
     (value) => {
       if (value === "") return true;
       if (isPresetAvatar(value)) return true;
+      if (isUploadedMediaPath(value)) return true;
       return z.url().safeParse(value).success;
     },
-    { message: "头像地址必须是有效的图片链接，或从下方选择内置预设头像" },
+    { message: "头像必须是内置预设、本地上传的图片，或有效的图片链接" },
   )
   .transform((value) => (value === "" ? null : value));
 
 /**
- * Same rule for the banner: cleared (""), a bundled gradient preset key, or an
- * absolute http(s) image URL.
+ * Same rule for the banner: cleared (""), an uploaded file, or an absolute
+ * http(s) image URL.
  */
 const coverImageSchema = z
   .string()
   .trim()
-  .refine((value) => value === "" || z.url().safeParse(value).success, {
-    message: "背景图地址必须是有效的图片链接",
-  })
+  .refine(
+    (value) =>
+      value === "" || isUploadedMediaPath(value) || z.url().safeParse(value).success,
+    { message: "背景图必须是本地上传的图片，或以 http:// 或 https:// 开头的链接" },
+  )
   .transform((value) => (value === "" ? null : value));
 
 const chipListSchema = (limit: number) =>

@@ -50,6 +50,8 @@ export const es = {
     search: "Buscar alojamiento",
     wishlist: "Favoritos",
     trips: "Mis viajes",
+    forum: "Comunidad",
+    friends: "Amigos",
     aiAgent: "Asistente IA",
     aiAgentTitle: "Asistente IA de alojamientos",
   },

@@ -30,6 +30,12 @@ const MODULE_NAMES = new Set<string>(Object.keys(MESSAGE_MODULES));
 
 export type TranslationKey = MainKey | ModuleKey;
 
+/**
+ * Re-exported so a consumer that indexes by key — `plurals.ts` — can name the
+ * module half of the union without importing from `./messages` directly.
+ */
+export type { ModuleKey } from "./messages";
+
 export const DICTIONARIES: Record<Locale, Dictionary> = {
   "zh-CN": zhCN,
   "zh-TW": zhTW as Dictionary,
@@ -75,6 +81,17 @@ export function interpolate(template: string, vars?: TVars): string {
 
 export function translate(locale: Locale, key: TranslationKey, vars?: TVars): string {
   const namespace = key.split(".")[0];
+  const count = typeof vars?.count === "number" ? vars.count : undefined;
+
+  // A count of exactly 1 may need a singular form ("1 night", not "1 nights").
+  //
+  // Checked FIRST because the override is a complete template that replaces
+  // whatever the module or the dictionary would have produced. It used to be
+  // consulted after the module routing below, which returns early — so a plural
+  // entry for a module-owned key (`forum.replies`) was silently unreachable and
+  // English rendered "1 replies".
+  const singular = singularForm(locale, key, count);
+  if (singular !== undefined) return interpolate(singular, vars);
 
   // A group module owns its whole namespace, so route there first — but fall
   // THROUGH rather than returning the key if the module does not define it.
@@ -88,9 +105,7 @@ export function translate(locale: Locale, key: TranslationKey, vars?: TVars): st
     if (fromModule !== undefined) return interpolate(fromModule, vars);
   }
 
-  // A count of exactly 1 may need a singular form ("1 night", not "1 nights").
-  const singular = singularForm(locale, key as MainKey, typeof vars?.count === "number" ? vars.count : undefined);
-  const fromLocale = singular ?? lookup(DICTIONARIES[locale], key);
+  const fromLocale = lookup(DICTIONARIES[locale], key);
   const fromFallback = lookup(DICTIONARIES[FALLBACK_LOCALE], key);
   return interpolate(fromLocale ?? fromFallback ?? key, vars);
 }

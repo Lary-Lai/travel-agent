@@ -23,6 +23,8 @@ import { toast } from "sonner";
 
 import { ChipListEditor } from "@/components/chip-list-editor";
 import { EmptyState } from "@/components/empty-state";
+import { ImageUploadField } from "@/components/image-upload-field";
+import { ProfilePrivacyDialog } from "@/components/profile-privacy-dialog";
 import { useLocale, useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -304,9 +306,15 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
       <div className="grid gap-6 lg:grid-cols-2">
         {/* -------------------------------------------------------- profile */}
         <section className="space-y-5 rounded-2xl border p-5">
-          <div className="flex items-center gap-2">
-            <BadgeCheck className="text-primary size-4" />
-            <h2 className="text-sm font-semibold">{t("account.publicInfo")}</h2>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <BadgeCheck className="text-primary size-4" />
+              <h2 className="text-sm font-semibold">{t("account.publicInfo")}</h2>
+            </div>
+            {/* Who may open `/u/<my id>`. Sits in this section's header rather
+                than in the account-security column because it is a property of
+                the public profile, not of the credentials. */}
+            <ProfilePrivacyDialog />
           </div>
 
           <div className="space-y-2">
@@ -353,14 +361,18 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="avatar">{t("account.avatarUrl")}</Label>
-            <Input
-              id="avatar"
+            <Label>{t("account.uploadAvatar")}</Label>
+            {/* Local file upload replaces the old "paste an image URL" field: a
+                URL input asks the user to already be hosting the file, and
+                makes the profile depend on a third-party host. */}
+            <ImageUploadField
+              kind="avatar"
+              label={t("account.uploadAvatar")}
               value={avatar}
-              onChange={(event) => setAvatar(event.target.value)}
-              placeholder={t("account.avatarPlaceholder")}
+              onChange={setAvatar}
+              disabled={profileMutation.isPending}
+              previewClassName="rounded-full"
             />
-            <p className="text-muted-foreground text-xs">{t("account.avatarHint")}</p>
           </div>
 
           <Separator />
@@ -402,18 +414,17 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
               })}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="coverImage" className="text-xs font-normal">
-                {t("account.coverCustom")}
-              </Label>
-              <Input
-                id="coverImage"
+              <Label className="text-xs font-normal">{t("account.coverUpload")}</Label>
+              <ImageUploadField
+                kind="cover"
+                label={t("account.uploadCover")}
                 value={coverImage}
-                onChange={(event) => {
-                  setCoverImage(event.target.value);
+                onChange={(next) => {
+                  setCoverImage(next);
                   setCoverImageBroken(false);
                 }}
-                placeholder={t("account.coverPlaceholder")}
-                className="h-8 text-sm"
+                disabled={profileMutation.isPending}
+                previewClassName="aspect-video w-24"
               />
               <p className="text-muted-foreground flex items-center gap-1 text-xs">
                 <ImageOff className="size-3" />

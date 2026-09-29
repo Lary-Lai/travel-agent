@@ -52,6 +52,73 @@ enum RefundReason {
   HOST_CANCELLED
 }
 
+/// Who may open a user's profile page.
+///
+/// A single enum rather than a set of booleans because the modes are mutually
+/// exclusive and "public + friends-only" is not a state anyone means.
+enum ProfileVisibility {
+  /// Anyone, including a signed-out visitor.
+  PUBLIC
+  /// Accepted friends only.
+  FRIENDS
+  /// Only the users on the allow-list, plus friends.
+  SELECTED
+  /// Only the owner.
+  PRIVATE
+}
+
+/// One row per (owner, viewer) exception to the visibility mode.
+///
+/// DENY always beats ALLOW: an explicit block is the only way to keep someone out
+/// of a PUBLIC profile, and "I blocked them but they can still see me because
+/// they are on the allow-list" would be a bug nobody could reason about.
+enum ProfileAccessKind {
+  ALLOW
+  DENY
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+}
+
+/// A friendship, stored as ONE row per pair with the direction recorded.
+///
+/// Not two mirrored rows: a mutual pair would need both rows kept in sync on
+/// every accept/remove, and any half-failed write would leave a user who is
+/// "friends" in one direction only.
+model Friendship {
+  id          String           @id @default(cuid())
+  requesterId String
+  addresseeId String
+  status      FriendshipStatus @default(PENDING)
+  createdAt   DateTime         @default(now())
+  respondedAt DateTime?
+
+  requester User @relation("FriendRequestsSent", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendRequestsReceived", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
+}
+
+/// A per-viewer exception to a profile's visibility mode (see ProfileAccessKind).
+model ProfileAccess {
+  id        String            @id @default(cuid())
+  ownerId   String
+  viewerId  String
+  kind      ProfileAccessKind
+  createdAt DateTime          @default(now())
+
+  owner  User @relation("ProfileAccessOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  viewer User @relation("ProfileAccessViewer", fields: [viewerId], references: [id], onDelete: Cascade)
+
+  /// One verdict per pair — setting a second one replaces the first.
+  @@unique([ownerId, viewerId])
+  @@index([ownerId, kind])
+}
+
 // ---------------------------------------------------------------- models
 
 model User {
@@ -77,6 +144,18 @@ model User {
   /// 已旅行地点 — the "display case" of places already visited.
   visitedPlaces     String[] @default([])
 
+  // ------------------------------------------------------------- social
+  /// Who may open this profile at `/u/[id]`. Defaults to PUBLIC so the feature
+  /// is discoverable rather than silently locking everyone out of a new account.
+  profileVisibility ProfileVisibility @default(PUBLIC)
+
+  accessGranted     ProfileAccess[] @relation("ProfileAccessViewer")
+  accessOwned       ProfileAccess[] @relation("ProfileAccessOwner")
+  friendRequestsSent Friendship[]   @relation("FriendRequestsSent")
+  friendRequestsReceived Friendship[] @relation("FriendRequestsReceived")
+  posts             Post[]          @relation("UserPosts")
+  replies           Reply[]         @relation("UserReplies")
+
   hostedListings Listing[]     @relation("HostListings")
   wishlists      Wishlist[]
   bookings       Booking[]
@@ -84,6 +163,7 @@ model User {
   searchEvents   SearchEvent[]
 
   @@index([email])
+  @@index([profileVisibility])
 }
 
 model Listing {
@@ -314,6 +394,77 @@ model Booking {
   @@index([listingId])
   @@index([userId, status])
   @@index([listingId, checkIn, checkOut])
+}
+
+/// A discussion board (板块) — 滑雪旅行 / 海滨度假 / 城市探索 …
+///
+/// Boards are rows rather than an enum so a new board is a seed change, not a
+/// migration plus a redeploy of the UI that switches on the enum.
+model Board {
+  id       String @id @default(cuid())
+  /// Stable identity for the seed, like `Listing.seedKey`.
+  slug     String @unique
+  /// Authored Chinese name / blurb.
+  name        String
+  description String
+  /// Per-locale name and description, keyed by locale code. Same reasoning as
+  /// `Listing.titleI18n`: the Chinese values stay the authored source of truth
+  /// (the API and the Agent read them) while the UI renders the localised text.
+  nameI18n        Json?
+  descriptionI18n Json?
+  /// Lucide icon name, chosen in the seed.
+  icon     String?
+  /// Emoji shown in the board header, e.g. 🎿.
+  emoji    String?
+  position Int    @default(0)
+
+  posts Post[]
+
+  @@index([position])
+}
+
+/// A forum post. Free-form (title + body), optionally tied to a city so a post
+/// can be found from the place it is about.
+model Post {
+  id       String  @id @default(cuid())
+  boardId  String
+  authorId String
+  title    String
+  body     String
+  /// Canonical English city name when the post names one, else null.
+  city     String?
+  /// Optional cover image (a bundled listing photo, or an uploaded one).
+  image    String?
+  /// Pinned posts sort first within their board.
+  pinned   Boolean @default(false)
+  /// Denormalised so board lists do not need a join per row to show the count.
+  replyCount Int  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  board   Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  author  User    @relation("UserPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  replies Reply[]
+
+  @@index([boardId, pinned, createdAt])
+  @@index([authorId])
+  @@index([city])
+}
+
+model Reply {
+  id       String @id @default(cuid())
+  postId   String
+  authorId String
+  body     String
+
+  createdAt DateTime @default(now())
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation("UserReplies", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorId])
 }
 
 /// Refund record for a cancelled booking.

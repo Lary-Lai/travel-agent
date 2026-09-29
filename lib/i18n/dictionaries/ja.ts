@@ -45,6 +45,8 @@ export const ja = {
     search: "宿を検索",
     wishlist: "お気に入り",
     trips: "予約一覧",
+    forum: "掲示板",
+    friends: "友だち",
     aiAgent: "AI アシスタント",
     aiAgentTitle: "AI 宿探しアシスタント",
   },

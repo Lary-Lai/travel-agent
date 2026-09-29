@@ -13,7 +13,7 @@ import { formatDate, formatDateRange, formatDateShort } from "../lib/format";
 import { LOCALES, matchAcceptLanguage, type Locale } from "../lib/i18n/locales";
 import { PLURALS } from "../lib/i18n/plurals";
 import { zhCN } from "../lib/i18n/dictionaries/zh-CN";
-import { MESSAGE_MODULES, type ModuleName } from "../lib/i18n/messages";
+import { MESSAGE_MODULES, moduleKeys, type ModuleName } from "../lib/i18n/messages";
 
 let passed = 0;
 let failed = 0;
@@ -131,11 +131,56 @@ check(
   translate("en", "common.reviews", { count: 1 }),
 );
 
+// Module keys must be able to carry a singular form too. A forum thread with
+// exactly one answer reading "1 replies" is the same bug as "1 nights", and it
+// was live until the plural table accepted `<module>.<key>` entries.
+check(
+  "English: a forum thread with one reply reads 1 reply",
+  translate("en", "forum.replies", { count: 1 }) === "1 reply",
+  translate("en", "forum.replies", { count: 1 }),
+);
+check(
+  "English: two replies stay plural",
+  translate("en", "forum.replies", { count: 2 }) === "2 replies",
+  translate("en", "forum.replies", { count: 2 }),
+);
+check(
+  "Spanish: una respuesta / dos respuestas",
+  translate("es", "forum.replies", { count: 1 }) === "1 respuesta" &&
+    translate("es", "forum.replies", { count: 2 }) === "2 respuestas",
+  `${translate("es", "forum.replies", { count: 1 })} / ${translate("es", "forum.replies", { count: 2 })}`,
+);
+check(
+  "English: one friend, not 1 friends",
+  translate("en", "social.friendCount", { count: 1 }) === "1 friend",
+  translate("en", "social.friendCount", { count: 1 }),
+);
+check(
+  "Chinese still ignores plurality for module keys",
+  translate("zh-CN", "forum.replies", { count: 1 }) === "1 条回复",
+  translate("zh-CN", "forum.replies", { count: 1 }),
+);
+
+/**
+ * Every key the app can legitimately ask for: the main dictionary plus each
+ * group module. The plural-table guard below needs both, because a module key
+ * with a singular override is not a typo.
+ */
+const allKeys = new Set<string>([
+  ...referencePaths,
+  ...Object.keys(MESSAGE_MODULES).flatMap((name) => moduleKeys(name as ModuleName)),
+]);
+
 check(
   "every plural override names a real key",
   Object.values(PLURALS).every((table) =>
-    Object.keys(table ?? {}).every((key) => reference.has(key)),
+    Object.keys(table ?? {}).every((key) => allKeys.has(key)),
   ),
+  Object.values(PLURALS)
+    .flatMap((table) => Object.keys(table ?? {}))
+    .filter((key) => !allKeys.has(key))
+    .slice(0, 4)
+    .join(", "),
 );
 
 console.log("\n— interpolation and lookup");

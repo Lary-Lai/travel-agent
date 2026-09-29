@@ -10,9 +10,9 @@
  * no entry, and the base dictionary is used — which is correct there.
  */
 import type { Locale } from "./locales";
-import type { TranslationKey } from ".";
+import type { ModuleKey, TranslationKey } from ".";
 
-export const PLURALS: Partial<Record<Locale, Partial<Record<TranslationKey, string>>>> = {
+export const PLURALS: Partial<Record<Locale, Partial<Record<TranslationKey | ModuleKey, string>>>> = {
   en: {
     "common.nights": "{count} night",
     "common.reviews": "{count} review",
@@ -24,6 +24,13 @@ export const PLURALS: Partial<Record<Locale, Partial<Record<TranslationKey, stri
     "houseRules.rulesCount": "{count} rule",
     "booking.totalNights": "{count} night",
     "searchBar.guests": "{count} guest",
+    // Forum and social counters: a thread with exactly one answer must not read
+    // "1 replies", which is the same class of bug as "1 nights".
+    "forum.replies": "{count} reply",
+    "forum.resultsCount": "{count} post",
+    "forum.postsInBoard": "{count} post",
+    "social.friendCount": "{count} friend",
+    "social.mutualFriends": "{count} mutual friend",
   },
   es: {
     "common.nights": "{count} noche",
@@ -36,6 +43,11 @@ export const PLURALS: Partial<Record<Locale, Partial<Record<TranslationKey, stri
     "houseRules.rulesCount": "{count} norma",
     "booking.totalNights": "{count} noche",
     "searchBar.guests": "{count} huésped",
+    "forum.replies": "{count} respuesta",
+    "forum.resultsCount": "{count} publicación",
+    "forum.postsInBoard": "{count} publicación",
+    "social.friendCount": "{count} amigo",
+    "social.mutualFriends": "{count} amigo en común",
   },
 };
 
@@ -49,5 +61,5 @@ export function singularForm(
   count: number | undefined,
 ): string | undefined {
   if (count !== 1) return undefined;
-  return PLURALS[locale]?.[key];
+  return PLURALS[locale]?.[key as ModuleKey];
 }

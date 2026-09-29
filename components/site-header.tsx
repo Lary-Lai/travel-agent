@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, Heart, Loader2, LogOut, Menu, Route, Search, Settings, Sparkles, User } from "lucide-react";
+import { Compass, Heart, Loader2, LogOut, Menu, MessagesSquare, Route, Search, Settings, Sparkles, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -31,6 +31,8 @@ const NAV = [
   { href: "/search", key: "nav.search", icon: Search },
   { href: "/wishlist", key: "nav.wishlist", icon: Heart },
   { href: "/trips", key: "nav.trips", icon: Route },
+  { href: "/forum", key: "nav.forum", icon: MessagesSquare },
+  { href: "/friends", key: "nav.friends", icon: Users },
 ] as const;
 
 export function SiteHeader() {

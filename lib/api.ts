@@ -6,17 +6,31 @@
  * UI renders in toasts and error states.
  */
 import type {
+  BoardDto,
   BookingDto,
   CityWeather,
+  ForumPostsPayload,
+  ForumSortValue,
+  FriendDto,
+  FriendsPayload,
   ListingDetail,
   ListingSearchInput,
   ListingSearchResult,
   PaymentMethodValue,
   PersonalizedDestination,
+  PostDetailDto,
+  PostDetailPayload,
+  ProfilePrivacyDto,
+  ProfileVisibilityValue,
+  PublicProfileDto,
+  PublicUserBrief,
   RefundDto,
+  ReplyDto,
   ReviewDto,
   ReviewSummary,
   SessionUserDto,
+  UploadedMediaDto,
+  UploadKindValue,
   WishlistDto,
 } from "@/types";
 
@@ -47,14 +61,23 @@ export function buildQuery(input: Record<string, unknown>): string {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return send<T>(path, init, init.body ? { "Content-Type": "application/json" } : {});
+}
+
+/**
+ * Multipart variant: the browser sets `Content-Type` including the generated
+ * boundary, so this one must NOT set a content type of its own.
+ */
+async function requestForm<T>(path: string, body: FormData): Promise<T> {
+  return send<T>(path, { method: "POST", body }, {});
+}
+
+async function send<T>(path: string, init: RequestInit, headers: Record<string, string>): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       ...init,
-      headers: {
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-      },
+      headers: { ...headers, ...init.headers },
       credentials: "same-origin",
     });
   } catch {
@@ -300,4 +323,101 @@ export const api = {
       destinations: PersonalizedDestination[];
       source: "history" | "popular";
     }>("/api/recommendations/destinations"),
+
+  // ================================================================ uploads
+  // Owned by the media/upload workstream. Methods below this banner are that
+  // workstream's; keep edits inside it so parallel writers never collide.
+  /**
+   * Upload a local image and get back a same-origin path to store.
+   *
+   * Separate from `request` because the browser must set the multipart boundary
+   * itself — forcing `Content-Type: application/json` here would corrupt it.
+   */
+  uploadImage: (file: File, kind: UploadKindValue) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("kind", kind);
+    return requestForm<UploadedMediaDto>("/api/uploads", body);
+  },
+
+  // ================================================================= social
+  // Owned by the social workstream (visibility, public profiles, friends).
+  /** Your own visibility settings, including both exception lists. */
+  getPrivacy: () => request<ProfilePrivacyDto>("/api/users/me/privacy"),
+
+  savePrivacy: (input: {
+    visibility: ProfileVisibilityValue;
+    allow: string[];
+    deny: string[];
+  }) =>
+    request<ProfilePrivacyDto>("/api/users/me/privacy", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }),
+
+  /** People picker used by the visibility dialog and by "find friends". */
+  searchUsers: (query: string) =>
+    request<{ users: PublicUserBrief[] }>(
+      `/api/users/search${buildQuery({ q: query })}`,
+    ),
+
+  /** Another person's profile. Returns `canView: false` rather than 403. */
+  getPublicProfile: (id: string) =>
+    request<PublicProfileDto>(`/api/users/${encodeURIComponent(id)}`),
+
+  listFriends: () => request<FriendsPayload>("/api/friends"),
+
+  sendFriendRequest: (userId: string) =>
+    request<{ friend: FriendDto }>("/api/friends", {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }),
+
+  respondToFriendRequest: (friendshipId: string, action: "accept" | "decline") =>
+    request<{ friend: FriendDto }>(`/api/friends/${encodeURIComponent(friendshipId)}`, {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    }),
+
+  removeFriend: (friendshipId: string) =>
+    request<{ removed: boolean }>(`/api/friends/${encodeURIComponent(friendshipId)}`, {
+      method: "DELETE",
+    }),
+
+  // ================================================================== forum
+  // Owned by the forum workstream.
+  listBoards: () => request<{ boards: BoardDto[] }>("/api/forum/boards"),
+
+  listPosts: (input: {
+    board?: string;
+    sort?: ForumSortValue;
+    q?: string;
+    city?: string;
+    mine?: boolean;
+  }) => request<ForumPostsPayload>(`/api/forum/posts${buildQuery(input)}`),
+
+  getPost: (id: string) =>
+    request<PostDetailPayload>(`/api/forum/posts/${encodeURIComponent(id)}`),
+
+  createPost: (input: { boardSlug: string; title: string; body: string; city?: string }) =>
+    request<{ post: PostDetailDto }>("/api/forum/posts", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  createReply: (postId: string, body: string) =>
+    request<{ reply: ReplyDto; replyCount: number }>(
+      `/api/forum/posts/${encodeURIComponent(postId)}/replies`,
+      { method: "POST", body: JSON.stringify({ body }) },
+    ),
+
+  deletePost: (id: string) =>
+    request<{ deleted: boolean }>(`/api/forum/posts/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
+
+  deleteReply: (id: string) =>
+    request<{ deleted: boolean }>(`/api/forum/replies/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }),
 };

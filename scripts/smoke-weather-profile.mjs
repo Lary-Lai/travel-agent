@@ -22,12 +22,31 @@ const check = (name, ok, detail = "") => {
   }
 };
 
-const login = async (email, password) => {
-  const response = await fetch(`${BASE}/api/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password }),
-  });
+/**
+ * Log in, retrying once on a network-level failure.
+ *
+ * The retry exists for one specific, reproducible flake: this suite blocks for
+ * several seconds while it shells out to `prisma db seed` (see the account
+ * persistence section), and the HTTP server closes an idle keep-alive socket
+ * after ~5s. The *next* POST then lands on a socket the server has already
+ * closed and fails with ECONNRESET before reaching any application code —
+ * undici retries idempotent requests automatically, but a POST is not one of
+ * them. Retrying on a fresh connection asserts the same thing (the account
+ * survived the seed) without asserting that socket reuse happens to work.
+ */
+const login = async (email, password, attempt = 1) => {
+  let response;
+  try {
+    response = await fetch(`${BASE}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (error) {
+    if (attempt >= 2) throw error;
+    console.log(`  note: login hit a stale connection (${error.cause?.code ?? error.message}), retrying`);
+    return login(email, password, attempt + 1);
+  }
   const cookie = (response.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
   return { status: response.status, cookie, body: await response.json() };
 };
