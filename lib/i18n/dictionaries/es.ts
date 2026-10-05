@@ -50,7 +50,7 @@ export const es = {
     search: "Buscar alojamiento",
     wishlist: "Favoritos",
     trips: "Mis viajes",
-    forum: "Comunidad",
+    forum: "Círculo viajero",
     friends: "Amigos",
     aiAgent: "Asistente IA",
     aiAgentTitle: "Asistente IA de alojamientos",

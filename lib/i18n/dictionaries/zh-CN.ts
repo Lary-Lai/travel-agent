@@ -48,7 +48,7 @@ export const zhCN = {
     search: "搜索房源",
     wishlist: "心愿单",
     trips: "我的行程",
-    forum: "讨论区",
+    forum: "旅行圈",
     friends: "好友",
     aiAgent: "AI 助手",
     aiAgentTitle: "AI 民宿助手",

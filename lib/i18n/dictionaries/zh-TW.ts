@@ -46,7 +46,7 @@ export const zhTW = {
     search: "搜尋房源",
     wishlist: "心願單",
     trips: "我的行程",
-    forum: "討論區",
+    forum: "旅行圈",
     friends: "好友",
     aiAgent: "AI 助手",
     aiAgentTitle: "AI 民宿助手",

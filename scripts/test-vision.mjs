@@ -57,11 +57,23 @@ async function probe(label, content) {
 
 console.log("— image input support");
 
-// A) image by public URL
-await probe("image_url (remote URL)", [
+/*
+ * A) image by public URL.
+ *
+ * This is reported as INCONCLUSIVE rather than FAIL when the provider could not
+ * fetch the image: with a remote URL, *the provider* downloads it, so a 400 from
+ * the image host says the host is unhappy, not that the model cannot see images.
+ * The check that matters for this app is B below — the OCR path sends a data URI
+ * precisely so it never depends on an external host being reachable.
+ */
+const remoteOk = await probe("image_url (remote URL)", [
   { type: "text", text: "用一句中文描述这张图片。" },
   { type: "image_url", image_url: { url: IMAGE_URL } },
 ]);
+if (!remoteOk) {
+  console.log("        note: a remote URL is fetched by the provider, not by us —");
+  console.log("              treat this as inconclusive and read the data-URI result below.");
+}
 
 // B) image as a data URI (what an OCR path would actually send)
 try {

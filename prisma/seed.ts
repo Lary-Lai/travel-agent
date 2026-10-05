@@ -671,7 +671,8 @@ const POSTS: PostSeed[] = [
     author: 0,
     title: "北海道二世谷 12 月雪况怎么样？第一次去需要注意什么",
     body: "计划 12 月中旬去二世谷待 6 天，第一次在日本滑雪，完全没经验。\n想问三件事：一是这个时间雪够不够厚，会不会遇到雪场只开部分缆车；二是从新千岁机场到比罗夫怎么走最省事，租车还是坐巴士；三是第一次滑粉雪，需不需要专门请教练。\n我和朋友都是中级水平，在国内雪场滑了大概三年。",
-    city: "Tokyo",
+    // No `city`: 二世谷 is not one of the platform's cities, and tagging it with
+    // the nearest one (Tokyo) put a Hokkaido thread under the Tokyo filter.
     daysAgo: 21,
     replies: [
       "12 月中旬二世谷一般已经开了大半，但每年不一样。前年我 12 月 18 号到，山顶还没完全开，山下雪很好。建议出发前一周再看一次雪场官网的缆车运行图。",
@@ -695,7 +696,8 @@ const POSTS: PostSeed[] = [
     author: 2,
     title: "崇礼太舞滑雪场周末人多吗？带小孩住哪比较方便",
     body: "想周末带 7 岁的小孩去崇礼玩两天。\n主要顾虑是周末人多，缆车排队会不会很久；另外太舞和云顶哪个对小孩更友好，雪道难度和雪具租赁哪个更省事。\n住宿想住在能走到雪场的地方，预算一晚 800 以内，有没有推荐的镇上或雪场内的酒店。",
-    city: "Kyoto",
+    // No `city`: 崇礼 is not a platform city either (it was tagged Kyoto, which
+    // is both wrong and confusing next to a Chinese resort name).
     pinned: true,
     daysAgo: 13,
     replies: [
@@ -829,6 +831,230 @@ const POSTS: PostSeed[] = [
     replies: [
       "11 月天气很稳，是那条线最好的时间。建议把行程多留一天当机动，山上因为天气延误很常见。",
       "我在尼泊尔走过 EBC，提醒一下 11 月早晚温差非常大，睡袋建议标温 -10 度的，客栈的被子不太够。",
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  // A second wave of samples, added after the first version shipped, so every
+  // board has enough threads to look alive when the board filter is used — a
+  // board with a single post makes the filter look broken rather than quiet.
+  // These were inserted by the per-post idempotency rule above; under the old
+  // per-board rule none of them would ever have appeared.
+  // ---------------------------------------------------------------------------
+
+  // ---- ski
+  {
+    board: "ski",
+    author: 3,
+    title: "白马和志贺高原怎么选？从东京出发的雪道与交通对比",
+    body: "2 月想去长野滑一周，从东京进出，在白马和志贺高原之间拿不定主意。\n白马是一个村多个雪场，海拔落差大，听说野雪和树林很好；志贺是一张通票滑十几个雪场，但雪场之间要坐巴士。\n我滑了四五年，能下黑道但不下蘑菇，同行的人偏中级。想听听两边都去过的人怎么评价。",
+    city: "Tokyo",
+    daysAgo: 17,
+    replies: [
+      "从东京坐新干线到长野站再转巴士，白马和志贺都方便。想省事选志贺，通票覆盖的雪场多，天气不好也有替代；想滑得爽选白马。",
+      "志贺的雪场之间巴士班次不多，尤其下午，回程要看好时刻表，不然只能在雪场门口等。白马村内倒是有免费穿梭巴士。",
+      "你们这个水平我建议白马，八方尾根的中级道很长，一天滑下来很过瘾。志贺的话挑一两个大雪场深度滑更合适。",
+    ],
+  },
+  {
+    board: "ski",
+    author: 4,
+    title: "欧洲滑雪：法国三山谷值不值得专程去一趟",
+    body: "在看明年 3 月的欧洲滑雪，巴黎转机，考虑法国的三山谷。\n价格比日本贵不少，雪票一天要 60 多欧，住宿也不便宜。\n想确认一下：3 月的雪况稳不稳，世界最大滑雪区到底「大」在哪里，以及从巴黎过去是不是真的要好几个小时。",
+    daysAgo: 30,
+    replies: [
+      "3 月雪况通常还很好，而且日照长、下午雪软，滑起来比 1 月舒服。缺点是部分低海拔的回程道会开始化。",
+      "巴黎到三山谷没有直达高铁，一般是高铁到尚贝里或里昂再转大巴，全程五六个小时，别低估这一段。",
+      "它的大在于雪道把几个村子连成一片，可以一天从法国滑到意大利又滑回来，但如果你只待三四天，其实滑不完，不如选一个区深度玩。",
+    ],
+  },
+
+  // ---- beach
+  {
+    board: "beach",
+    author: 2,
+    title: "普吉岛和甲米选哪个？第一次去泰国海岛",
+    body: "第一次去泰国海岛，7 天左右，从曼谷转机。\n看照片普吉更热闹、设施全，甲米更安静、能看石灰岩山。\n我们两个人，不打算出海太多天，主要想找一片水清、人不太挤的海滩住几天，晚上能吃到好海鲜就行。纠结的地方是普吉会不会太商业化。",
+    city: "Bangkok",
+    daysAgo: 26,
+    replies: [
+      "普吉确实商业，但换个角度就是方便：医院、餐厅、包车都好找。想避开人多就别住芭东，往卡塔和奈涵走。",
+      "甲米更适合你们这种想安静的，奥南和莱莱都行。莱莱没有公路，进出靠长尾船，行李多会有点麻烦。",
+      "海鲜两边都不错，但甲米的夜市更便宜。提醒一句雨季出海要看清天气，很多一日游照样发船。",
+    ],
+  },
+  {
+    board: "beach",
+    author: 6,
+    title: "巴塞罗那附近的海滩，一天往返够玩吗",
+    body: "在巴塞罗那待五天，想抽一天去海边，不打算过夜。\n市区本身就有海滩，但听说人多且沙子一般；也看到有人推荐坐近郊火车去锡切斯或布拉瓦海岸。\n想问问一天往返到底值不值，来回路上大概要多久，以及 5 月下水会不会太冷。",
+    city: "Barcelona",
+    daysAgo: 15,
+    replies: [
+      "市区海滩胜在方便，走几步就到，但 5 月的水还是偏凉，游泳的人不多，晒晒太阳正好。",
+      "去锡切斯坐火车大概 40 分钟一班，很方便，小镇本身也好看，一天往返完全够，比市区海滩舒服。",
+      "如果只想下水，建议等到 6 月底之后；5 月去海边更适合散步和吃海鲜饭。",
+    ],
+  },
+
+  // ---- city
+  {
+    board: "city",
+    author: 1,
+    title: "首尔三天怎么安排？第一次去不想太赶",
+    body: "第一次去首尔，只有三天，住在明洞附近。\n想去的地方有景福宫、北村、弘大、江南，但看起来分布挺散。\n不想每天赶路，宁愿少去两个地方、把一处逛透。想请教一下三天怎么排比较顺，以及地铁换乘是不是真的要走很久。",
+    city: "Seoul",
+    daysAgo: 11,
+    replies: [
+      "三天的话建议一天一个片区：景福宫加北村加仁寺洞一天，弘大加延南洞一天，江南加汉江公园一天。这样几乎不跨城。",
+      "换乘确实有要走很久的站，比如首尔站和高速巴士客运站，留出十分钟比较稳。用 T-money 卡最省事。",
+      "明洞购物方便但吃的不算最好，可以往乙支路和广藏市场走一走，本地小吃更多也更便宜。",
+    ],
+  },
+  {
+    board: "city",
+    author: 5,
+    title: "新加坡四天，除了滨海湾还有什么值得去",
+    body: "在新加坡四天，带父母，节奏要慢。\n滨海湾、鱼尾狮、植物园这些肯定会去。\n想再加一些「不像旅游团」的地方，比如老街区、市场、或者能坐着发呆的公园。另外想问问 4 月是不是真的很闷热，需要怎么安排时间。",
+    city: "Singapore",
+    daysAgo: 8,
+    replies: [
+      "带父母推荐加一个加东和如切的老街区，娘惹建筑很好看，吃的也地道，走路不多。",
+      "4 月基本是全年前后最热的时候，午后常有雷阵雨。建议上午出门、中午回酒店休息、傍晚再出去。",
+      "可以安排半天去南部山脊步道，海拔不高、有树荫，从花柏山走到直落布兰雅，中间有缆车和观景台。",
+    ],
+  },
+
+  // ---- food
+  {
+    board: "food",
+    author: 0,
+    title: "筑地场外市场几点去合适？想吃寿司又怕排队",
+    body: "早上想去筑地场外市场，主要是吃海鲜和玉子烧。\n看了几篇攻略，有人说六点去最好，也有人说九点之后人少一些。\n想确认一下：名店大概几点开始排队，两点以后还有没有的吃，以及场内市场搬走之后外场还值不值得专门跑一趟。",
+    city: "Tokyo",
+    daysAgo: 19,
+    replies: [
+      "想吃热门的那几家，7 点前到比较稳，8 点以后队伍就绕出去了。玉子烧和海鲜丼的小店反而不用排太久。",
+      "外场还是很值得去，场内搬走的是拍卖和批发，外场的店基本都留着。中午之后有些店会卖完收摊，别拖到下午。",
+      "提醒一句很多店周三或周日休，出发前查一下，不然白跑。",
+    ],
+  },
+  {
+    board: "food",
+    author: 4,
+    title: "悉尼有什么本地人常吃的地方推荐吗",
+    body: "在悉尼待一周，不想顿顿吃游客区。\n听说鱼市场要早去，还有人说真正的日常美食在郊区的越南城和唐人街。\n想找一些人均不太贵、能吃到本地日常的店，早中晚都可以。另外澳洲的咖啡是不是真的随便一家都好喝？",
+    city: "Sydney",
+    daysAgo: 13,
+    replies: [
+      "咖啡基本不用挑，社区里的咖啡馆普遍比连锁好。Flat white 是本地日常，可以当早饭配个牛角包。",
+      "想吃便宜的往 Bankstown 和 Cabramatta 走，越南粉和烤肉米线又便宜又好。市区的话 Haymarket 一带晚上很热闹。",
+      "鱼市场尽量 10 点前到，晚了旅行团一来就很挤。买完可以拿到外面坐着吃，注意海鸥会抢。",
+    ],
+  },
+
+  // ---- outdoors
+  {
+    board: "outdoors",
+    author: 3,
+    title: "京都周边的赏枫徒步线，11 月哪条最合适",
+    body: "11 月下旬去京都，想安排两天在城外走山路，顺便看红叶。\n知道有高雄、大原、比叡山这些方向，但不确定哪条既能看红叶又不至于太累。\n同行的人平时有运动，但不想走夜路，希望下午四点前能回到市区。",
+    city: "Kyoto",
+    daysAgo: 22,
+    replies: [
+      "推荐高雄三寺那条，从神护寺走到高山寺，红叶密集、坡度缓，半天就能走完，公交回市区也方便。",
+      "比叡山可以坐缆车上、走下来，省力又能看全景，但下山的路有些台阶湿滑，11 月落叶多要小心。",
+      "11 月下旬京都天黑得早，四点半就开始暗了，尽量把行程往前压，别安排太晚。",
+    ],
+  },
+  {
+    board: "outdoors",
+    author: 6,
+    title: "纽约附近有适合新手的徒步吗？不想租车",
+    body: "在纽约待十天，想抽两天走走路，最好坐公共交通能到。\n看到有人推荐冷泉镇和熊山，也有人说不租车基本去不了。\n我平时会走路但不算常爬山，一次走 8 到 10 公里可以接受，想找路况清楚、有退路的路线。",
+    city: "New York",
+    daysAgo: 6,
+    replies: [
+      "熊山有火车直达，站外就有接驳，从市区一个多小时。环湖那条路很平缓，适合第一次去。",
+      "冷泉镇更适合散步而不是徒步，小镇本身很可爱，爬断颈岭那段稍微费点力但也有台阶。",
+      "不租车完全可行，Metro-North 周末有套票，含火车和景点门票，比单买便宜。冬天注意防滑。",
+    ],
+  },
+
+  // ---- budget
+  {
+    board: "budget",
+    author: 2,
+    title: "同一家房源在不同渠道差多少钱？怎么比价",
+    body: "发现同一套公寓在平台、酒店官网和另外两个渠道上的价格不一样，有的差一两百。\n想搞清楚这些差价一般出在哪里：是服务费、税费，还是会员价。\n另外想问问有没有必要为了几天的住宿到处比价，还是直接订省心。",
+    daysAgo: 27,
+    replies: [
+      "差价主要来自三块：平台服务费、税费展示方式（有的把税藏到最后一步）、以及是否含早餐或清洁费。把总价拉到最后一步再比才有意义。",
+      "短住三天以内我一般不折腾，差不出多少。住五天以上值得比一比，尤其是官网直订经常免服务费。",
+      "提醒一下官网直订要看清取消政策，很多低价房型是不可退的，通过平台反而更宽松。",
+    ],
+  },
+  {
+    board: "budget",
+    author: 5,
+    title: "红眼航班省下来的钱，值不值多住一晚酒店",
+    body: "在纠结机票：红眼比白天航班便宜 600 左右，但凌晨到，机场到市区的地铁还没开。\n算下来可能要在机场等到早上，或者多订一晚酒店，那省的钱就没了。\n想听听大家的实际经验，尤其是带家人出行的情况。",
+    daysAgo: 10,
+    replies: [
+      "一个人我可以接受在机场等，带家人就算了，孩子睡不好第二天全废。省 600 花 400 订一晚，其实没省。",
+      "有些机场有按小时计费的休息舱或胶囊旅馆，比订一晚酒店便宜，三四个小时也能睡一觉，可以查一下。",
+      "还要算上打车，凌晨到市区打车经常比地铁贵好几倍，这样一算红眼就完全不划算了。",
+    ],
+  },
+  {
+    board: "budget",
+    author: 4,
+    title: "伦敦住宿太贵，住周边通勤划算吗",
+    body: "去伦敦一周，市区住宿一晚要一千多。\n看到有人住到郊区的通勤镇，火车半小时进市区，价格能便宜一半。\n想确认一下：通勤票贵不贵、晚上回程安不安全，以及这样每天路上花的时间会不会把旅行的乐趣耗掉。",
+    city: "London",
+    daysAgo: 4,
+    replies: [
+      "通勤票可以买周票，摊下来一天没多少，但要看清是哪个区，跨区加价挺明显。刷银行卡进出站会自动算上限，比买单程票划算。",
+      "安全上问题不大，就是末班车比较早，晚上看完剧要赶车，别安排太晚的活动。",
+      "每天来回一小时，一周下来就是半天。我后来宁愿住市区小一点的房间，也不想把时间花在车上。",
+    ],
+  },
+
+  // ---- companions
+  {
+    board: "companions",
+    author: 1,
+    title: "1 月中旬在东京看展，有人一起吗",
+    body: "1 月中旬会在东京待五天，主要看几个美术馆的特展，行程比较松。\n一个人逛展有点闷，想找人一起，也可以只是某一天同行。\n我住在上野附近，白天看展、晚上找居酒屋，节奏很慢，不赶景点。",
+    city: "Tokyo",
+    daysAgo: 3,
+    replies: [
+      "上野那一带美术馆密集，一天看两个刚好，看三个会完全记不住。建议按展期排一下顺序。",
+      "1 月是淡季，很多展不用预约，但热门的还是建议提前买指定时间的票。",
+    ],
+  },
+  {
+    board: "companions",
+    author: 6,
+    title: "春节想去巴黎，找人拼房或者一起吃年夜饭",
+    body: "春节假期去巴黎待六天，一个人，住宿想找人拼一间双床房，能省不少。\n另外除夕那天想找中餐馆吃顿饭，一个人点菜不太方便。\n我作息正常、爱干净，白天各玩各的也行，主要是住宿和吃饭有个伴。",
+    city: "Paris",
+    daysAgo: 2,
+    replies: [
+      "春节那几天巴黎的中餐厅会很满，建议提前两周订位，尤其是十三区那一带。",
+      "拼房记得提前说清作息和是否介意打呼，不然住一起比一个人还累。",
+    ],
+  },
+  {
+    board: "companions",
+    author: 3,
+    title: "5 月悉尼，想找人一起自驾蓝山",
+    body: "5 月上旬在悉尼，计划抽一天自驾去蓝山，看三姐妹峰和几个观景台。\n一个人租车不划算，也想有人换着开、帮忙看导航。\n我有国际驾照和三年驾龄，路线已经大致查过，早出晚归一天能走完。",
+    city: "Sydney",
+    daysAgo: 1,
+    replies: [
+      "蓝山一天够，但要早出发，市区过去大概一个半小时。下午山里起雾很快，观景台要赶在两点前。",
+      "5 月山上比市区冷不少，带件外套。另外几个观景台的停车场很小，周末容易没位。",
     ],
   },
 ];
@@ -1198,22 +1424,29 @@ async function main() {
    * Sample posts — **idempotency, and why it looks like this.**
    *
    * `Post` has no unique key to upsert on, so a re-run has to decide for itself
-   * what "already seeded" means. Two rules, applied in this order:
+   * what "already seeded" means. The rule is per **post**, matched on
+   * `(boardId, title)` — unique among the samples:
    *
-   *  1. A board that already holds **any** post is skipped entirely, and a post
-   *     that already holds **any** reply is skipped for replies. So a second run
-   *     inserts nothing at all: no duplicate threads, and `replyCount` cannot be
-   *     driven up by re-seeding.
+   *  1. A sample whose `(board, title)` already exists is skipped, so a second
+   *     run inserts nothing: no duplicate threads. Replies likewise: a post that
+   *     already has replies is left alone, so `replyCount` cannot be driven up by
+   *     re-seeding.
    *  2. A **missing** board is refilled. A freshly migrated database has no
    *     boards, and a forum that stays empty after `npm run db:seed` would be a
-   *     broken demo — so "the board does not exist" is treated as "never seeded
-   *     here", not as "the user deleted these posts".
+   *     broken demo.
    *
-   * The consequence, stated plainly: deleting every post in a board and then
-   * re-seeding brings that board's samples back. Posts are demo content with no
-   * owner and no way to mark them as seeded, and this is the trade-off that keeps
-   * both "never duplicate" and "never empty" true at the same time. Nothing is
-   * ever *deleted* by this section.
+   * This started out as "a board that already holds any post is skipped
+   * entirely", which is coarser and has a bad consequence: **adding a new sample
+   * to an existing board could never take effect**, because the board was
+   * already non-empty. Matching per post means the sample list can grow and the
+   * next `db:seed` simply inserts what is missing.
+   *
+   * The remaining consequence, stated plainly: deleting a sample post and then
+   * re-seeding brings that one thread back. Posts are demo content with no owner
+   * and no way to mark them as seeded, and this is the trade-off that keeps both
+   * "never duplicate" and "never empty" true at the same time. Nothing is ever
+   * *deleted* by this section, and a real user's own thread is untouched because
+   * only titles in the sample list are ever considered.
    */
   const authorEmails = [
     ...HOSTS.map((host) => host.email),
@@ -1230,14 +1463,17 @@ async function main() {
     .filter((id): id is string => Boolean(id));
   if (authors.length === 0) throw new Error("[seed] no seeded accounts available to author posts");
 
-  const seededBoards = await prisma.post.findMany({
-    select: { boardId: true },
-    distinct: ["boardId"],
+  const existingSamples = await prisma.post.findMany({
+    where: { title: { in: POSTS.map((post) => post.title) } },
+    select: { boardId: true, title: true },
   });
-  const boardsWithPosts = new Set(seededBoards.map((post) => post.boardId));
+  const existingKeys = new Set(
+    existingSamples.map((post) => `${post.boardId}:${post.title}`),
+  );
 
   console.log("[seed] forum sample posts ...");
   let createdPosts = 0;
+  let refreshedPosts = 0;
   const samplesByBoard = new Map<string, PostSeed[]>();
   for (const post of POSTS) {
     const bucket = samplesByBoard.get(post.board) ?? [];
@@ -1251,20 +1487,47 @@ async function main() {
       // A typo in POSTS would otherwise show up as a silently smaller forum.
       throw new Error(`[seed] post references unknown board "${slug}"`);
     }
-    if (boardsWithPosts.has(boardId)) continue;
 
-    await prisma.post.createMany({
-      data: samples.map((post) => ({
-        boardId,
-        authorId: authors[post.author % authors.length],
-        title: post.title,
-        body: post.body,
-        city: post.city ?? null,
-        pinned: post.pinned ?? false,
-        createdAt: new Date(Date.now() - post.daysAgo * 86_400_000),
-      })),
-    });
-    createdPosts += samples.length;
+    const missing = samples.filter((post) => !existingKeys.has(`${boardId}:${post.title}`));
+
+    if (missing.length > 0) {
+      await prisma.post.createMany({
+        data: missing.map((post) => ({
+          boardId,
+          authorId: authors[post.author % authors.length],
+          title: post.title,
+          body: post.body,
+          city: post.city ?? null,
+          pinned: post.pinned ?? false,
+          createdAt: new Date(Date.now() - post.daysAgo * 86_400_000),
+        })),
+      });
+      createdPosts += missing.length;
+    }
+
+    // Content of the samples that already exist is refreshed, so the seed source
+    // and the database converge instead of silently drifting apart.
+    //
+    // This was a real bug, not a hypothetical: a sample had `city: "Kyoto"` on a
+    // thread about 崇礼, and deleting that line changed nothing in an already
+    // seeded database — the wrong tag stayed on the card. Same reasoning as the
+    // listing upsert: the seed owns the *content* of its demo rows, while their
+    // ids survive so replies, bookmarks and orders attached to them are safe.
+    // `createdAt` and `replyCount` are deliberately NOT touched: the first is
+    // part of the row's identity in the list, the second is owned by the replies.
+    const present = samples.filter((post) => existingKeys.has(`${boardId}:${post.title}`));
+    for (const post of present) {
+      await prisma.post.updateMany({
+        where: { boardId, title: post.title },
+        data: {
+          body: post.body,
+          city: post.city ?? null,
+          pinned: post.pinned ?? false,
+          authorId: authors[post.author % authors.length],
+        },
+      });
+      refreshedPosts++;
+    }
   }
 
   // Replies next, matched by (boardId, title) — unique among the samples — so the
@@ -1326,8 +1589,8 @@ async function main() {
     prisma.reply.count(),
   ]);
   console.log(
-    `[seed] forum: ${boardCount} boards, ${postCount} posts (+${createdPosts} this run), ` +
-      `${replyTotal} replies (+${createdReplies} this run)`,
+    `[seed] forum: ${boardCount} boards, ${postCount} posts (+${createdPosts} this run, ` +
+      `${refreshedPosts} refreshed), ${replyTotal} replies (+${createdReplies} this run)`,
   );
 
   // ------------------------------------------------------------------ social

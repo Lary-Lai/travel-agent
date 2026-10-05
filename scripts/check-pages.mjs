@@ -125,6 +125,20 @@ async function main() {
       await browser.closeTab(tabId);
     }
 
+    /**
+     * The browser tab title gets its own assertion: it comes from
+     * `generateMetadata`, not from the page body, so no screenshot of the page
+     * shows it — and a rename can leave it saying the old name indefinitely.
+     */
+    const forumTab = await browser.visit(`${BASE}/forum`, { cookies: cookie });
+    const tabTitle = await browser.evaluate("document.title");
+    check(
+      "the /forum tab title follows the renamed heading",
+      tabTitle.includes("讨论区") && !tabTitle.includes("自由讨论区"),
+      tabTitle,
+    );
+    await browser.closeTab(forumTab.tabId);
+
     // Rendered from the signed-out perspective too: the public profile and the
     // forum must not fall over for a visitor with no session.
     console.log("\n— and for a signed-out visitor");

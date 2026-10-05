@@ -47,7 +47,7 @@ export const ko = {
     search: "숙소 검색",
     wishlist: "위시리스트",
     trips: "내 여행",
-    forum: "커뮤니티",
+    forum: "여행 서클",
     friends: "친구",
     aiAgent: "AI 도우미",
     aiAgentTitle: "AI 숙소 도우미",
