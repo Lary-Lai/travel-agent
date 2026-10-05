@@ -16,11 +16,21 @@ import { spawnSync } from "node:child_process";
 
 const BASE = process.argv[2] ?? "http://localhost:3001";
 
-/** `runner` is either node or tsx; the suites are a mix. */
+/**
+ * `runner` is either node or tsx; the suites are a mix.
+ *
+ * `tsx` is invoked as `node node_modules/tsx/dist/cli.mjs …` rather than as the
+ * `npx tsx` shim. Going through `npx` needs `shell: true` on Windows (it is a
+ * `.cmd`), and Node then warns on every run: passing an args array with a shell
+ * concatenates them instead of escaping them (DEP0190). Calling the entry point
+ * directly avoids the shell, the warning, and a process layer.
+ */
+const TSX = ["node", "node_modules/tsx/dist/cli.mjs"];
+
 const SUITES = [
-  { name: "verify-db", cmd: ["npx", "tsx", "scripts/verify-db.ts"], kind: "db" },
+  { name: "verify-db", cmd: [...TSX, "scripts/verify-db.ts"], kind: "db" },
   { name: "smoke-api", cmd: ["node", "scripts/smoke-api.mjs", BASE] },
-  { name: "verify-tools", cmd: ["npx", "tsx", "scripts/verify-tools.ts"] },
+  { name: "verify-tools", cmd: [...TSX, "scripts/verify-tools.ts"] },
   { name: "verify-ai", cmd: ["node", "scripts/verify-ai.mjs"], kind: "report" },
   { name: "test-vision", cmd: ["node", "scripts/test-vision.mjs"], kind: "report" },
   { name: "smoke-agent", cmd: ["node", "scripts/smoke-agent.mjs", BASE] },
@@ -32,18 +42,14 @@ const SUITES = [
   { name: "smoke-uploads", cmd: ["node", "scripts/smoke-uploads.mjs"] },
   { name: "smoke-social", cmd: ["node", "scripts/smoke-social.mjs"] },
   { name: "smoke-forum", cmd: ["node", "scripts/smoke-forum.mjs"] },
-  { name: "verify-guests", cmd: ["npx", "tsx", "scripts/verify-guests.ts"] },
-  { name: "verify-tiles", cmd: ["npx", "tsx", "scripts/verify-tiles.ts"] },
-  { name: "verify-markdown", cmd: ["npx", "tsx", "scripts/verify-markdown.ts"] },
-  { name: "verify-i18n", cmd: ["npx", "tsx", "scripts/verify-i18n.ts"] },
-  { name: "verify-listing-i18n", cmd: ["npx", "tsx", "scripts/verify-listing-i18n.ts"] },
+  { name: "verify-guests", cmd: [...TSX, "scripts/verify-guests.ts"] },
+  { name: "verify-tiles", cmd: [...TSX, "scripts/verify-tiles.ts"] },
+  { name: "verify-markdown", cmd: [...TSX, "scripts/verify-markdown.ts"] },
+  { name: "verify-i18n", cmd: [...TSX, "scripts/verify-i18n.ts"] },
+  { name: "verify-listing-i18n", cmd: [...TSX, "scripts/verify-listing-i18n.ts"] },
   { name: "check-pages", cmd: ["node", "scripts/check-pages.mjs"] },
   { name: "check-home-design", cmd: ["node", "scripts/check-home-design.mjs"] },
 ];
-
-// Only `npx` needs the shell on Windows (it is a .cmd shim); running node
-// directly through a shell would be an unnecessary quoting hazard.
-const isWindows = process.platform === "win32";
 
 const results = [];
 
@@ -52,7 +58,6 @@ for (const suite of SUITES) {
   const [command, ...args] = suite.cmd;
   const run = spawnSync(command, args, {
     encoding: "utf8",
-    shell: isWindows && command === "npx",
     maxBuffer: 32 * 1024 * 1024,
   });
 
@@ -124,6 +129,40 @@ console.log(`TOTAL: ${totalPassed} passed, ${totalFailed} failed`);
 if (informationalProblems > 0) {
   console.log(`(${informationalProblems} informational check(s) flagged, see above — not counted)`);
 }
+
+/*
+ * Report — but do not delete — throwaway accounts left behind.
+ *
+ * Several suites register `@example.com` accounts and never remove them
+ * (attributed by running a group-by on the email prefix: forum-smoke, archive,
+ * history, reviewer). Cleaning up inside the runner would be a surprising side
+ * effect for something whose job is to *measure*, so this only says what is
+ * there and what to run. Silent accumulation is how it got to 56 accounts once.
+ */
+try {
+  const { default: pg } = await import("pg");
+  const db = new pg.Client({
+    host: "127.0.0.1",
+    port: 55432,
+    user: "postgres",
+    password: "postgres",
+    database: "travel_agent",
+  });
+  await db.connect();
+  const { rows } = await db.query(
+    `select count(*)::int as n from "User" where email like '%@example.com'`,
+  );
+  await db.end();
+  if (rows[0].n > 0) {
+    console.log(
+      `note: ${rows[0].n} throwaway account(s) left behind by the suites — ` +
+        `run \`node scripts/clean-test-data.mjs --apply\` to remove them`,
+    );
+  }
+} catch {
+  // The database may be down; that is not this runner's problem to report.
+}
+
 console.log("=".repeat(66));
 
 process.exit(totalFailed === 0 ? 0 : 1);

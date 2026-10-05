@@ -17,7 +17,6 @@ import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { Browser, loginCookie } from "./lib/chrome.mjs";
-
 const BASE = process.argv[2] ?? "http://localhost:3001";
 const SHOTS = path.join(process.cwd(), "data", "shots");
 
@@ -63,6 +62,21 @@ async function main() {
   // cookie the page follows the browser's Accept-Language, which in headless
   // Chrome means English and would make every string check locale-dependent.
   const cookie = `${await loginCookie(BASE)}; ta_locale=zh-CN`;
+
+  /*
+   * Note before it bites someone again: this script walks the app **signed in**,
+   * and the search page records a SearchEvent for a signed-in visitor with a
+   * destination (`components/search-recorder.tsx`). So running this file leaves
+   * real search history on the demo account — visiting Barcelona here really does
+   * add a Barcelona row.
+   *
+   * That is the app behaving as designed, not a side effect worth patching out.
+   * The consequence to know about is that any suite asserting on personalisation
+   * MUST clear the history it depends on rather than assume it starts empty:
+   * `verify-tools` asserted "the most recent search ranks first" and failed for
+   * three rounds once the accumulated rows from these visits outweighed the city
+   * it had just recorded. It now clears first.
+   */
 
   // Discover ids for the parameterised routes instead of hardcoding them.
   const listingId = await fetch(`${BASE}/api/listings?pageSize=1`)
@@ -138,6 +152,83 @@ async function main() {
       tabTitle,
     );
     await browser.closeTab(forumTab.tabId);
+
+    // ------------------------------------------------ clicking through the nav
+    /**
+     * Navigation has to be *clicked*, not just visited.
+     *
+     * Every check above loads a route directly, which is why none of them would
+     * have caught the real bug this section was written for: a half-applied edit
+     * left the header referencing an icon before its import, the header threw on
+     * render, and every nav link in the app went dead — while the page body was
+     * fine and each route still returned 200 when fetched by URL. A user hit it;
+     * twenty suites did not.
+     *
+     * Real mouse events are used rather than `element.click()`, because a
+     * synthetic click skips hit-testing and would also pass if an overlay were
+     * covering the link.
+     */
+    console.log("\n— navigating by clicking the header");
+
+    const nav = await browser.visit(`${BASE}/profile`, { cookies: cookie, settle: 2500 });
+
+    const clickNavLink = async (label) => {
+      const target = await browser.evaluate(`
+        (() => {
+          const link = [...document.querySelectorAll('header a')]
+            .find((a) => a.textContent.trim() === ${JSON.stringify(label)});
+          if (!link) return null;
+          const r = link.getBoundingClientRect();
+          const cx = Math.round(r.x + r.width / 2);
+          const cy = Math.round(r.y + r.height / 2);
+          const top = document.elementFromPoint(cx, cy);
+          return { cx, cy, covered: !(top === link || link.contains(top)) };
+        })()
+      `);
+      if (!target) return { found: false };
+      if (target.covered) return { found: true, covered: true };
+
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x: target.cx, y: target.cy, button: "left", clickCount: 1,
+      });
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: target.cx, y: target.cy, button: "left", clickCount: 1,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      return { found: true, covered: false, path: await browser.evaluate("location.pathname") };
+    };
+
+    // The reported case: profile -> home.
+    const toHome = await clickNavLink("首页");
+    check(
+      "clicking 首页 from the profile page navigates",
+      toHome.found && !toHome.covered && toHome.path === "/",
+      `found=${toHome.found} covered=${toHome.covered} path=${toHome.path ?? "n/a"}`,
+    );
+
+    // And the header keeps working for the rest of the app, in both directions.
+    for (const [label, expected, from] of [
+      ["旅行圈", "/forum", "/"],
+      ["心愿单", "/wishlist", "/forum"],
+      ["首页", "/", "/wishlist"],
+    ]) {
+      await browser.visit(`${BASE}${from}`, { cookies: cookie, settle: 1500 });
+      const result = await clickNavLink(label);
+      check(
+        `clicking ${label} from ${from} navigates to ${expected}`,
+        result.found && !result.covered && result.path === expected,
+        `found=${result.found} covered=${result.covered} path=${result.path ?? "n/a"}`,
+      );
+    }
+
+    check(
+      "the header never fell back to its error state",
+      !(await browser.evaluate(
+        `document.querySelector('header').innerText.includes('重新加载')`,
+      )),
+    );
+
+    await browser.closeTab(nav.tabId);
 
     // ------------------------------------------------- agent composer
     /**

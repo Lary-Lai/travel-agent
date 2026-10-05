@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { HeaderErrorBoundary } from "@/components/header-error-boundary";
 import { LocaleProvider } from "@/components/locale-provider";
 import { Providers } from "@/components/providers";
 import { SiteFooter } from "@/components/site-footer";
@@ -53,7 +54,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="bg-background text-foreground flex min-h-full flex-col">
         <LocaleProvider initialLocale={locale}>
           <Providers>
-            <SiteHeader />
+            {/* Scoped to the header only: `children` sit outside it, so a crash
+                in the navigation can never make the page below unreachable. */}
+            <HeaderErrorBoundary>
+              <SiteHeader />
+            </HeaderErrorBoundary>
             <main className="flex-1">{children}</main>
             <SiteFooter />
           </Providers>

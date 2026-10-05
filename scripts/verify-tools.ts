@@ -319,13 +319,28 @@ async function main() {
 
   // Record a couple of searches, then confirm the tool reports them.
   const { recordSearch, getSearchInsights } = await import("../server/personalization.service");
+
+  /*
+   * Clear the history FIRST, not just at the end.
+   *
+   * The assertion below is "the most recent search ranks first", and the ranking
+   * sums recency-weighted counts. Any earlier event for this account therefore
+   * competes: the browser checks visit `/search?location=Barcelona` with a
+   * session, the app records that (by design), and after enough runs Barcelona's
+   * accumulated weight beat the freshly recorded city — which is how this suite
+   * failed for three rounds with the top city reported as "Tokyo", then
+   * "Barcelona", neither of which this test records.
+   *
+   * Cleaning up afterwards was never enough; the test needs to start from a known
+   * empty history to be about what it claims to be about.
+   */
+  await prisma.searchEvent.deleteMany({ where: { userId: demo.id } });
+
   await recordSearch(demo.id, { location: "Tokyo" });
   // Spaced deliberately. Two inserts in the *same millisecond* get identical
-  // recency weights, so "the most recent ranks first" would then be decided by
-  // the tie-break rather than by recency — the assertion below is about the
-  // weighting, so its inputs have to be ordered in time. (The tie-break is now
-  // deterministic too; this flake cost two debugging rounds before the runner
-  // started printing the failing assertion's name.)
+  // recency weights, so the ordering would then be decided by the tie-break
+  // rather than by recency. This assertion is about the weighting, so its inputs
+  // have to be ordered in time.
   await new Promise((resolve) => setTimeout(resolve, 20));
   await recordSearch(demo.id, { location: "首尔" });
 

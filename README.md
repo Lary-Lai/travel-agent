@@ -669,7 +669,7 @@ npx tsx scripts/verify-i18n.ts          # 6 种语言字典 + 日期本地化：
 npx tsx scripts/verify-listing-i18n.ts  # 房源标题与地址的 6 语言版本：29 项断言
 npx tsx scripts/verify-markdown.ts      # Agent Markdown 渲染：21 项断言（纯逻辑单测）
 node scripts/shot-payment-deadline.mjs  # ★真实浏览器截图 + 逐页运行时错误检查（7 个页面）
-node scripts/check-pages.mjs            # ★真实浏览器巡检 11 条路由 + 上传交互 + 可见性弹窗：35 项断言
+node scripts/check-pages.mjs            # ★真实浏览器巡检 11 条路由 + 点导航 + 上传 + 可见性弹窗：40 项断言
 node scripts/check-home-design.mjs     # ★量渲染后像素：噪点强度 / 阴影衰减 / 半透明 / 字距：20 项断言
 node scripts/run-all.mjs                # ★一条命令跑完上面全部套件，并打印失败断言名
 node scripts/clean-test-data.mjs        # 清理测试遗留的 @example.com 账号（默认只报告，--apply 才删除）
@@ -704,7 +704,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `verify-listing-i18n.ts` | ✅ **29 / 29**（180 个房源 × 6 种语言的标题与地址） |
 | `verify-markdown.ts` | ✅ **21 / 21** |
 | `shot-payment-deadline.mjs` | ✅ 7 个页面渲染无运行时错误 |
-| `check-pages.mjs` | ✅ **35 / 35**（11 条路由的真实页面文本 + 上传交互 + 可见性弹窗 + 标签页标题 + 助手输入框） |
+| `check-pages.mjs` | ✅ **40 / 40**（11 条路由的真实页面文本 + **点击导航** + 上传交互 + 可见性弹窗 + 标签页标题 + 助手输入框） |
 | `check-home-design.mjs` | ✅ **20 / 20**（渲染后像素：噪点 1.80/255、卡片阴影衰减 2.9–3.0/255） |
 | `bench-images.mjs` | ✅ **12 / 12 张加载成功**，中位数 4ms |
 
@@ -1564,6 +1564,53 @@ FAIL  the most recent search ranks first — Tokyo
 2. **测试**：两次 `recordSearch` 之间加了 20ms。这条断言想验证的是**时间衰减加权**，那它的输入就必须有先后之分；同毫秒的两条记录根本无从谈论"更近"。
 
 　　**教训：把失败断言的名字留下来。** 同一处 flake 出现三次，前两次都被归档成"偶发"，直到报告里有了具体名字，五分钟就定位到了根因——而且根因是产品里一个真实的、用户可见的不确定性，不只是测试噪音。"偶发失败"这四个字本身没有信息量，**记录工具的完善程度，直接决定这类问题会不会被永远归为玄学**。
+
+**39. 「点首页没反应」——一次自己造成的、且测试完全看不见的故障**
+
+用户报告：进入个人主页后点顶栏「首页」切不过去，左下角一直显示 `Rendering...`。
+
+**先取证，不猜。** 服务端日志里躺着这一行：
+
+```
+✓ Compiled in 128ms
+⨯ ReferenceError: MessagesSquare is not defined
+    at Module.eval (components\site-header.tsx:34:45)
+> 34 |   { href: "/forum", key: "nav.forum", icon: MessagesSquare },
+```
+
+根因是**我自己的半成品编辑**：给导航加「旅行圈」时，先改了 `NAV` 数组、后补的 icon import，中间那一瞬间模块引用了尚未导入的符号。Fast Refresh 把这个坏模块推给了当时开着的页面，于是：
+
+- `site-header.tsx` 在**模块求值阶段**就抛错（`Module.eval`），header 整个没渲染；
+- header 在 root layout 里、并且**拥有全部导航链接**，所以表现不是"头部坏了"，而是**整个应用点什么都没反应**；
+- 而页面正文其实是好的、完全够不到；同时 dev 指示器还在转，看起来像"正在渲染"。
+
+**这个故障我的 20 个套件一个都抓不到**，原因很具体：所有检查都是**直接用 URL 访问路由**，从来没有人**点过**导航链接。按 URL 取页面时每条路由都返回 200，header 是死是活完全不在断言范围内。现在补齐了：`check-pages.mjs` 增加 5 项断言，从 `/profile` 出发**用真实鼠标事件**点「首页」「旅行圈」「心愿单」并断言 URL 真的变了——用真实鼠标事件而不是 `element.click()`，因为合成点击会跳过命中测试，连"有东西盖住链接"这种情况也会误判为通过。
+
+**同时加了 `HeaderErrorBoundary`**（只包住 header，`children` 在它外面）。这里有一点值得说清楚，因为一开始我**推理错了**：我以为"模块求值失败"这种错 Error Boundary 接不住，于是专门做了实验——把 import 真的删掉再加载页面，结果是**接住了**：页面显示降级 header（品牌 + 「重新加载」，1 个链接），正文完整渲染。所以对"新文档加载时某个客户端模块挂掉"这类故障，边界是有效的。
+
+但对**用户实际遇到的那条路径无效**：一个已经挂载的树被热替换成一个坏模块时，错误是从 HMR 运行时冒出来的、不经过 React 渲染，客户端没有任何边界能拦。这一点写进了组件的注释，没有含糊过去——**所以对这个报告正确的处理是：代码已修好，打开着的那个标签页需要刷新一次。**
+
+**40. 一个查了三轮才找到的「偶发失败」，两次都是测试自己的锅**
+
+`verify-tools.ts` 的 `the most recent search ranks first` 又一次间歇失败。这次 `run-all.mjs` 直接打出了断言名和**实际值**：
+
+```
+FAIL  the most recent search ranks first — Barcelona
+```
+
+Barcelona 这个城市**这条测试根本没记录过**。所以问题不在时间戳，而在污染：`personalization` 的排名是**按时间衰减加权的计数**，而我的 `check-pages.mjs` 会**带着登录态**访问 `/search?location=Barcelona`——应用的 `SearchRecorder` 会为登录用户记录这次搜索（这是设计行为）。跑得多了，Barcelona 累积的权重就压过了测试刚记录的那一个城市。
+
+第一次的"同毫秒时间戳并列"是真的（服务层已补上确定 tie-break），但那只是**一半**原因；后一半是测试**假设历史是空的**。
+
+修法是让测试**自己清场**：`verify-tools` 现在在记录之前先清掉该账号的搜索历史（原来只在结尾清，等于把"开始时的状态"交给了别人）。修完做了验证：先往历史里灌 10 条 Barcelona，再跑该套件 —— **55/55 通过**。原来的写法在这个条件下必挂。
+
+> 顺带说明：`check-pages` 会留下搜索记录这件事**没有去"修"**。那不是 bug，是应用对登录用户的正常行为；我在文件头写清楚了这一点，以及"任何依赖个性化的套件必须自己清历史"。一开始我写了一段按时间戳清理的代码，实测删了 0 条——因为 `SearchEvent.createdAt` 是无时区列，跨时区比较会整体偏移（与第 31 条同一个坑）。**一段静默不生效的清理代码比没有清理更糟**，所以删掉了，改成在文件头把约束写明白。
+
+**41. 测试账号泄漏，这次定位到了具体是哪几个套件**
+
+`run-all.mjs` 现在会在结尾检查 `@example.com` 残留账号并提示清理命令。按邮箱前缀分组统计，泄漏来源是明确的四个套件：`forum-smoke`（9）、`archive`（8）、`history`（8）、`reviewer`（8）——而 `smoke-social` 与 `smoke-payment-deadline` 是干净的，它们确实做了清理。
+
+**没有让 runner 顺手删除**：一个"只负责测量"的工具不该有破坏性副作用。它只报告有多少、以及该跑哪条命令。
 
 ### 技术选择记录
 
