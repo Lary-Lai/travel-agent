@@ -139,6 +139,165 @@ async function main() {
     );
     await browser.closeTab(forumTab.tabId);
 
+    // ------------------------------------------------- agent composer
+    /**
+     * The composer must stay editable while the assistant is streaming.
+     *
+     * This is a behaviour, not a layout, so it needs the real thing: a real send,
+     * a real stream in flight, and a real keystroke. It also covers the trap that
+     * made "just remove `disabled`" insufficient — Enter during a reply has to
+     * leave the typed text alone, because the provider silently ignores the send
+     * and the debugged version cleared the box on top of that.
+     */
+    console.log("\n— the agent composer while a reply is streaming");
+
+    const chat = await browser.visit(`${BASE}/search?location=Barcelona`, {
+      cookies: cookie,
+      settle: 2500,
+    });
+
+    await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find((el) => (el.getAttribute('aria-label') ?? '') === 'AI 助手'
+                     || /AI 助手/.test(el.textContent ?? ''));
+        if (button) button.click();
+        return Boolean(button);
+      })()
+    `);
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    /** Type into the composer the way React sees it (native setter + input event). */
+    const typeInto = (text) =>
+      browser.evaluate(`
+        (() => {
+          const el = document.querySelector('[role="dialog"] textarea');
+          if (!el) return 'no-textarea';
+          const setter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype, 'value',
+          ).set;
+          setter.call(el, ${JSON.stringify(text)});
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          return el.value;
+        })()
+      `);
+
+    const composerState = () =>
+      browser.evaluate(`
+        (() => {
+          const el = document.querySelector('[role="dialog"] textarea');
+          if (!el) return null;
+          const buttons = [...document.querySelectorAll('[role="dialog"] button')];
+          return {
+            value: el.value,
+            disabled: el.disabled,
+            readOnly: el.readOnly,
+            hasStop: buttons.some((b) => /停止生成|Stop generating/.test(b.getAttribute('aria-label') ?? '')),
+            hasSend: buttons.some((b) => /发送|Send/.test(b.getAttribute('aria-label') ?? '')),
+          };
+        })()
+      `);
+
+    const DRAFT = "帮我在巴塞罗那找一间能住两人的公寓";
+    const typed = await typeInto(DRAFT);
+    check("the composer accepts typed text", typed === DRAFT, String(typed));
+
+    // Send it: the send button is the textarea's next sibling in the composer row.
+    await browser.evaluate(`
+      (() => {
+        const el = document.querySelector('[role="dialog"] textarea');
+        const button = el?.parentElement?.querySelector('button:last-of-type');
+        if (button) button.click();
+        return Boolean(button);
+      })()
+    `);
+
+    // Wait for the reply to actually be in flight (the send button becomes Stop).
+    let streaming = null;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const state = await composerState();
+      if (state?.hasStop) {
+        streaming = state;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+
+    if (!streaming) {
+      // The model provider is external; an unreachable provider must not look
+      // like a broken composer (same rule the weather suite follows).
+      console.log("  SKIP  could not observe a stream in flight (provider unreachable?)");
+    } else {
+      check("a reply is streaming (stop button shown)", streaming.hasStop === true);
+
+      // The message that actually went out, so a mangled draft cannot pass as
+      // "typed fine, sent fine".
+      const conversation = await browser.evaluate(
+        `document.querySelector('[role="dialog"]').innerText`,
+      );
+      check(
+        "the sent message is exactly what was typed",
+        conversation.includes(DRAFT),
+        conversation.slice(0, 120).replace(/\n/g, " / "),
+      );
+
+      check(
+        "the composer is NOT disabled while streaming",
+        streaming.disabled === false,
+        `disabled=${streaming.disabled}`,
+      );
+
+      // Draft the next question mid-reply.
+      const midTyped = await typeInto("顺便看看有没有带阳台的");
+      check(
+        "text can be typed while the reply streams",
+        midTyped === "顺便看看有没有带阳台的",
+        String(midTyped),
+      );
+
+      // Enter must not swallow it: the provider refuses a concurrent send, so the
+      // box must keep the draft instead of clearing it.
+      await browser.evaluate(`
+        (() => {
+          const el = document.querySelector('[role="dialog"] textarea');
+          el.focus();
+          el.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Enter', code: 'Enter', bubbles: true, cancelable: true,
+          }));
+          return el.value;
+        })()
+      `);
+      await new Promise((resolve) => setTimeout(resolve, 400));
+
+      const afterEnter = await composerState();
+      check(
+        "Enter during a reply keeps the draft instead of silently dropping it",
+        afterEnter?.value === "顺便看看有没有带阳台的",
+        `value=${JSON.stringify(afterEnter?.value)} stillStreaming=${afterEnter?.hasStop}`,
+      );
+      check(
+        "and the UI says why Enter did nothing",
+        (await browser.evaluate(`document.querySelector('[role="dialog"]').innerText`)).includes(
+          "正在回复中",
+        ),
+      );
+
+      await browser.screenshot(path.join(SHOTS, "agent-composing.png"));
+
+      // Leave no stream running behind us.
+      await browser.evaluate(`
+        (() => {
+          const button = [...document.querySelectorAll('[role="dialog"] button')]
+            .find((b) => /停止生成|Stop generating/.test(b.getAttribute('aria-label') ?? ''));
+          if (button) button.click();
+          return Boolean(button);
+        })()
+      `);
+    }
+
+    check("the agent composer raised no runtime error", chat.errors.length === 0, chat.errors.join(" | "));
+    await browser.closeTab(chat.tabId);
+
     // Rendered from the signed-out perspective too: the public profile and the
     // forum must not fall over for a visitor with no session.
     console.log("\n— and for a signed-out visitor");

@@ -54,9 +54,21 @@ export function AgentChat() {
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages, status]);
 
+  /**
+   * Send what is in the box.
+   *
+   * The `busy` guard is not redundant with the provider's own guard: `send()`
+   * silently returns while a reply is streaming, so without this the code below
+   * would clear the box and the user's text would vanish with nothing sent. The
+   * composer stays editable during a reply on purpose (people draft the next
+   * question while reading the answer), which is exactly why Enter has to be
+   * handled rather than ignored.
+   */
   const submit = () => {
-    if (!input.trim()) return;
-    send(input);
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    if (busy) return;
+    send(trimmed);
     setInput("");
   };
 
@@ -256,7 +268,9 @@ export function AgentChat() {
             }}
             placeholder={t("agent.placeholder")}
             rows={2}
-            disabled={busy}
+            /* Deliberately NOT disabled while a reply streams: the user should be
+               able to draft the next question while reading the answer. Sending is
+               what waits (the button below turns into Stop), not typing. */
             className="min-h-11 resize-none text-sm"
           />
 
@@ -280,6 +294,13 @@ export function AgentChat() {
             </Button>
           )}
         </div>
+
+        {/* Says why Enter did nothing, instead of leaving the user to guess. */}
+        {busy && input.trim() ? (
+          <p className="text-muted-foreground text-[11px]" role="status">
+            {t("agentUi.composingWhileReplying")}
+          </p>
+        ) : null}
 
         <div className="flex items-center justify-between">
           <input

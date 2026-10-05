@@ -30,6 +30,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "看看我的心愿单里都有什么。",
 
     "agentUi.stopGenerating": "停止生成",
+    "agentUi.composingWhileReplying": "正在回复中，可以继续编辑；回复结束后按 Enter 发送，或点停止",
     "agentUi.uploadPlan": "上传旅行计划",
     "agentUi.parsing": "解析中…",
     "agentUi.retry": "重试",
@@ -96,6 +97,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "看看我的心願單裡有什麼。",
 
     "agentUi.stopGenerating": "停止產生",
+    "agentUi.composingWhileReplying": "正在回覆中，可以繼續編輯；回覆結束後按 Enter 傳送，或點停止",
     "agentUi.uploadPlan": "上傳旅行計畫",
     "agentUi.parsing": "解析中…",
     "agentUi.retry": "重試",
@@ -162,6 +164,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "What is in my wishlist?",
 
     "agentUi.stopGenerating": "Stop generating",
+    "agentUi.composingWhileReplying": "Still replying — keep typing; press Enter when it finishes, or press stop",
     "agentUi.uploadPlan": "Upload a travel plan",
     "agentUi.parsing": "Reading…",
     "agentUi.retry": "Retry",
@@ -230,6 +233,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "お気に入りに何が入っているか見せて。",
 
     "agentUi.stopGenerating": "生成を停止",
+    "agentUi.composingWhileReplying": "返信中でも入力できます。返信が終わったら Enter で送信、または停止を押してください",
     "agentUi.uploadPlan": "旅行プランをアップロード",
     "agentUi.parsing": "読み取り中…",
     "agentUi.retry": "再試行",
@@ -301,6 +305,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "내 위시리스트에 뭐가 있는지 보여 줘.",
 
     "agentUi.stopGenerating": "생성 중지",
+    "agentUi.composingWhileReplying": "답변 중에도 입력할 수 있습니다. 답변이 끝나면 Enter로 전송하거나 중지를 누르세요",
     "agentUi.uploadPlan": "여행 계획 업로드",
     "agentUi.parsing": "분석 중…",
     "agentUi.retry": "다시 시도",
@@ -369,6 +374,7 @@ export const agentUi = {
     "agentUi.suggestionWishlists": "¿Qué hay en mi lista de favoritos?",
 
     "agentUi.stopGenerating": "Detener la generación",
+    "agentUi.composingWhileReplying": "Sigue respondiendo: puedes escribir; pulsa Enter al terminar, o detén la respuesta",
     "agentUi.uploadPlan": "Subir un plan de viaje",
     "agentUi.parsing": "Leyendo…",
     "agentUi.retry": "Reintentar",
