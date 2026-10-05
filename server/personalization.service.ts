@@ -65,18 +65,25 @@ export async function recordSearch(
   });
 }
 
-/** Recency-weighted count per city. */
-function weigh(
-  events: Array<{ city: string | null; createdAt: Date }>,
-): Map<string, number> {
-  const scores = new Map<string, number>();
+/** Recency-weighted count per city, with each city's most recent search time. */
+function weigh(events: Array<{ city: string | null; createdAt: Date }>): Map<
+  string,
+  { score: number; lastSeen: number }
+> {
+  const scores = new Map<string, { score: number; lastSeen: number }>();
   const now = Date.now();
 
   for (const event of events) {
     if (!event.city) continue;
     const ageDays = (now - event.createdAt.getTime()) / 86_400_000;
     const weight = 0.5 ** (ageDays / HALF_LIFE_DAYS);
-    scores.set(event.city, (scores.get(event.city) ?? 0) + weight);
+    const seen = event.createdAt.getTime();
+    const existing = scores.get(event.city);
+
+    scores.set(event.city, {
+      score: (existing?.score ?? 0) + weight,
+      lastSeen: Math.max(existing?.lastSeen ?? 0, seen),
+    });
   }
 
   return scores;
@@ -99,7 +106,27 @@ export async function getSearchInsights(userId: string): Promise<SearchInsights>
   const lastSearchAt = events[0]?.createdAt.toISOString() ?? null;
   const scores = weigh(events);
 
-  const ranked = [...scores.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+  /*
+   * Ranked with an explicit tie-break.
+   *
+   * Two searches in the same millisecond produce *exactly* equal weights, and a
+   * bare `b[1] - a[1]` comparator then leaves the order up to the Map's insertion
+   * order — which comes from Postgres, where rows sharing a `createdAt` have no
+   * defined order. That made "the most recent search ranks first" fail roughly
+   * one run in ten, and it was never a test problem: the user-visible order
+   * really was a coin flip.
+   *
+   * Tie-break on the most recent search, then on the city name so the result is
+   * at least stable when two searches are genuinely simultaneous.
+   */
+  const ranked = [...scores.entries()]
+    .sort(
+      (a, b) =>
+        b[1].score - a[1].score ||
+        b[1].lastSeen - a[1].lastSeen ||
+        a[0].localeCompare(b[0]),
+    )
+    .slice(0, 5);
 
   const topCities: PersonalizedDestination[] = ranked.map(([city], index) => {
     const hits = events.filter((event) => event.city === city).length;

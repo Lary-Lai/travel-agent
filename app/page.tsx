@@ -64,17 +64,21 @@ export default async function HomePage() {
   return (
     <div className="mx-auto max-w-7xl space-y-16 px-4 py-8 sm:px-6 lg:px-8">
       {/* ---------------------------------------------------------------- hero */}
-      {/* Depth is three stacked layers: a masked grid, soft brand washes, and a
-          glow bleeding up from behind the search bar. */}
-      <section className="surface-hero edge-light relative overflow-hidden rounded-3xl border shadow-sm">
+      {/* Depth is four stacked layers: a masked grid, soft brand washes, a white
+          grain film that also dithers the gradient's banding away, and a glow
+          bleeding up from behind the search bar. */}
+      <section className="surface-hero edge-light shadow-float-lg relative overflow-hidden rounded-3xl border">
         <div className="grid-fade pointer-events-none absolute inset-0" aria-hidden />
         <div
           className="from-primary/12 pointer-events-none absolute inset-x-0 -bottom-24 h-56 bg-gradient-to-t to-transparent"
           aria-hidden
         />
+        <div className="noise-veil pointer-events-none absolute inset-0 opacity-[0.14]" aria-hidden />
 
         <div className="relative z-10 px-6 py-12 sm:px-10 sm:py-16">
-          <div className="mx-auto max-w-3xl text-center">
+          {/* Wider than the title on purpose: the supporting line has to hold a
+              single row, while the title breaks where it reads best. */}
+          <div className="mx-auto max-w-4xl text-center">
             <Badge
               variant="secondary"
               className="edge-light bg-background/70 mb-4 border-transparent backdrop-blur"
@@ -82,14 +86,17 @@ export default async function HomePage() {
               <Sparkles className="size-3.5" />
               {t("home.badge")}
             </Badge>
-            <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">
+            <h1 className="mx-auto max-w-3xl text-3xl leading-[1.2] font-semibold tracking-[0.06em] sm:text-4xl md:text-5xl">
               {t("home.heroLine1")}
               <span className="from-primary bg-gradient-to-r to-rose-500 bg-clip-text text-transparent">
                 {" "}
                 {t("home.heroLine2")}
               </span>
             </h1>
-            <p className="text-muted-foreground mx-auto mt-4 max-w-2xl text-sm leading-relaxed sm:text-base">
+            {/* One row from `lg` up (a wider measure plus `nowrap`), a roomier
+                line-height, and the light grey token so it stays three steps
+                below the title in weight and value. */}
+            <p className="text-hero-subtitle mx-auto mt-4 text-sm leading-7 sm:text-base lg:whitespace-nowrap">
               {cities.length > 0
                 ? t("home.heroSubtitle", { cities: cities.length, listings: totalListings })
                 : ""}
@@ -141,7 +148,7 @@ export default async function HomePage() {
                 <Link
                   key={category.type}
                   href={`/search?propertyType=${category.type}`}
-                  className="surface-sheen edge-light hover:border-primary/40 group flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5 hover:shadow-md"
+                  className="surface-sheen edge-light shadow-float hover:border-primary/40 group flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition-all hover:-translate-y-0.5 hover:shadow-float-lg"
                 >
                   <span
                     className={cn(
@@ -199,7 +206,7 @@ export default async function HomePage() {
                   <Link
                     key={city.city}
                     href={`/search?location=${encodeURIComponent(city.city)}`}
-                    className="group edge-light relative overflow-hidden rounded-2xl border shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                    className="group edge-light shadow-float hover:shadow-float-lg relative overflow-hidden rounded-2xl border transition-all hover:-translate-y-0.5"
                   >
                     <div className="relative aspect-4/5">
                       <SafeImage

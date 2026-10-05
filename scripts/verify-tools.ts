@@ -320,6 +320,13 @@ async function main() {
   // Record a couple of searches, then confirm the tool reports them.
   const { recordSearch, getSearchInsights } = await import("../server/personalization.service");
   await recordSearch(demo.id, { location: "Tokyo" });
+  // Spaced deliberately. Two inserts in the *same millisecond* get identical
+  // recency weights, so "the most recent ranks first" would then be decided by
+  // the tie-break rather than by recency — the assertion below is about the
+  // weighting, so its inputs have to be ordered in time. (The tie-break is now
+  // deterministic too; this flake cost two debugging rounds before the runner
+  // started printing the failing assertion's name.)
+  await new Promise((resolve) => setTimeout(resolve, 20));
   await recordSearch(demo.id, { location: "首尔" });
 
   const history = await run("getMySearchHistory", {});

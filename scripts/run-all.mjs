@@ -38,6 +38,7 @@ const SUITES = [
   { name: "verify-i18n", cmd: ["npx", "tsx", "scripts/verify-i18n.ts"] },
   { name: "verify-listing-i18n", cmd: ["npx", "tsx", "scripts/verify-listing-i18n.ts"] },
   { name: "check-pages", cmd: ["node", "scripts/check-pages.mjs"] },
+  { name: "check-home-design", cmd: ["node", "scripts/check-home-design.mjs"] },
 ];
 
 // Only `npx` needs the shell on Windows (it is a .cmd shim); running node

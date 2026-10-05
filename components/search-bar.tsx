@@ -145,13 +145,17 @@ export function SearchBar({
       }}
       className={cn(
         "bg-background border-border flex w-full flex-col gap-2 border p-2 md:flex-row md:items-center md:gap-0 md:rounded-full",
-        // The hero variant sits on a gradient, so it needs its own lift. In dark
-        // mode the hero's warm glow makes the backdrop behind the card *lighter*
-        // than the neutral background, so stepping only to `card` left the two
-        // nearly equal. `secondary` (0.269) clears the glow's tinted backdrop,
-        // and the ring gives the edge a defined line.
+        // The hero variant floats over a gradient, so it needs both a lift and a
+        // surface that lets the gradient through: translucent white plus a blur
+        // reads as frosted glass sitting *above* the wash, where an opaque card
+        // reads as a hole punched in it. The coral shadow (rather than a black
+        // one) keeps the light looking like it comes from the brand colour.
+        //
+        // Dark mode keeps `secondary` at 70%: the hero's warm glow makes the
+        // backdrop behind the card *lighter* than the neutral background there,
+        // so a transparent surface would swallow the card's own edge.
         isHero
-          ? "edge-light rounded-3xl shadow-xl shadow-black/10 ring-1 ring-black/5 dark:bg-secondary dark:shadow-black/50 dark:ring-white/20"
+          ? "edge-light shadow-float rounded-3xl border-transparent bg-background/65 ring-1 ring-white/60 backdrop-blur-xl dark:bg-secondary/70 dark:ring-white/15"
           : "rounded-2xl shadow-lg shadow-black/5",
         className,
       )}
