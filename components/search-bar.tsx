@@ -130,12 +130,23 @@ export function SearchBar({
   const isHero = variant === "hero";
 
   const segmentClass = cn(
-    "flex flex-col justify-center gap-0.5 rounded-2xl px-4 py-2.5 text-left transition-colors hover:bg-accent/60",
-    isHero ? "min-h-[56px]" : "min-h-[48px]",
+    "flex flex-col justify-center gap-0.5 rounded-2xl text-left transition-colors hover:bg-accent/60",
+    // The hero bar stacks its fields on a phone (a full-screen-ish form is fine
+    // there). The compact bar is a single row at every width, so its segments get
+    // tighter horizontal padding and a shorter minimum height — but never below
+    // 44px, which is what a thumb needs.
+    isHero ? "min-h-[56px] px-4 py-2.5" : "min-h-[44px] px-2 py-2 md:min-h-[48px] md:px-4",
   );
 
-  const labelClass = "text-[11px] font-semibold tracking-wide text-muted-foreground";
-  const valueClass = "truncate text-sm";
+  const labelClass = cn(
+    "text-[11px] font-semibold tracking-wide text-muted-foreground",
+    // Hidden in the compact bar on a phone: two stacked lines per field cannot
+    // fit three fields plus a button in one row, and the value alone still reads
+    // ("东京", "10月1日 – 10月5日", "2 位").
+    !isHero && "max-md:hidden",
+  );
+
+  const valueClass = cn("truncate", isHero ? "text-sm" : "text-xs md:text-sm");
 
   return (
     <form
@@ -144,7 +155,11 @@ export function SearchBar({
         submit();
       }}
       className={cn(
-        "bg-background border-border flex w-full flex-col gap-2 border p-2 md:flex-row md:items-center md:gap-0 md:rounded-full",
+        "bg-background border-border flex w-full gap-2 border p-2 md:gap-0 md:rounded-full",
+        // Hero: a column on a phone, a row from `md`. Compact: a row always — a
+        // stacked "compact" bar would be ~250px tall on a phone and would cover
+        // the very page it exists to give you access to.
+        isHero ? "flex-col md:flex-row md:items-center" : "flex-row items-center p-1.5 md:p-2",
         // The hero variant floats over a gradient, so it needs both a lift and a
         // surface that lets the gradient through: translucent white plus a blur
         // reads as frosted glass sitting *above* the wash, where an opaque card
@@ -156,7 +171,11 @@ export function SearchBar({
         // so a transparent surface would swallow the card's own edge.
         isHero
           ? "edge-light shadow-float rounded-3xl border-transparent bg-background/65 ring-1 ring-white/60 backdrop-blur-xl dark:bg-secondary/70 dark:ring-white/15"
-          : "rounded-2xl shadow-lg shadow-black/5",
+          : // The compact variant floats over *page content* while it is sticky, so
+            // it gets the same treatment for the same reason: an opaque bar would
+            // punch a hole in whatever it covers, and the blur is what makes it
+            // read as a layer above the cards scrolling underneath it.
+            "shadow-float rounded-2xl border-transparent bg-background/85 ring-1 ring-black/5 backdrop-blur-xl dark:bg-secondary/85 dark:ring-white/15",
         className,
       )}
       style={style}
@@ -216,7 +235,12 @@ export function SearchBar({
         </PopoverContent>
       </Popover>
 
-      <Separator orientation="vertical" className="hidden h-8 md:block" />
+      <Separator
+        orientation="vertical"
+        // A vertical divider only makes sense between fields sitting side by side,
+        // so the hero bar shows it from `md` and the single-row compact bar always.
+        className={cn("h-6 md:h-8", isHero ? "hidden md:block" : "block")}
+      />
 
       {/* Dates */}
       <Popover
@@ -276,7 +300,12 @@ export function SearchBar({
         </PopoverContent>
       </Popover>
 
-      <Separator orientation="vertical" className="hidden h-8 md:block" />
+      <Separator
+        orientation="vertical"
+        // A vertical divider only makes sense between fields sitting side by side,
+        // so the hero bar shows it from `md` and the single-row compact bar always.
+        className={cn("h-6 md:h-8", isHero ? "hidden md:block" : "block")}
+      />
 
       {/* Guests */}
       <Popover
@@ -329,15 +358,24 @@ export function SearchBar({
         <Button
           type="submit"
           size={isHero ? "lg" : "default"}
-          className={cn("w-full gap-2 md:w-auto", isHero && "h-12 rounded-2xl px-6 md:rounded-full")}
+          // The compact bar is the *mobile* bar — it is what a thumb reaches for
+          // while scrolling — so its button is 44px tall there, meeting the
+          // minimum touch target. The default sizes in this design system are
+          // 32–36px, which is fine for a mouse and too small for a thumb. It goes
+          // back to the compact desktop height at `md`, where the whole bar is
+          // only 48px tall and a 44px button would fill it edge to edge.
+          className={cn(
+            isHero ? "h-12 w-full gap-2 rounded-2xl px-6 md:w-auto md:rounded-full" : "h-11 shrink-0 gap-1.5 rounded-2xl px-3 md:h-9 md:gap-2 md:px-4",
+          )}
         >
           <Search className="size-4" />
           {t("common.search")}
         </Button>
       </div>
 
-      {/* Compact hint about selected dates, visible on mobile too */}
-      {!isHero && !checkIn && (
+      {/* Hint about unset dates, for the hero bar's stacked phone layout only:
+          the compact bar is a single row, so a paragraph here would break it. */}
+      {isHero && !checkIn && (
         <p className="text-muted-foreground flex items-center gap-1.5 px-2 pb-1 text-xs md:hidden">
           <CalendarIcon className="size-3.5" />
           {t("searchBar.noDatesHint")}

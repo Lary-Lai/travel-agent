@@ -28,6 +28,7 @@ const BASE = process.argv[2] ?? "http://localhost:3001";
 const TSX = ["node", "node_modules/tsx/dist/cli.mjs"];
 
 const SUITES = [
+  { name: "check-encoding", cmd: ["node", "scripts/check-encoding.mjs"], kind: "exit" },
   { name: "verify-db", cmd: [...TSX, "scripts/verify-db.ts"], kind: "db" },
   { name: "smoke-api", cmd: ["node", "scripts/smoke-api.mjs", BASE] },
   { name: "verify-tools", cmd: [...TSX, "scripts/verify-tools.ts"] },
@@ -49,6 +50,7 @@ const SUITES = [
   { name: "verify-listing-i18n", cmd: [...TSX, "scripts/verify-listing-i18n.ts"] },
   { name: "check-pages", cmd: ["node", "scripts/check-pages.mjs"] },
   { name: "check-home-design", cmd: ["node", "scripts/check-home-design.mjs"] },
+  { name: "check-search-animation", cmd: ["node", "scripts/check-search-animation.mjs"] },
 ];
 
 const results = [];
@@ -79,6 +81,10 @@ for (const suite of SUITES) {
   let verdict = summary ? "counted" : "informational";
   if (suite.kind === "db") {
     verdict = /ALL CHECKS PASSED/.test(output) ? "db-ok" : "db-failed";
+  }
+  if (suite.kind === "exit") {
+    // Suites that report their own verdict and signal through the exit code.
+    verdict = run.status === 0 ? "exit-ok" : "exit-failed";
   }
 
   results.push({
@@ -113,6 +119,11 @@ for (const result of results) {
   } else if (result.verdict === "db-failed") {
     totalFailed += 1;
     console.log(`${result.name.padEnd(26)} FAILED`);
+  } else if (result.verdict === "exit-ok") {
+    console.log(`${result.name.padEnd(26)} ${result.reportLine}  ok`);
+  } else if (result.verdict === "exit-failed") {
+    totalFailed += 1;
+    console.log(`${result.name.padEnd(26)} ${result.reportLine}  FAILED`);
   } else {
     // Informational: show the provider's own verdict, and its FAIL lines so a
     // genuine problem is still visible — just not counted as a code failure.
