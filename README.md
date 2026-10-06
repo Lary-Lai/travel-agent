@@ -719,7 +719,7 @@ node scripts/make-scanned-pdf.mjs   # 生成"扫描件"PDF + 同页 JPEG 测试�
 | `verify-listing-i18n.ts` | ✅ **29 / 29**（180 个房源 × 6 种语言的标题与地址） |
 | `verify-markdown.ts` | ✅ **21 / 21** |
 | `shot-payment-deadline.mjs` | ✅ 7 个页面渲染无运行时错误 |
-| `check-pages.mjs` | ✅ **60 / 60**（11 条路由的真实页面文本 + **点击导航** + **头像悬停卡片（含防闪烁）** + 上传交互 + 可见性弹窗 + 回复徽章 + 标签页标题 + 助手输入框） |
+| `check-pages.mjs` | ✅ **70 / 70**（11 条路由的真实页面文本 + **点击导航** + **三个悬停菜单（含防闪烁与 inert 检查）** + 上传交互 + 可见性弹窗 + 回复徽章 + 标签页标题 + 助手输入框） |
 | `check-home-design.mjs` | ✅ **20 / 20**（渲染后像素：噪点 1.80/255、卡片阴影衰减 2.9–3.0/255） |
 | `check-search-animation.mjs` | ✅ **23 / 23**（两态状态机 + 锁存 + 单行手机布局 + reduced-motion） |
 | `check-encoding.mjs` | ✅ ENCODING: OK（272 个文件无 BOM、无乱码） |
@@ -1704,6 +1704,27 @@ t+600ms open=true bodyPointer=auto  topAtAvatar=SPAN
 | 头像始终**可被命中测试打到** | 悬停与菜单互相打架的机制 |
 
 这次修复也印证了一条经验：**"断言某一时刻的状态"和"断言一段时间内的状态"是两种不同的测试**，闪烁、抖动、竞态这类问题只有后者能发现。
+
+**45. 悬停行为推广到语言与主题选择器：顺手抽出 `useHoverMenu`**
+
+顶栏右侧三个菜单（语言、主题、账号）都要悬停即弹出，而上一轮那些机制——250ms 延时、悬停守卫、Escape 绕过、`modal={false}`——散在 `site-header.tsx` 里。三份拷贝意味着三处可能漏掉 `modal={false}`，而漏掉的表现正是上一轮那个闪烁 bug。所以抽成 `lib/use-hover-menu.ts`：
+
+```tsx
+const menu = useHoverMenu();
+
+<DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
+  <DropdownMenuTrigger asChild>
+    <Button {...menu.triggerProps}>…</Button>
+  </DropdownMenuTrigger>
+  <DropdownMenuContent {...menu.contentProps}>
+    <DropdownMenuItem onSelect={() => { doTheThing(); menu.closeNow(); }} />
+  </DropdownMenuContent>
+</DropdownMenu>
+```
+
+`triggerProps` 给触发元素、`contentProps` 给 portal 出去的菜单内容（它必须有自己的一套指针事件：它不在触发的子树里，进入它看起来就像是离开了触发）。`modal={false}` 写在调用处而不是钩子里，因为它是 `DropdownMenu` 的属性——所以在钩子的文档注释里写明**必需**，并在三个调用处都加了指向它的注释。
+
+新增断言把三个菜单都覆盖一遍（`check-pages` 增至 70）：打开、**指针不动时反复采样不闪烁**、**页面从不变 inert**、移开后关闭。语言与主题这两个菜单的图也复核过：不溢出、不裁切、紧贴各自图标下方。
 
 ### 技术选择记录
 

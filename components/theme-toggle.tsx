@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { TranslationKey } from "@/lib/i18n";
+import { useHoverMenu } from "@/lib/use-hover-menu";
 
 /** `value` stays the next-themes key; only the visible label is translated. */
 const OPTIONS: { value: "light" | "dark" | "system"; label: TranslationKey; icon: typeof Sun }[] = [
@@ -32,21 +33,31 @@ const OPTIONS: { value: "light" | "dark" | "system"; label: TranslationKey; icon
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const t = useT();
+  const menu = useHoverMenu();
 
   return (
-    <DropdownMenu>
+    // `modal={false}` is required by `useHoverMenu` — see its docs.
+    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={t("globals.themeToggle")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("globals.themeToggle")}
+          {...menu.triggerProps}
+        >
           <Sun className="size-4 dark:hidden" />
           <Moon className="hidden size-4 dark:block" />
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-40">
+      <DropdownMenuContent align="end" className="w-40" {...menu.contentProps}>
         {OPTIONS.map((option) => (
           <DropdownMenuItem
             key={option.value}
-            onSelect={() => setTheme(option.value)}
+            onSelect={() => {
+              setTheme(option.value);
+              menu.closeNow();
+            }}
             className="cursor-pointer gap-2"
           >
             <option.icon className="size-4" />

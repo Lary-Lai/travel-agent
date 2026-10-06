@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LOCALE_META, LOCALES } from "@/lib/i18n/locales";
+import { useHoverMenu } from "@/lib/use-hover-menu";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,9 +25,11 @@ import { cn } from "@/lib/utils";
  */
 export function LocaleSwitcher({ className }: { className?: string }) {
   const { locale, setLocale, t, isSwitching } = useLocale();
+  const menu = useHoverMenu();
 
   return (
-    <DropdownMenu>
+    // `modal={false}` is required by `useHoverMenu` — see its docs.
+    <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -34,6 +37,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           className={cn("gap-1.5 px-2", className)}
           aria-label={t("locale.label")}
           disabled={isSwitching}
+          {...menu.triggerProps}
         >
           {isSwitching ? (
             <Loader2 className="size-4 animate-spin" />
@@ -44,7 +48,7 @@ export function LocaleSwitcher({ className }: { className?: string }) {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-44" {...menu.contentProps}>
         <DropdownMenuLabel className="text-xs">{t("locale.label")}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {LOCALES.map((code) => {
@@ -53,7 +57,10 @@ export function LocaleSwitcher({ className }: { className?: string }) {
           return (
             <DropdownMenuItem
               key={code}
-              onSelect={() => setLocale(code)}
+              onSelect={() => {
+                setLocale(code);
+                menu.closeNow();
+              }}
               aria-checked={active}
               role="menuitemradio"
               className="justify-between gap-2"

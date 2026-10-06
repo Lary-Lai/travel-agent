@@ -471,6 +471,62 @@ async function main() {
     }
 
     check("the hover card raised no runtime error", hover.errors.length === 0, hover.errors.join(" | "));
+
+    /*
+     * The language and theme pickers sit to the left of the avatar and use the
+     * same hook, so they get the same treatment — including the two failure modes
+     * that are invisible to a "does it open" check: a menu that closes and reopens
+     * on its own, and a page that goes inert while a menu is open.
+     */
+    for (const [label, selector] of [
+      ["language picker", 'header button[aria-label="语言"]'],
+      ["theme picker", 'header button[aria-label="切换主题"]'],
+    ]) {
+      console.log(`\n— hovering the ${label}`);
+
+      const tab = await browser.visit(`${BASE}/`, { cookies: cookie, settle: 2500 });
+      const target = await pointIn(selector);
+      check(`the ${label} trigger is on the page`, Boolean(target), String(target));
+
+      if (target) {
+        await moveTo(target.x, target.y);
+        await new Promise((r) => setTimeout(r, 400));
+        check(`hovering the ${label} opens its menu`, (await menuOpen()) === true);
+        await browser.screenshot(
+          path.join(SHOTS, label === "language picker" ? "hover-locale-menu.png" : "hover-theme-menu.png"),
+        );
+
+        const samples = [];
+        for (let i = 0; i < 8; i++) {
+          await new Promise((r) => setTimeout(r, 200));
+          samples.push(
+            await browser.evaluate(`
+              ({
+                open: Boolean(document.querySelector('[role="menu"]')),
+                bodyPointerEvents: getComputedStyle(document.body).pointerEvents,
+              })
+            `),
+          );
+        }
+        check(
+          `the ${label} menu stays open without flickering`,
+          samples.every((sample) => sample.open),
+          `${samples.filter((s) => !s.open).length}/${samples.length} samples were closed`,
+        );
+        check(
+          `the page never goes inert while the ${label} menu is open`,
+          samples.every((sample) => sample.bodyPointerEvents !== "none"),
+          `${[...new Set(samples.map((s) => s.bodyPointerEvents))].join(", ")}`,
+        );
+
+        // And moving away closes it, so the hover handlers are not one-way.
+        await moveTo(700, 600);
+        await new Promise((r) => setTimeout(r, 600));
+        check(`moving away closes the ${label} menu`, (await menuOpen()) === false);
+      }
+
+      await browser.closeTab(tab.tabId);
+    }
     await browser.closeTab(hover.tabId);
 
     // ------------------------------------------------------ forum reply badge

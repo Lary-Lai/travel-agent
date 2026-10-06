@@ -4,7 +4,7 @@ import { Compass, ChevronDown, Heart, Loader2, LogOut, Menu, MessagesSquare, Rou
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 import { LocaleSwitcher } from "@/components/locale-switcher";
@@ -24,6 +24,7 @@ import {
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useHoverMenu } from "@/lib/use-hover-menu";
 import { useAgentStore } from "@/lib/store";
 
 const NAV = [
@@ -34,24 +35,6 @@ const NAV = [
   { href: "/forum", key: "nav.forum", icon: MessagesSquare },
   { href: "/friends", key: "nav.friends", icon: Users },
 ] as const;
-
-/**
- * How long the pointer may be away from the trigger *and* the menu before the
- * menu closes.
- *
- * This delay is the whole trick of a hover card. The menu is portalled to the
- * body and offset from the avatar, so travelling from one to the other briefly
- * leaves both — closing on the first `pointerleave` would make the menu
- * impossible to reach. 250ms is long enough for that trip and short enough not
- * to feel sticky.
- *
- * (A "bridge" element — transparent padding bridging the gap — is the other
- * common fix, but it cannot work here: the content is portalled, so a padding
- * div inside the trigger is not an ancestor of the menu and never receives the
- * pointer. The 4px offset takes ~10ms to cross at normal pointer speed, which
- * the delay covers by a wide margin.)
- */
-const HOVER_CLOSE_DELAY = 250;
 
 export function SiteHeader() {
   const pathname = usePathname();
@@ -64,86 +47,12 @@ export function SiteHeader() {
   const [signingOut, setSigningOut] = useState(false);
 
   /**
-   * Account menu: hover opens it, with a delayed close (see HOVER_CLOSE_DELAY).
-   *
-   * The menu is *controlled* because hover has to drive it, and two details are
-   * easy to get wrong:
-   *
-   *  - `hoveringAccount` is a ref, not state: it is read inside an event handler
-   *    that decides whether to honour a close request, and storing it in state
-   *    would mean the handler closes over a stale value.
-   *  - a mouse user clicking the avatar while the menu is already open would
-   *    otherwise toggle it shut and then leave it shut, because no new
-   *    `pointerenter` fires while the pointer has not moved. So a close request
-   *    that arrives *while the pointer is inside* is ignored — for mouse users
-   *    the pointer leaving is what closes it. Touch and keyboard are unaffected,
-   *    so tapping still toggles and Escape still works.
+   * Hover-opened account menu. The mechanics — the 250ms close delay, the hover
+   * guard that stops a click from toggling a hover-opened menu shut, and the
+   * Escape bypass — live in `useHoverMenu`, shared with the language and theme
+   * pickers rather than copied into each.
    */
-  const [accountOpen, setAccountOpen] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoveringAccount = useRef(false);
-  const lastPointerType = useRef<string>("mouse");
-  /** Set when the close is intentional (a menu item was chosen), not hover. */
-  const bypassHoverGuard = useRef(false);
-
-  const cancelAccountClose = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, []);
-
-  const openAccount = useCallback(
-    (pointerType: string) => {
-      lastPointerType.current = pointerType;
-      cancelAccountClose();
-      setAccountOpen(true);
-    },
-    [cancelAccountClose],
-  );
-
-  const scheduleAccountClose = useCallback(() => {
-    cancelAccountClose();
-    closeTimerRef.current = setTimeout(() => setAccountOpen(false), HOVER_CLOSE_DELAY);
-  }, [cancelAccountClose]);
-
-  // A pending timer must not fire after unmount.
-  useEffect(() => cancelAccountClose, [cancelAccountClose]);
-
-  const handleAccountOpenChange = useCallback(
-    (next: boolean) => {
-      cancelAccountClose();
-      if (
-        !next &&
-        hoveringAccount.current &&
-        lastPointerType.current === "mouse" &&
-        !bypassHoverGuard.current
-      ) {
-        return;
-      }
-      bypassHoverGuard.current = false;
-      setAccountOpen(next);
-    },
-    [cancelAccountClose],
-  );
-
-  /** Close the menu for real, e.g. right before navigating from a menu item. */
-  const closeAccountNow = useCallback(() => {
-    bypassHoverGuard.current = true;
-    setAccountOpen(false);
-  }, []);
-
-  /** Shared by the trigger area and the portalled content. */
-  const accountHoverHandlers = {
-    onPointerEnter: (event: React.PointerEvent) => {
-      hoveringAccount.current = true;
-      openAccount(event.pointerType);
-    },
-    onPointerLeave: () => {
-      hoveringAccount.current = false;
-      scheduleAccountClose();
-    },
-  };
+  const accountMenu = useHoverMenu();
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -276,10 +185,14 @@ export function SiteHeader() {
            * must stay live, so that moving the pointer anywhere else behaves like
            * moving a pointer, not like dismissing a modal.
            */
-          <DropdownMenu modal={false} open={accountOpen} onOpenChange={handleAccountOpenChange}>
+          <DropdownMenu
+            modal={false}
+            open={accountMenu.open}
+            onOpenChange={accountMenu.onOpenChange}
+          >
             {/* The hover area is the avatar *and* the chevron, so the affordance
                 and the trigger are the same target. */}
-            <div {...accountHoverHandlers} className="flex items-center">
+            <div {...accountMenu.triggerProps} className="flex items-center">
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -296,27 +209,13 @@ export function SiteHeader() {
                   <ChevronDown
                     className={cn(
                       "text-muted-foreground group-hover/account:text-foreground size-4 shrink-0 transition-transform duration-200",
-                      accountOpen && "rotate-180",
+                      accountMenu.open && "rotate-180",
                     )}
                   />
                 </button>
               </DropdownMenuTrigger>
             </div>
-            <DropdownMenuContent
-              align="end"
-              className="w-60"
-              {...accountHoverHandlers}
-              // Escape is an explicit "close this" from the keyboard, so it must
-              // not be vetoed by the hover guard below — otherwise a keyboard user
-              // whose pointer happens to rest on the avatar cannot close the menu
-              // at all. Radix calls this before it requests the close.
-              onEscapeKeyDown={() => {
-                bypassHoverGuard.current = true;
-              }}
-              // Items close the menu on select; the hover guard would otherwise
-              // veto that and leave the menu sitting open after navigating.
-              onPointerDownOutside={cancelAccountClose}
-            >
+            <DropdownMenuContent align="end" className="w-60" {...accountMenu.contentProps}>
               <DropdownMenuLabel className="flex items-center gap-2 py-2">
                 <Avatar className="size-8 border">
                   {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
@@ -330,25 +229,25 @@ export function SiteHeader() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild onSelect={closeAccountNow}>
+              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
                 <Link href="/profile" className="cursor-pointer">
                   <User className="size-4" />
                   {t("common.profile")}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild onSelect={closeAccountNow}>
+              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
                 <Link href="/wishlist" className="cursor-pointer">
                   <Heart className="size-4" />
                   {t("nav.wishlist")}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild onSelect={closeAccountNow}>
+              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
                 <Link href="/trips" className="cursor-pointer">
                   <Route className="size-4" />
                   {t("nav.trips")}
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild onSelect={closeAccountNow}>
+              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
                 <Link href="/friends" className="cursor-pointer">
                   <Users className="size-4" />
                   {t("nav.friends")}
@@ -359,7 +258,7 @@ export function SiteHeader() {
                 variant="destructive"
                 onSelect={(event) => {
                   event.preventDefault();
-                  closeAccountNow();
+                  accountMenu.closeNow();
                   void handleSignOut();
                 }}
                 disabled={signingOut}
