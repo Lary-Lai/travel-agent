@@ -249,6 +249,178 @@ async function main() {
 
     await browser.closeTab(nav.tabId);
 
+    // ------------------------------------------------ the avatar hover card
+    /**
+     * Hovering the avatar must open the account menu, and the menu must survive
+     * the trip from the avatar into it.
+     *
+     * Real pointer input throughout (`Input.dispatchMouseEvent`), because the
+     * whole feature is pointer-event driven: a synthetic `mouseenter` would pass
+     * even if the handlers were wired to the wrong element, and the delay cannot
+     * be observed at all without real timing.
+     */
+    console.log("\n— hovering the avatar opens the account menu");
+
+    const hover = await browser.visit(`${BASE}/`, { cookies: cookie, settle: 2500 });
+
+    const moveTo = async (x, y) => {
+      await browser.send("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+    };
+    const pointIn = async (selector) =>
+      browser.evaluate(`
+        (() => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+        })()
+      `);
+    const menuOpen = () =>
+      browser.evaluate(`Boolean(document.querySelector('[role="menu"]'))`);
+
+    const avatar = await pointIn('header button[aria-label="账户菜单"]');
+    check("the avatar trigger is on the page", Boolean(avatar), String(avatar));
+
+    if (avatar) {
+      await moveTo(avatar.x, avatar.y);
+      await new Promise((r) => setTimeout(r, 400));
+      check("hovering the avatar opens the menu", (await menuOpen()) === true);
+
+      /*
+       * Compare the chevron in both states rather than asserting on one CSS
+       * property by name: Tailwind v4's `rotate-180` writes the standalone
+       * `rotate` property, so a `transform`-only assertion reported "none" while
+       * the chevron was in fact rotated.
+       */
+      const chevronStyle = () =>
+        browser.evaluate(`
+          (() => {
+            const button = document.querySelector('header button[aria-label="账户菜单"]');
+            const svgs = [...button.querySelectorAll('svg')];
+            const chevron = svgs[svgs.length - 1];
+            if (!chevron) return null;
+            const style = getComputedStyle(chevron);
+            return style.rotate + " | " + style.transform;
+          })()
+        `);
+
+      const chevronOpen = await chevronStyle();
+      check("the chevron exists next to the avatar", chevronOpen !== null, String(chevronOpen));
+
+      // Move into the menu, across the gap. This is the case the delay exists for.
+      const menuPoint = await pointIn('[role="menu"]');
+      if (menuPoint) {
+        await moveTo(menuPoint.x, menuPoint.y);
+        await new Promise((r) => setTimeout(r, 450));
+        check("the menu survives the pointer crossing into it", (await menuOpen()) === true);
+        await browser.screenshot(path.join(SHOTS, "account-hover-menu.png"));
+      }
+
+      // Leaving both closes it — but not instantly, or the trip above would fail.
+      await moveTo(Math.round(700), Math.round(600));
+      await new Promise((r) => setTimeout(r, 120));
+      check(
+        "leaving does not close it instantly (the 250ms delay)",
+        (await menuOpen()) === true,
+      );
+      await new Promise((r) => setTimeout(r, 500));
+      check("and it does close once the delay elapses", (await menuOpen()) === false);
+
+      const chevronClosed = await chevronStyle();
+      check(
+        "the chevron rotates between the closed and open states",
+        chevronOpen !== chevronClosed,
+        `open "${chevronOpen}" vs closed "${chevronClosed}"`,
+      );
+
+      // Clicking the avatar while hover-opened must not toggle it shut: no new
+      // pointerenter fires while the pointer has not moved, so it would stay shut.
+      await moveTo(avatar.x, avatar.y);
+      await new Promise((r) => setTimeout(r, 350));
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x: avatar.x, y: avatar.y, button: "left", clickCount: 1,
+      });
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: avatar.x, y: avatar.y, button: "left", clickCount: 1,
+      });
+      await new Promise((r) => setTimeout(r, 250));
+      check(
+        "clicking the avatar does not close a hover-opened menu",
+        (await menuOpen()) === true,
+      );
+
+      /*
+       * Keyboard path, tested as a keyboard user performs it: focus the trigger,
+       * open with Enter, close with Escape. Escape is delivered to whatever holds
+       * focus, so pressing it while the menu was opened by *hover* (which does not
+       * move focus into the menu) proves nothing about the keyboard flow.
+       */
+      const pressKey = async (key, code, windowsVirtualKeyCode) => {
+        await browser.send("Input.dispatchKeyEvent", {
+          type: "keyDown", key, code, windowsVirtualKeyCode,
+        });
+        await browser.send("Input.dispatchKeyEvent", {
+          type: "keyUp", key, code, windowsVirtualKeyCode,
+        });
+      };
+
+      await moveTo(700, 600);
+      await new Promise((r) => setTimeout(r, 600));
+      await browser.evaluate(
+        `document.querySelector('header button[aria-label="账户菜单"]').focus()`,
+      );
+      await pressKey("Enter", "Enter", 13);
+      await new Promise((r) => setTimeout(r, 400));
+      check("Enter on the focused avatar opens the menu", (await menuOpen()) === true);
+      check(
+        "and focus moved into the menu (so Escape can reach it)",
+        await browser.evaluate(`Boolean(document.activeElement?.closest?.('[role="menu"]'))`),
+      );
+
+      await pressKey("Escape", "Escape", 27);
+      await new Promise((r) => setTimeout(r, 300));
+      check("Escape closes the menu", (await menuOpen()) === false);
+
+      // Choosing an item both closes it and navigates.
+      await moveTo(avatar.x, avatar.y);
+      await new Promise((r) => setTimeout(r, 350));
+      const wishlistItem = await browser.evaluate(`
+        (() => {
+          const item = [...document.querySelectorAll('[role="menuitem"]')]
+            .find((el) => el.textContent.includes('心愿单'));
+          if (!item) return null;
+          const r = item.getBoundingClientRect();
+          return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+        })()
+      `);
+      if (wishlistItem) {
+        await moveTo(wishlistItem.x, wishlistItem.y);
+        await browser.send("Input.dispatchMouseEvent", {
+          type: "mousePressed", x: wishlistItem.x, y: wishlistItem.y, button: "left", clickCount: 1,
+        });
+        await browser.send("Input.dispatchMouseEvent", {
+          type: "mouseReleased", x: wishlistItem.x, y: wishlistItem.y, button: "left", clickCount: 1,
+        });
+        await new Promise((r) => setTimeout(r, 1600));
+        const afterSelect = await browser.evaluate(
+          `({ path: location.pathname, menu: Boolean(document.querySelector('[role="menu"]')) })`,
+        );
+        check(
+          "choosing 心愿单 navigates there",
+          afterSelect.path === "/wishlist",
+          String(afterSelect.path),
+        );
+        check(
+          "and the menu does not linger open after the choice",
+          afterSelect.menu === false,
+          `menu=${afterSelect.menu}`,
+        );
+      }
+    }
+
+    check("the hover card raised no runtime error", hover.errors.length === 0, hover.errors.join(" | "));
+    await browser.closeTab(hover.tabId);
+
     // ------------------------------------------------------ forum reply badge
     /**
      * A reply written by the signed-in user must be labelled 我的回复, not 我的帖子.
