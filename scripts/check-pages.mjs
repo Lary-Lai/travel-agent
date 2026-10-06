@@ -91,6 +91,25 @@ async function main() {
     .then((j) => (j.data?.posts?.[0]?.id ? `/forum/${j.data.posts[0].id}` : null))
     .catch(() => null);
 
+  /*
+   * Reply to the newest seeded post as the demo user, so the "my reply" badge has
+   * something to render. It is cleaned up below.
+   *
+   * This has to be done here, in a browser check, and cannot be an API assertion:
+   * the forum detail view fetches its data on the client, so the server-rendered
+   * HTML contains a skeleton and no badges at all. An attempt to assert it over
+   * HTTP found zero occurrences of either label and looked like a broken fix.
+   */
+  const postId = postHref?.split("/").pop();
+  const createdReply = postId
+    ? await api(`/api/forum/posts/${postId}/replies`, {
+        cookie,
+        method: "POST",
+        body: { body: "来自 check-pages 的回复，用于验证徽章文案。" },
+      })
+    : null;
+  const createdReplyId = createdReply?.body?.data?.reply?.id ?? null;
+
   const browser = await new Browser().start();
   console.log(`  browser: ${browser.process?.spawnfile ?? "chromium"}\n`);
 
@@ -229,6 +248,49 @@ async function main() {
     );
 
     await browser.closeTab(nav.tabId);
+
+    // ------------------------------------------------------ forum reply badge
+    /**
+     * A reply written by the signed-in user must be labelled 我的回复, not 我的帖子.
+     *
+     * The bug was real and user-reported: the reply list reused the *post's* badge
+     * key. The API cannot catch it — both replies carry `isMine: true` regardless
+     * of the label — so the claim is only observable in rendered markup, which is
+     * why it lives here.
+     */
+    if (postHref && createdReplyId) {
+      console.log("\n— the reply badge says 我的回复, not 我的帖子");
+
+      const replyTab = await browser.visit(`${BASE}${postHref}`, { cookies: cookie, settle: 3000 });
+      const text = await browser.evaluate("document.body.innerText");
+      const countOf = (needle) => text.split(needle).length - 1;
+
+      check(
+        "the seeded post is not mine, so 我的帖子 appears zero times",
+        countOf("我的帖子") === 0,
+        `found ${countOf("我的帖子")}`,
+      );
+      check(
+        "my own reply is labelled 我的回复",
+        countOf("我的回复") >= 1,
+        `found ${countOf("我的回复")}`,
+      );
+      check(
+        "the page raised no runtime error",
+        replyTab.errors.length === 0,
+        replyTab.errors.join(" | "),
+      );
+
+      await browser.screenshot(path.join(SHOTS, "forum-reply-badge.png"));
+      await browser.closeTab(replyTab.tabId);
+    } else {
+      console.log("\n  SKIP  could not set up a reply for the badge check");
+    }
+
+    // Undo the reply so the seeded thread is left as found.
+    if (createdReplyId) {
+      await api(`/api/forum/replies/${createdReplyId}`, { cookie, method: "DELETE" });
+    }
 
     // ------------------------------------------------- agent composer
     /**

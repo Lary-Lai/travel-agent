@@ -313,7 +313,7 @@ export function PostDetailView({ postId }: { postId: string }) {
                       </span>
                       {reply.isMine ? (
                         <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
-                          {t("forum.myPost")}
+                          {t("forum.myReply")}
                         </span>
                       ) : null}
                     </div>
