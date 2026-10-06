@@ -287,6 +287,58 @@ async function main() {
       check("hovering the avatar opens the menu", (await menuOpen()) === true);
 
       /*
+       * It must then *stay* open while the pointer does not move.
+       *
+       * This is the assertion whose absence let a real flicker ship. The menu was
+       * modal (Radix's default), so opening it set `pointer-events: none` on the
+       * page; the avatar stopped receiving pointer events, the browser fired
+       * `pointerleave`, the delayed close fired, the menu closed, pointer events
+       * returned and `pointerenter` reopened it — cycling roughly every 300ms.
+       * Checking "open at 400ms" walked straight past all of it.
+       *
+       * So: sample repeatedly without moving the pointer, and assert both the
+       * symptom (never closed) and the cause (the page never goes inert).
+       */
+      const stability = [];
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        stability.push(
+          await browser.evaluate(`
+            (() => {
+              const button = document.querySelector('header button[aria-label="账户菜单"]');
+              const r = button.getBoundingClientRect();
+              const under = document.elementFromPoint(
+                Math.round(r.x + r.width / 2),
+                Math.round(r.y + r.height / 2),
+              );
+              return {
+                open: Boolean(document.querySelector('[role="menu"]')),
+                bodyPointerEvents: getComputedStyle(document.body).pointerEvents,
+                triggerStillHitTestable: Boolean(under && (under === button || button.contains(under))),
+              };
+            })()
+          `),
+        );
+      }
+
+      const closedSamples = stability.filter((sample) => !sample.open).length;
+      check(
+        "the menu stays open while the pointer rests on the avatar (no flicker)",
+        closedSamples === 0,
+        `${closedSamples}/${stability.length} samples were closed`,
+      );
+      check(
+        "the page never goes inert while the menu is open",
+        stability.every((sample) => sample.bodyPointerEvents !== "none"),
+        `body pointer-events values: ${[...new Set(stability.map((s) => s.bodyPointerEvents))].join(", ")}`,
+      );
+      check(
+        "and the avatar is still hit-testable, so hover does not fight the menu",
+        stability.every((sample) => sample.triggerStillHitTestable),
+        `${stability.filter((s) => !s.triggerStillHitTestable).length} sample(s) failed hit-testing`,
+      );
+
+      /*
        * Compare the chevron in both states rather than asserting on one CSS
        * property by name: Tailwind v4's `rotate-180` writes the standalone
        * `rotate` property, so a `transform`-only assertion reported "none" while

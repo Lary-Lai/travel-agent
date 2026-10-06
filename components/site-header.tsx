@@ -261,7 +261,22 @@ export function SiteHeader() {
             <Loader2 className="text-muted-foreground size-4 animate-spin" />
           </div>
         ) : user ? (
-          <DropdownMenu open={accountOpen} onOpenChange={handleAccountOpenChange}>
+          /*
+           * `modal={false}` is required, not a preference.
+           *
+           * Radix's DropdownMenu is modal by default, and a modal menu sets
+           * `pointer-events: none` on the rest of the page while it is open. That
+           * breaks a *hover*-triggered menu in a loop: the avatar stops receiving
+           * pointer events, so the browser fires `pointerleave` on it, the delayed
+           * close fires, the menu closes, pointer events come back, `pointerenter`
+           * fires again and it reopens — measured as `bodyPointer` cycling
+           * none/none/auto on a ~300ms period, which is the flicker a user sees.
+           *
+           * It is also the correct semantics for a hover card: the rest of the page
+           * must stay live, so that moving the pointer anywhere else behaves like
+           * moving a pointer, not like dismissing a modal.
+           */
+          <DropdownMenu modal={false} open={accountOpen} onOpenChange={handleAccountOpenChange}>
             {/* The hover area is the avatar *and* the chevron, so the affordance
                 and the trigger are the same target. */}
             <div {...accountHoverHandlers} className="flex items-center">
