@@ -51,6 +51,7 @@ const SUITES = [
   { name: "check-pages", cmd: ["node", "scripts/check-pages.mjs"] },
   { name: "check-home-design", cmd: ["node", "scripts/check-home-design.mjs"] },
   { name: "check-search-animation", cmd: ["node", "scripts/check-search-animation.mjs"] },
+  { name: "check-icons", cmd: ["node", "scripts/check-icons.mjs"] },
 ];
 
 const results = [];
