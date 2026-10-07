@@ -762,6 +762,64 @@ async function main() {
         );
 
         await browser.screenshot(path.join(SHOTS, "host-profile.png"));
+
+        /*
+         * Reviewers are people too: their avatars and names must open the same kind
+         * of profile. Asserted by count and by clicking the *last* profile link on
+         * the page, which is a reviewer's rather than the host's.
+         */
+        const back = await browser.visit(`${BASE}/listings/${listingId}`, {
+          cookies: cookie,
+          settle: 2500,
+        });
+        const profileLinks = await browser.evaluate(`
+          [...document.querySelectorAll('a[href^="/u/"]')].map((a) => a.getAttribute('href'))
+        `);
+        check(
+          "the listing page links to more than just the host",
+          profileLinks.length >= 2,
+          `${profileLinks.length} profile link(s)`,
+        );
+
+        const reviewer = await browser.evaluate(`
+          (() => {
+            const links = [...document.querySelectorAll('a[href^="/u/"]')];
+            const link = links[links.length - 1];
+            if (!link) return null;
+            /*
+             * The review list is far below the fold, and a rect measured off-screen
+             * gives coordinates that belong to no visible element — the click then
+             * lands nowhere and looks like a broken link. Centre it first.
+             */
+            link.scrollIntoView({ block: 'center' });
+            const r = link.getBoundingClientRect();
+            return {
+              href: link.getAttribute('href'),
+              x: Math.round(r.x + r.width / 2),
+              y: Math.round(r.y + r.height / 2),
+            };
+          })()
+        `);
+        if (reviewer) {
+          await browser.send("Input.dispatchMouseEvent", {
+            type: "mousePressed", x: reviewer.x, y: reviewer.y, button: "left", clickCount: 1,
+          });
+          await browser.send("Input.dispatchMouseEvent", {
+            type: "mouseReleased", x: reviewer.x, y: reviewer.y, button: "left", clickCount: 1,
+          });
+          const reviewDeadline = Date.now() + 8000;
+          let reviewPath = await browser.evaluate("location.pathname");
+          while (!reviewPath.startsWith("/u/") && Date.now() < reviewDeadline) {
+            await new Promise((r) => setTimeout(r, 150));
+            reviewPath = await browser.evaluate("location.pathname");
+          }
+          check(
+            "clicking a reviewer opens their profile",
+            reviewPath === reviewer.href,
+            `expected ${reviewer.href}, got ${reviewPath}`,
+          );
+        }
+        await browser.closeTab(back.tabId);
       }
 
       await browser.closeTab(hostTab.tabId);

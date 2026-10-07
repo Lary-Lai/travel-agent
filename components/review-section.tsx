@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, MessageSquareQuote, Pencil, Star, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -109,18 +110,31 @@ function ReviewCard({
   return (
     <article className="space-y-2.5 rounded-2xl border p-4">
       <div className="flex items-start gap-3">
-        <Avatar className="size-9 border">
-          {review.author.avatar ? (
-            <AvatarImage src={review.author.avatar} alt={review.author.name} />
-          ) : null}
-          <AvatarFallback className="text-xs">
-            {review.author.name.slice(0, 1) || "?"}
-          </AvatarFallback>
-        </Avatar>
+        {/*
+          The reviewer's avatar and name link to their public profile, the same
+          `/u/[id]` route the host card and the forum authors use. As there, what a
+          visitor may actually see is that page's decision, so the link does not
+          try to predict it.
+        */}
+        <Link href={`/u/${review.author.id}`} className="group/reviewer shrink-0">
+          <Avatar className="size-9 border transition-colors group-hover/reviewer:border-primary">
+            {review.author.avatar ? (
+              <AvatarImage src={review.author.avatar} alt={review.author.name} />
+            ) : null}
+            <AvatarFallback className="text-xs">
+              {review.author.name.slice(0, 1) || "?"}
+            </AvatarFallback>
+          </Avatar>
+        </Link>
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-sm font-medium">{review.author.name}</p>
+            <Link
+              href={`/u/${review.author.id}`}
+              className="hover:underline text-sm font-medium"
+            >
+              {review.author.name}
+            </Link>
             {review.isMine ? (
               <span className="bg-primary/10 text-primary rounded-full px-2 py-0.5 text-[11px] font-medium">
                 {t("reviews.mine")}
