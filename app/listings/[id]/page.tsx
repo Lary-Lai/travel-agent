@@ -130,7 +130,17 @@ export default async function ListingDetailPage({ params }: Props) {
         <div className="min-w-0 space-y-8">
           {/* host + highlights */}
           <section className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
+            {/*
+              The host card links to their public profile (`/u/[id]`), which is the
+              same page the friend graph and the forum authors use. Whether the
+              profile is actually viewable is that page's business, not this one's:
+              it already renders the right thing for friends-only, selected and
+              private profiles, so the link does not need to guess.
+            */}
+            <Link
+              href={`/u/${listing.host.id}`}
+              className="group hover:bg-accent/60 -m-2 flex items-center gap-3 rounded-2xl p-2 transition-colors"
+            >
               <Avatar className="size-12 border">
                 {listing.host.avatar ? (
                   <AvatarImage src={listing.host.avatar} alt={listing.host.name} />
@@ -138,7 +148,9 @@ export default async function ListingDetailPage({ params }: Props) {
                 <AvatarFallback>{listing.host.name.slice(0, 1)}</AvatarFallback>
               </Avatar>
               <div>
-                <p className="text-sm font-medium">{t("listing.host")} · {listing.host.name}</p>
+                <p className="text-sm font-medium group-hover:underline">
+                  {t("listing.host")} · {listing.host.name}
+                </p>
                 <p className="text-muted-foreground text-xs">
                   {t("listing.hostStats", {
                     count: listing.host.listingCount,
@@ -146,7 +158,7 @@ export default async function ListingDetailPage({ params }: Props) {
                   })}
                 </p>
               </div>
-            </div>
+            </Link>
           </section>
 
           <Separator />

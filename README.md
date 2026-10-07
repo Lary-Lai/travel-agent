@@ -1756,6 +1756,45 @@ ctx.fillStyle = 'rgb(241, 72, 80)'             -> '#f14850'
 
 > 这三项像素断言我第一版写错了：采样最角落期待它是珊瑚色，而 37.5% 的圆角那里本来就该被切掉、是透明的。**断言失败的原因是我的几何理解错了，不是图标错了**——修的是断言。
 
+**47. 房东可点击进入其主页；以及一个把整套测试拖垮的环境问题**
+
+**需求**：点击房源详情页的房东头像 → 房东的个人主页。`/u/[id]` 这套页面已经存在（好友图谱与讨论区作者都在用），`listing.service.ts` 也已经返回 `host.id`，所以这里只是接线：把房东卡片包成 `<Link href={\`/u/${host.id}\`}>`，加悬停底色与下划线。**是否可看由那个页面自己决定**——friends-only / selected / private 它已经各自处理好了，链接不需要猜。
+
+`check-pages` 新增 4 项断言（点击头像后 URL 落在 `/u/<id>`、页面确实显示该房东的名字而不是死胡同、无运行时错误）。
+
+**然后是这轮真正的收获：上一轮我报的"未修好的失败"，根因不在代码。**
+
+上一轮全量回归 977/9 失败，其中 `smoke-payment-deadline` 单独跑也失败（6/19），我当时给了"数据累积或日期跨越"的猜测，**猜错了**。真正的线索是这次 `check-pages` 报出的：
+
+```
+Server Error: timeout exceeded when trying to connect
+```
+
+以及对照数据：数据库本身很快（2–17ms），但接口的 `application-code` 时间是 **1–3 秒**。查 `pg_stat_activity` 发现 `max_connections=30`，而 32 核机器上 **Prisma 的默认连接池是 `32×2+1 = 65`** —— 单个进程就超了服务端上限。但连接数只有 9，并没有真的打满……
+
+**真正的原因在 `.env`**：
+
+```
+# ===== Database (embedded-postgres, started by: npm run db:start) =====
+DATABASE_URL="postgresql://neondb_owner:***@ep-quiet-fire-....us-east-2.aws.neon.tech/neondb?sslmode=require"
+```
+
+注释还写着 embedded-postgres，值却已经是 **Neon（美东 us-east-2）**——用户在部署时换成了托管库，于是本地应用与全部测试套件都在**跨太平洋查远程数据库**。这一条解释了此前所有反常现象：接口 1–3 秒、Neon 连接数受限导致的 pool timeout、以及最关键的——**订单自动取消要写库，写不进去就永远停在 PENDING**，于是 `smoke-payment-deadline` 稳定失败、`smoke-new-features` 的删评价报 500（单独跑又全绿）。
+
+**验证**（不是推断）：把 `DATABASE_URL` 指回本地 55432 后
+
+| | Neon | 本地 embedded |
+| --- | --- | --- |
+| `GET /api/forum/posts?sort=latest` | **2671ms** | **96ms**（快 28 倍） |
+| `smoke-payment-deadline` | 8/19 | **19/19** ✅ |
+| `smoke-new-features` | 60/63（500） | 63/63 ✅ |
+
+`.env` 是 gitignore 的，所以**对 Vercel 没有任何影响**（Vercel 用它自己项目设置里的环境变量）。我把原文件备份成 `.env.neon-backup`，并在 `.env` 里写清了为什么本地要用 embedded。
+
+> 顺带记下一个仍然存在的隐患：`scripts/db.mjs` 里 `max_connections=30`，而 Prisma 在 32 核上的默认连接池是 65。本地单机开发时靠"实际并发不高"侥幸没炸，但多开一个套件就会互相抢连接。要么提高 `max_connections`，要么给连接串加 `connection_limit`。
+
+**仍然红的一项**（与上述无关）：`smoke-weather-profile` 的 `GET /api/weather?all=1 covers every city` 连续两次分别是 **7/10** 与 **9/10**。数字在变 = 上游天气服务有城市查不到，属外部依赖抖动，不是本地代码问题。
+
 ### 技术选择记录
 
 | 决策 | 理由 |

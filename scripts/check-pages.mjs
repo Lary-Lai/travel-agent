@@ -693,6 +693,82 @@ async function main() {
     check("the filter interaction raised no runtime error", filters.errors.length === 0, filters.errors.join(" | "));
     await browser.closeTab(filters.tabId);
 
+    // -------------------------------------- the host card links to the host
+    /**
+     * Clicking the host on a listing must reach that host's public profile.
+     *
+     * The link itself is one line, but "does it land somewhere useful" is not: the
+     * profile page decides for itself what a visitor may see, so the assertion
+     * covers the destination rendering the host's name rather than a dead end.
+     */
+    console.log("\n— the host card links to the host's profile");
+
+    if (listingId) {
+      const hostTab = await browser.visit(`${BASE}/listings/${listingId}`, {
+        cookies: cookie,
+        settle: 3000,
+      });
+
+      const hostLink = await browser.evaluate(`
+        (() => {
+          const link = [...document.querySelectorAll('a[href^="/u/"]')][0];
+          if (!link) return null;
+          const r = link.getBoundingClientRect();
+          return {
+            href: link.getAttribute('href'),
+            text: link.innerText.replace(/\\n/g, ' | ').slice(0, 60),
+            x: Math.round(r.x + r.width / 2),
+            y: Math.round(r.y + Math.min(r.height / 2, 30)),
+          };
+        })()
+      `);
+      check("the listing page has a link to the host", Boolean(hostLink), String(hostLink));
+
+      if (hostLink) {
+        // Click the avatar itself (the top-left of the card), not the text.
+        await browser.send("Input.dispatchMouseEvent", {
+          type: "mousePressed", x: hostLink.x, y: hostLink.y, button: "left", clickCount: 1,
+        });
+        await browser.send("Input.dispatchMouseEvent", {
+          type: "mouseReleased", x: hostLink.x, y: hostLink.y, button: "left", clickCount: 1,
+        });
+
+        // `nextPath`, not `path`: the module-level `node:path` import is used below
+        // for the screenshot path, and a local named `path` shadows it.
+        const deadline = Date.now() + 8000;
+        let nextPath = await browser.evaluate("location.pathname");
+        while (!nextPath.startsWith("/u/") && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 150));
+          nextPath = await browser.evaluate("location.pathname");
+        }
+
+        check(
+          "clicking the host opens their profile",
+          nextPath === hostLink.href,
+          `expected ${hostLink.href}, got ${nextPath}`,
+        );
+
+        const hostName = hostLink.text.split("·").pop()?.trim() ?? "";
+        const profileText = await browser.evaluate("document.body.innerText");
+        check(
+          "and the profile shows the host rather than a dead end",
+          hostName.length > 0 && profileText.includes(hostName),
+          `looked for "${hostName}" in ${profileText.length} chars`,
+        );
+        check(
+          "the profile page raised no runtime error",
+          hostTab.errors.length === 0,
+          hostTab.errors.join(" | "),
+        );
+
+        await browser.screenshot(path.join(SHOTS, "host-profile.png"));
+      }
+
+      await browser.closeTab(hostTab.tabId);
+    } else {
+      console.log("  SKIP  no listing id available");
+    }
+
     // ------------------------------------------------------ forum reply badge
     /**
      * A reply written by the signed-in user must be labelled 我的回复, not 我的帖子.
