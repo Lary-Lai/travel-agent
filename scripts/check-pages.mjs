@@ -761,6 +761,31 @@ async function main() {
           hostTab.errors.join(" | "),
         );
 
+        /*
+         * The travel-profile card must never be an empty box.
+         *
+         * It was reported as exactly that from a screenshot: a thin blank rounded
+         * rectangle, because the card held four chip rows that each render nothing
+         * when the owner has declared nothing. A blank card is worse than no card —
+         * it reads as a broken page — so this asserts it always has *something*:
+         * declared chips, a footprint derived from the owner's public posts, or an
+         * explicit line saying there is nothing to show.
+         */
+        const travelCard = await browser.evaluate(`
+          (() => {
+            const section = [...document.querySelectorAll('section.rounded-2xl')]
+              .find((el) => /标签|足迹|还没有|has not shared|not filled/.test(el.innerText));
+            if (!section) return null;
+            const text = section.innerText.replace(/\\s+/g, ' ').trim();
+            return { text, height: Math.round(section.getBoundingClientRect().height) };
+          })()
+        `);
+        check(
+          "the travel-profile card is never an empty box",
+          travelCard !== null && travelCard.text.length > 0,
+          JSON.stringify(travelCard),
+        );
+
         await browser.screenshot(path.join(SHOTS, "host-profile.png"));
 
         /*

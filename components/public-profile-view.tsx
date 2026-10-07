@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Compass, Heart, Lock, LogIn, MapPin, Sparkles, Tag, Users } from "lucide-react";
+import { CalendarDays, Compass, Footprints, Heart, Lock, LogIn, MapPin, Sparkles, Tag, Users } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/empty-state";
@@ -95,6 +95,24 @@ export function PublicProfileView({ id }: { id: string }) {
   const cover = resolveCover(profile.coverImage, profile.coverPreset);
   const posts = (forum?.posts ?? []).filter((post) => post.author.id === data.user.id).slice(0, 5);
 
+  /**
+   * Where this traveller has actually been posting from.
+   *
+   * Derived from their own public posts rather than from anything private, and
+   * de-duplicated in post order so the most recent place comes first. Labelled
+   * "recent" because it is built from the newest posts the profile already lists.
+   */
+  const footprint = [
+    ...new Set(posts.map((post) => post.city).filter((city): city is string => Boolean(city))),
+  ];
+
+  const hasDeclaredProfile = [
+    profile.tags,
+    profile.hobbies,
+    profile.dreamDestinations,
+    profile.visitedPlaces,
+  ].some((values) => values.length > 0);
+
   return (
     <div className="space-y-6">
       {/* ------------------------------------------------------------- banner */}
@@ -152,12 +170,35 @@ export function PublicProfileView({ id }: { id: string }) {
         <p className="text-muted-foreground text-xs">{t("social.selfProfile")}</p>
       ) : null}
 
-      {/* ------------------------------------------------------------- chips */}
+      {/*
+        ---------------------------------------------------------- travel profile
+
+        This section used to render as an empty bordered box whenever the owner had
+        filled in none of the four declared lists, because each `ChipRow` returns
+        null when empty and nothing else was in the card — an empty rounded
+        rectangle that reads as a broken placeholder (it showed up in a user
+        screenshot as exactly that).
+
+        It now has three jobs: show what the owner declared, derive a **footprint**
+        from what they have actually published, and — if both are empty — say so
+        instead of leaving a blank box.
+
+        The derived row comes from the author's own public posts (their cities),
+        never from private signals: search history and wishlists are not shown to
+        visitors, and a profile page is not the place to leak them.
+      */}
       <section className="space-y-5 rounded-2xl border p-5">
         <ChipRow icon={Tag} label={t("account.tags")} values={profile.tags} />
         <ChipRow icon={Heart} label={t("account.hobbies")} values={profile.hobbies} />
         <ChipRow icon={Compass} label={t("account.dreamDestinations")} values={profile.dreamDestinations} />
         <ChipRow icon={MapPin} label={t("account.visitedPlaces")} values={profile.visitedPlaces} />
+        <ChipRow icon={Footprints} label={t("social.travelFootprint")} values={footprint} />
+
+        {footprint.length === 0 && !hasDeclaredProfile ? (
+          <p className="text-muted-foreground text-sm">
+            {data.relation === "SELF" ? t("social.profileEmptySelf") : t("social.profileEmpty")}
+          </p>
+        ) : null}
       </section>
 
       {/* ------------------------------------------------------------- posts */}
