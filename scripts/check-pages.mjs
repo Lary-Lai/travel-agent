@@ -201,7 +201,7 @@ async function main() {
           const cx = Math.round(r.x + r.width / 2);
           const cy = Math.round(r.y + r.height / 2);
           const top = document.elementFromPoint(cx, cy);
-          return { cx, cy, covered: !(top === link || link.contains(top)) };
+          return { cx, cy, covered: !(top === link || link.contains(top)), path: location.pathname };
         })()
       `);
       if (!target) return { found: false };
@@ -213,8 +213,22 @@ async function main() {
       await browser.send("Input.dispatchMouseEvent", {
         type: "mouseReleased", x: target.cx, y: target.cy, button: "left", clickCount: 1,
       });
-      await new Promise((resolve) => setTimeout(resolve, 1800));
-      return { found: true, covered: false, path: await browser.evaluate("location.pathname") };
+
+      /*
+       * Poll for the path change instead of sleeping a fixed amount.
+       *
+       * A fixed wait is a flake waiting to happen whenever a route is slow to
+       * compile — and a false failure here is indistinguishable from the real
+       * "navigation is dead" bug this section exists to catch, which makes it worse
+       * than useless.
+       */
+      const deadline = Date.now() + 8000;
+      let path = await browser.evaluate("location.pathname");
+      while (path === target.path && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        path = await browser.evaluate("location.pathname");
+      }
+      return { found: true, covered: false, path };
     };
 
     // The reported case: profile -> home.
@@ -528,6 +542,156 @@ async function main() {
       await browser.closeTab(tab.tabId);
     }
     await browser.closeTab(hover.tabId);
+
+    // ------------------------------------------- price slider and the reset button
+    /**
+     * Dragging the price slider and then pressing 重置 must put the slider back too.
+     *
+     * The reported bug: the reset cleared the results (180 listings again) while the
+     * slider and its label stayed at the old drag — a local "in-flight" value in the
+     * filter panel that nothing ever invalidated when the filters changed from
+     * outside the slider.
+     *
+     * It needs a **drag**: loading `/search?priceMax=900` sets the committed props
+     * directly, so the local override never exists and the bug cannot happen. Only
+     * pointer input on the thumb creates the state that went stale, which is why
+     * this lives in the browser suite.
+     */
+    console.log("\n— the price slider and 重置");
+
+    const filters = await browser.visit(`${BASE}/search`, { cookies: cookie, settle: 3000 });
+
+    const readPriceState = () =>
+      browser.evaluate(`
+        (() => {
+          const thumbs = [...document.querySelectorAll('[role="slider"]')];
+          return {
+            values: thumbs.map((thumb) => Number(thumb.getAttribute('aria-valuenow'))),
+            text: document.body.innerText.match(/共找到\\s*[\\d,]+\\s*套房源/)?.[0] ?? null,
+          };
+        })()
+      `);
+
+    const before = await readPriceState();
+    check(
+      "the search page starts with the full price range",
+      before.values.length === 2 && before.values[1] > before.values[0],
+      JSON.stringify(before),
+    );
+    const boundsMax = before.values[1];
+
+    // Drag the upper thumb to about 45% of the track.
+    const drag = await browser.evaluate(`
+      (() => {
+        const thumbs = [...document.querySelectorAll('[role="slider"]')];
+        const thumb = thumbs[1];
+        const thumbRect = thumb.getBoundingClientRect();
+
+        /*
+         * Find the *track*, not the thumb.
+         *
+         * Radix puts data-orientation on the thumb as well as on the root, so
+         * closest('[data-orientation]') returns the 12px thumb and a "45% across"
+         * target lands 5px away — the drag then does nothing and looks like an app
+         * bug. Walk up to the first ancestor wide enough to be the track.
+         */
+        let track = thumb.parentElement;
+        while (track && track.getBoundingClientRect().width < 100) track = track.parentElement;
+        const trackRect = track.getBoundingClientRect();
+
+        return {
+          from: {
+            x: Math.round(thumbRect.x + thumbRect.width / 2),
+            y: Math.round(thumbRect.y + thumbRect.height / 2),
+          },
+          to: {
+            x: Math.round(trackRect.x + trackRect.width * 0.45),
+            y: Math.round(thumbRect.y + thumbRect.height / 2),
+          },
+          trackWidth: Math.round(trackRect.width),
+        };
+      })()
+    `);
+    check(
+      "the track is wider than the thumb (the drag target is meaningful)",
+      drag.trackWidth > 100,
+      `track ${drag.trackWidth}px wide`,
+    );
+
+    await browser.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: drag.from.x, y: drag.from.y });
+    await browser.send("Input.dispatchMouseEvent", {
+      type: "mousePressed", x: drag.from.x, y: drag.from.y, button: "left", buttons: 1, clickCount: 1,
+    });
+    for (let step = 1; step <= 6; step++) {
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: Math.round(drag.from.x + ((drag.to.x - drag.from.x) * step) / 6),
+        y: drag.from.y,
+        // `buttons` has to say the left button is still held, or the framework
+        // cannot tell a drag from a hover.
+        button: "left",
+        buttons: 1,
+      });
+      await new Promise((r) => setTimeout(r, 60));
+    }
+    await browser.send("Input.dispatchMouseEvent", {
+      type: "mouseReleased", x: drag.to.x, y: drag.to.y, button: "left", buttons: 0, clickCount: 1,
+    });
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const dragged = await readPriceState();
+    check(
+      "dragging the upper thumb moves it",
+      dragged.values[1] < boundsMax,
+      `before ${boundsMax}, after ${dragged.values[1]}`,
+    );
+    check(
+      "and the filter is committed to the URL",
+      /priceMax=\d+/.test(await browser.evaluate("location.search")),
+      await browser.evaluate("location.search"),
+    );
+
+    // The reported case: press 重置.
+    const resetButton = await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find((el) => el.textContent.trim() === '重置');
+        if (!button) return null;
+        const r = button.getBoundingClientRect();
+        return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+      })()
+    `);
+    check("the 重置 button is present", Boolean(resetButton), String(resetButton));
+
+    if (resetButton) {
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x: resetButton.x, y: resetButton.y, button: "left", clickCount: 1,
+      });
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: resetButton.x, y: resetButton.y, button: "left", clickCount: 1,
+      });
+      await new Promise((r) => setTimeout(r, 1800));
+
+      const after = await readPriceState();
+      check(
+        "重置 clears the price from the URL",
+        !/priceM(in|ax)=/.test(await browser.evaluate("location.search")),
+        await browser.evaluate("location.search"),
+      );
+      check(
+        "重置 puts the slider back to the full range",
+        after.values[1] === boundsMax && after.values[0] === before.values[0],
+        `expected [${before.values.join(", ")}], got [${after.values.join(", ")}]`,
+      );
+      check(
+        "and the results go back to everything",
+        after.text === before.text,
+        `${before.text} -> ${after.text}`,
+      );
+    }
+
+    check("the filter interaction raised no runtime error", filters.errors.length === 0, filters.errors.join(" | "));
+    await browser.closeTab(filters.tabId);
 
     // ------------------------------------------------------ forum reply badge
     /**

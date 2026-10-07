@@ -73,10 +73,33 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
    * over once the URL catches up. Deriving this during render (instead of
    * syncing it in an effect) keeps it pure and avoids the slider snapping back
    * to the previous value for a frame.
+   *
+   * ## Why the override is keyed on the identity of `value`
+   *
+   * The override has to expire, and it must expire on *any* change to the
+   * committed criteria — including changes made outside the slider. Otherwise
+   * pressing **重置** cleared the results (180 listings again) while the slider and
+   * its label stayed at the old drag, because nothing had told the local value it
+   * was obsolete. Removing the price chip did the same.
+   *
+   * Comparing numbers cannot express this. A reset returns the props to exactly
+   * the pair they held before the commit, so "the props differ from what I asked
+   * for" stays true forever and "the props caught up" never becomes true. A
+   * *string* revision does not work either, for the same reason: the URL before the
+   * commit and the URL after a reset are identical.
+   *
+   * Identity does work. `value` is memoised on the URL in `search-results.tsx`, so
+   * every navigation produces a new object, and the override is dropped the moment
+   * the criteria it was made against are replaced — whether they were replaced by
+   * this commit or by a reset. While the URL has not moved, the object is the same
+   * one, so the override survives exactly as long as the round trip takes.
    */
-  const [pending, setPending] = useState<[number, number] | null>(null);
-  const catchingUp = pending !== null && (pending[0] !== min || pending[1] !== max);
-  const priceRange: [number, number] = catchingUp && pending ? pending : [min, max];
+  const [pending, setPending] = useState<{
+    request: [number, number];
+    against: ListingSearchInput;
+  } | null>(null);
+  const priceRange: [number, number] =
+    pending && pending.against === value ? pending.request : [min, max];
 
   /** Clamp, keep the pair ordered, and treat the extremes as "no filter". */
   const commitPrice = (nextMin: number, nextMax: number) => {
@@ -87,7 +110,7 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
     let hi = clamp(nextMax);
     if (lo > hi) [lo, hi] = [hi, lo];
 
-    setPending([lo, hi]);
+    setPending({ request: [lo, hi], against: value });
     onChange({
       priceMin: lo <= bounds.min ? undefined : lo,
       priceMax: hi >= bounds.max ? undefined : hi,
@@ -135,7 +158,9 @@ export function FilterPanel({ value, onChange, onReset, className }: Props) {
             // Track locally while dragging and only commit on release. Committing
             // on every tick pushed a new URL (and a refetch) per frame, which is
             // what made the thumb lag behind the cursor.
-            onValueChange={([nextMin, nextMax]) => setPending([nextMin, nextMax])}
+            onValueChange={([nextMin, nextMax]) =>
+              setPending({ request: [nextMin, nextMax], against: value })
+            }
             onValueCommit={([nextMin, nextMax]) => commitPrice(nextMin, nextMax)}
             className="py-2"
           />
