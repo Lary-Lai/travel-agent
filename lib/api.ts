@@ -149,7 +149,8 @@ export const api = {
    * sends the whole object to keep the form and the stored row in step.
    */
   updateProfile: (input: {
-    name: string;
+    /** Omitted when saving only the personalisation section. */
+    name?: string;
     avatar?: string;
     coverPreset?: string;
     coverImage?: string;
@@ -160,6 +161,12 @@ export const api = {
   }) =>
     request<{ user: SessionUserDto }>("/api/users/me", {
       method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+
+  changeEmail: (input: { email: string; currentPassword: string }) =>
+    request<{ user: SessionUserDto }>("/api/users/me/email", {
+      method: "POST",
       body: JSON.stringify(input),
     }),
 

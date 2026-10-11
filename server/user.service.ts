@@ -129,7 +129,8 @@ export async function getUserById(id: string): Promise<SessionUserDto | null> {
 export async function updateProfile(
   userId: string,
   input: {
-    name: string;
+    /** Omitted when the caller is saving a different section. */
+    name?: string;
     avatar?: string | null;
     coverPreset?: string | null;
     coverImage?: string | null;
@@ -139,9 +140,11 @@ export async function updateProfile(
     visitedPlaces?: string[];
   },
 ): Promise<SessionUserDto> {
-  const name = input.name.trim();
-  if (name.length === 0) throw badRequest("昵称不能为空");
-  if (name.length > 40) throw badRequest("昵称不能超过 40 个字符");
+  const name = input.name?.trim();
+  if (name !== undefined) {
+    if (name.length === 0) throw badRequest("昵称不能为空");
+    if (name.length > 40) throw badRequest("昵称不能超过 40 个字符");
+  }
 
   // `undefined` means "the caller did not send this field" — leave the stored
   // value untouched. `null`/"" means "clear it". The editor saves in sections,
@@ -216,4 +219,47 @@ export async function changePassword(
     where: { id: userId },
     data: { password: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
   });
+}
+
+/**
+ * Change the address the account signs in with.
+ *
+ * Requires the current password, for the same reason as `changePassword`: a
+ * stolen session cookie must not be enough to move the account to an address the
+ * thief controls, which would otherwise be a silent takeover — the real owner
+ * would simply stop being able to log in.
+ *
+ * Addresses are compared and stored lower-cased, matching how registration and
+ * login normalise them; without that, `A@b.com` and `a@b.com` would be two
+ * different accounts.
+ */
+export async function changeEmail(
+  userId: string,
+  currentPassword: string,
+  newEmail: string,
+): Promise<SessionUserDto> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, password: true },
+  });
+  if (!user) throw unauthorized("账号不存在，请重新登录");
+
+  const valid = await bcrypt.compare(currentPassword, user.password);
+  if (!valid) throw badRequest("当前密码不正确");
+
+  const email = newEmail.trim().toLowerCase();
+  if (email === user.email.toLowerCase()) {
+    throw badRequest("新邮箱与当前邮箱相同");
+  }
+
+  const taken = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+  if (taken) throw conflict("该邮箱已被注册");
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: { email },
+    select: userSelect,
+  });
+
+  return toDto(updated);
 }

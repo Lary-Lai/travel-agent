@@ -116,6 +116,54 @@ function UnsavedDot({ label }: { label: string }) {
   );
 }
 
+/**
+ * The save/revert row at the foot of a section.
+ *
+ * Rendered inside the section it saves, so the button that commits a change sits
+ * with the fields it commits. The page previously had one bar for the whole form,
+ * which meant a chip added at the bottom lit up a bar above the nickname, and
+ * "save" silently covered fields the user had not looked at.
+ *
+ * The row is always present (rather than appearing only when dirty) so the
+ * section's shape does not jump as you type; only the buttons' state changes.
+ */
+function SectionActions({
+  dirty,
+  pending,
+  onSave,
+  onRevert,
+  saveLabel,
+  revertLabel,
+  pendingLabel,
+  disabled,
+}: {
+  dirty: boolean;
+  pending: boolean;
+  onSave: () => void;
+  onRevert: () => void;
+  saveLabel: string;
+  revertLabel: string;
+  pendingLabel: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t pt-4">
+      <p className="text-muted-foreground text-xs">
+        {dirty ? pendingLabel : ""}
+      </p>
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="sm" onClick={onRevert} disabled={!dirty || pending}>
+          {revertLabel}
+        </Button>
+        <Button size="sm" className="gap-2" onClick={onSave} disabled={!dirty || pending || disabled}>
+          {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+          {saveLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ProfileEditor({ user }: { user: SessionUserDto }) {
   const { locale, t } = useLocale();
   const { refresh } = useSession();
@@ -139,30 +187,62 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
   const { data: wishlists } = useQuery({ queryKey: ["wishlists"], queryFn: api.listWishlists });
   const { data: trips } = useQuery({ queryKey: ["bookings"], queryFn: api.listBookings });
 
-  const profileMutation = useMutation({
-    mutationFn: () =>
-      api.updateProfile({
-        name: name.trim(),
-        avatar,
-        coverPreset,
-        coverImage,
-        tags,
-        dreamDestinations,
-        hobbies,
-        visitedPlaces,
-      }),
-    onSuccess: async (result) => {
+  /*
+   * One mutation per section, each sending only its own fields.
+   *
+   * There used to be a single mutation plus a single bottom bar, so saving the
+   * nickname also committed whatever happened to be pending in the
+   * personalisation lists, and vice versa. The service has always accepted partial
+   * updates ("a request that only edits hobbies must not wipe the banner") — the
+   * editor simply never used that, which is why "保存资料" was ambiguous about what
+   * it would save.
+   */
+  const savedHandlers = {
+    onSuccess: async (result: { user: SessionUserDto }) => {
       await refresh();
       toast.success(t("account.saved"), {
         description: t("account.savedDetail", { name: result.user.name }),
       });
     },
-    onError: (error) =>
+    onError: (error: unknown) =>
       toast.error(error instanceof ApiClientError ? error.message : t("account.saveFailed")),
+  };
+
+  const publicInfoMutation = useMutation({
+    mutationFn: () => api.updateProfile({ name: name.trim(), avatar, coverPreset, coverImage }),
+    ...savedHandlers,
   });
 
-  const passwordMutation = useMutation({
-    mutationFn: () => api.changePassword(passwords),
+  const personalisationMutation = useMutation({
+    mutationFn: () => api.updateProfile({ tags, dreamDestinations, hobbies, visitedPlaces }),
+    ...savedHandlers,
+  });
+
+  /** Email change: its own little form, with its own password confirmation. */
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [emailForm, setEmailForm] = useState({ email: "", currentPassword: "" });
+
+  const emailMutation = useMutation({
+    mutationFn: () => api.changeEmail(emailForm),
+    onSuccess: async () => {
+      await refresh();
+      setEmailOpen(false);
+      setEmailForm({ email: "", currentPassword: "" });
+      toast.success(t("account.emailChanged"), {
+        description: t("account.emailChangedDetail"),
+      });
+    },
+    onError: (error) => {
+      const details = (error as ApiClientError)?.details as
+        Array<{ path: string; message: string }> | undefined;
+      toast.error(
+        details?.[0]?.message ??
+          (error instanceof ApiClientError ? error.message : t("account.saveFailed")),
+      );
+    },
+  });
+
+  const passwordMutation = useMutation({    mutationFn: () => api.changePassword(passwords),
     onSuccess: () => {
       setPasswords({ currentPassword: "", newPassword: "", confirmPassword: "" });
       toast.success(t("account.passwordChanged"), {
@@ -204,12 +284,16 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
     !same(hobbies, user.hobbies) ||
     !same(visitedPlaces, user.visitedPlaces);
 
-  const dirty = publicInfoDirty || personalisationDirty;
-
   const passwordReady =
     passwords.currentPassword.length > 0 &&
     passwords.newPassword.length >= 8 &&
     passwords.newPassword === passwords.confirmPassword;
+
+  /** Both fields filled and the address differs from the current one. */
+  const emailReady =
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailForm.email.trim()) &&
+    emailForm.currentPassword.length > 0 &&
+    emailForm.email.trim().toLowerCase() !== user.email.toLowerCase();
 
   const favouriteCount =
     wishlists?.wishlists.reduce((sum, wishlist) => sum + wishlist.itemCount, 0) ?? 0;
@@ -217,12 +301,16 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
   // Live preview: what the banner will look like once saved.
   const cover = resolveCover(coverImageBroken ? null : coverImage, coverPreset);
 
-  const reset = () => {
+  /** Revert one section to what the server currently holds. */
+  const resetPublicInfo = () => {
     setName(user.name);
     setAvatar(user.avatar ?? "");
     setCoverPreset(user.coverPreset ?? "");
     setCoverImage(user.coverImage ?? "");
     setCoverImageBroken(false);
+  };
+
+  const resetPersonalisation = () => {
     setTags(user.tags);
     setDreamDestinations(user.dreamDestinations);
     setHobbies(user.hobbies);
@@ -315,27 +403,6 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
         ))}
       </div>
 
-      {/* ------------------------------------------------- unsaved-change bar */}
-      {dirty ? (
-        <div className="bg-secondary/60 flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3">
-          <p className="text-sm">{t("account.unsaved")}</p>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={reset}>
-              {t("account.undo")}
-            </Button>
-            <Button
-              size="sm"
-              className="gap-2"
-              onClick={() => profileMutation.mutate()}
-              disabled={!name.trim() || profileMutation.isPending}
-            >
-              {profileMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              {t("account.save")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       <div className="grid gap-6 lg:grid-cols-2">
         {/* -------------------------------------------------------- profile */}
         <section className="space-y-5 rounded-2xl border p-5">
@@ -405,7 +472,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
               label={t("account.uploadAvatar")}
               value={avatar}
               onChange={setAvatar}
-              disabled={profileMutation.isPending}
+              disabled={publicInfoMutation.isPending}
               previewClassName="rounded-full"
             />
           </div>
@@ -458,7 +525,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
                   setCoverImage(next);
                   setCoverImageBroken(false);
                 }}
-                disabled={profileMutation.isPending}
+                disabled={publicInfoMutation.isPending}
                 previewClassName="aspect-video w-24"
               />
               <p className="text-muted-foreground flex items-center gap-1 text-xs">
@@ -467,6 +534,17 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
               </p>
             </div>
           </div>
+
+          <SectionActions
+            dirty={publicInfoDirty}
+            pending={publicInfoMutation.isPending}
+            onSave={() => publicInfoMutation.mutate()}
+            onRevert={resetPublicInfo}
+            saveLabel={t("account.save")}
+            revertLabel={t("account.undo")}
+            pendingLabel={t("account.unsaved")}
+            disabled={!name.trim()}
+          />
 
           <Separator />
 
@@ -489,6 +567,81 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             <h2 className="text-sm font-semibold">{t("account.security")}</h2>
           </div>
           <p className="text-muted-foreground text-xs">{t("account.securityHint")}</p>
+
+          {/*
+            The sign-in address, as a first-class account field rather than
+            something only the registration form ever set. It requires the current
+            password, like the password change below it: a stolen cookie must not be
+            enough to move the account to an address the thief controls, which would
+            lock the real owner out without them ever seeing a prompt.
+          */}
+          <div className="space-y-3 rounded-xl border p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t("account.email")}</p>
+                <p className="text-muted-foreground truncate text-sm">{user.email}</p>
+              </div>
+              {!emailOpen ? (
+                <Button variant="outline" size="sm" onClick={() => setEmailOpen(true)}>
+                  {t("account.changeEmail")}
+                </Button>
+              ) : null}
+            </div>
+
+            {emailOpen ? (
+              <div className="space-y-3 border-t pt-3">
+                <div className="space-y-2">
+                  <Label htmlFor="newEmail">{t("account.newEmail")}</Label>
+                  <Input
+                    id="newEmail"
+                    type="email"
+                    autoComplete="email"
+                    value={emailForm.email}
+                    onChange={(event) =>
+                      setEmailForm((prev) => ({ ...prev, email: event.target.value }))
+                    }
+                    placeholder={t("account.newEmailPlaceholder")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="emailCurrentPassword">{t("account.currentPassword")}</Label>
+                  <Input
+                    id="emailCurrentPassword"
+                    type="password"
+                    autoComplete="current-password"
+                    value={emailForm.currentPassword}
+                    onChange={(event) =>
+                      setEmailForm((prev) => ({ ...prev, currentPassword: event.target.value }))
+                    }
+                    placeholder={t("account.currentPasswordPlaceholder")}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs">{t("account.emailHint")}</p>
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setEmailOpen(false);
+                      setEmailForm({ email: "", currentPassword: "" });
+                    }}
+                    disabled={emailMutation.isPending}
+                  >
+                    {t("common.cancel")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => emailMutation.mutate()}
+                    disabled={!emailReady || emailMutation.isPending}
+                  >
+                    {emailMutation.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {t("account.changeEmail")}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="currentPassword">{t("account.currentPassword")}</Label>
@@ -617,6 +770,18 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             emptyText={t("account.visitedPlacesEmpty")}
           />
         </div>
+
+        <SectionActions
+          dirty={personalisationDirty}
+          pending={personalisationMutation.isPending}
+          onSave={() => personalisationMutation.mutate()}
+          onRevert={resetPersonalisation}
+          // "保存" rather than the public-details section's "保存资料": this button
+          // saves the lists, not the profile details.
+          saveLabel={t("common.save")}
+          revertLabel={t("account.undo")}
+          pendingLabel={t("account.unsaved")}
+        />
       </section>
     </div>
   );

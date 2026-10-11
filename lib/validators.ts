@@ -192,7 +192,11 @@ const chipListSchema = (limit: number) =>
 
 /** Profile edit: identity, banner, and the personalisation chip lists. */
 export const updateProfileSchema = z.object({
-  name: z.string().trim().min(1, "请填写昵称").max(40, "昵称不能超过 40 个字符"),
+  // Optional because the editor saves one section at a time: a request that only
+  // changes hobbies must not have to restate the nickname (and must not, or it
+  // would quietly save an edit the user had not confirmed in the other section).
+  // The service treats `undefined` as "leave the stored value alone".
+  name: z.string().trim().min(1, "请填写昵称").max(40, "昵称不能超过 40 个字符").optional(),
   avatar: avatarValueSchema.optional(),
   coverPreset: z
     .union([z.string().trim().refine(isCoverPreset, "未知的背景预设"), z.literal("")])
@@ -204,6 +208,18 @@ export const updateProfileSchema = z.object({
   dreamDestinations: chipListSchema(MAX_CHIPS.dreamDestinations).optional(),
   hobbies: chipListSchema(MAX_CHIPS.hobbies).optional(),
   visitedPlaces: chipListSchema(MAX_CHIPS.visitedPlaces).optional(),
+});
+
+/**
+ * Changing the sign-in address.
+ *
+ * The current password is required for the same reason the password change
+ * requires it: a stolen session cookie must not be enough to move the account to
+ * an address the attacker controls.
+ */
+export const changeEmailSchema = z.object({
+  email: z.email("请输入有效的邮箱地址").max(120, "邮箱过长"),
+  currentPassword: z.string().min(1, "请输入当前密码"),
 });
 
 export const changePasswordSchema = z

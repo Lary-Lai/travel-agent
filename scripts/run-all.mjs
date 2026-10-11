@@ -37,6 +37,7 @@ const SUITES = [
   { name: "smoke-agent", cmd: ["node", "scripts/smoke-agent.mjs", BASE] },
   { name: "smoke-weather-profile", cmd: ["node", "scripts/smoke-weather-profile.mjs"] },
   { name: "smoke-profile-fields", cmd: ["node", "scripts/smoke-profile-fields.mjs"] },
+  { name: "smoke-email-change", cmd: ["node", "scripts/smoke-email-change.mjs"] },
   { name: "smoke-new-features", cmd: ["node", "scripts/smoke-new-features.mjs"] },
   { name: "smoke-archive-booking", cmd: ["node", "scripts/smoke-archive-booking.mjs"] },
   { name: "smoke-payment-deadline", cmd: ["node", "scripts/smoke-payment-deadline.mjs"] },
