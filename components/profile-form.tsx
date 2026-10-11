@@ -97,6 +97,25 @@ export function ProfileForm() {
   return <ProfileEditor key={user.id} user={user} />;
 }
 
+/**
+ * "This section has unsaved changes", as a dot beside the section title.
+ *
+ * A dot rather than a word because the label would be a new string in six
+ * languages for something a tooltip already explains, and because the design
+ * system already uses exactly this dot to mark the active theme option. The label
+ * is still exposed to hover and to assistive technology.
+ */
+function UnsavedDot({ label }: { label: string }) {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className="bg-primary inline-block size-1.5 shrink-0 rounded-full"
+    />
+  );
+}
+
 function ProfileEditor({ user }: { user: SessionUserDto }) {
   const { locale, t } = useLocale();
   const { refresh } = useSession();
@@ -163,15 +182,29 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
   const same = (a: string[], b: string[]) =>
     a.length === b.length && a.every((value, index) => value === b[index]);
 
-  const dirty =
+  /*
+   * Dirty state is tracked **per section**, not once for the page.
+   *
+   * The page has a single save bar, but it covers two unrelated groups of fields:
+   * the public details (name, avatar, cover) and the personalisation lists. One
+   * combined flag meant the bar said "you have unsaved changes" without saying
+   * *where*, and a chip added three sections further down lit up a bar next to the
+   * nickname. Each section now carries its own marker so the global bar and the
+   * sections agree.
+   */
+  const publicInfoDirty =
     name.trim() !== user.name ||
     avatar !== (user.avatar ?? "") ||
     coverPreset !== (user.coverPreset ?? "") ||
-    coverImage !== (user.coverImage ?? "") ||
+    coverImage !== (user.coverImage ?? "");
+
+  const personalisationDirty =
     !same(tags, user.tags) ||
     !same(dreamDestinations, user.dreamDestinations) ||
     !same(hobbies, user.hobbies) ||
     !same(visitedPlaces, user.visitedPlaces);
+
+  const dirty = publicInfoDirty || personalisationDirty;
 
   const passwordReady =
     passwords.currentPassword.length > 0 &&
@@ -310,12 +343,14 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             <div className="flex items-center gap-2">
               <BadgeCheck className="text-primary size-4" />
               <h2 className="text-sm font-semibold">{t("account.publicInfo")}</h2>
+              {publicInfoDirty ? <UnsavedDot label={t("account.unsaved")} /> : null}
             </div>
             {/* Who may open `/u/<my id>`. Sits in this section's header rather
                 than in the account-security column because it is a property of
                 the public profile, not of the credentials. */}
             <ProfilePrivacyDialog />
           </div>
+          <p className="text-muted-foreground text-xs">{t("account.publicInfoHint")}</p>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -453,6 +488,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             <ShieldCheck className="text-primary size-4" />
             <h2 className="text-sm font-semibold">{t("account.security")}</h2>
           </div>
+          <p className="text-muted-foreground text-xs">{t("account.securityHint")}</p>
 
           <div className="space-y-2">
             <Label htmlFor="currentPassword">{t("account.currentPassword")}</Label>
@@ -521,6 +557,7 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary size-4" />
           <h2 className="text-sm font-semibold">{t("account.personalisation")}</h2>
+          {personalisationDirty ? <UnsavedDot label={t("account.unsaved")} /> : null}
           <span className="text-muted-foreground ml-auto text-xs">
             {t("account.personalisationHint")}
           </span>

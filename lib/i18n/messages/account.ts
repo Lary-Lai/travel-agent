@@ -46,6 +46,8 @@ export const account = {
 
     // Public profile.
     "account.publicInfo": "公开资料",
+    "account.publicInfoHint": "决定别人在搜索结果与你的主页上看到什么。",
+    "account.securityHint": "修改密码需要先验证当前密码。",
     "account.chooseAvatar": "选择头像",
     "account.presetCount": "{count} 个预设",
     "account.useAvatar": "使用该头像",
@@ -136,6 +138,8 @@ export const account = {
     "account.save": "儲存資料",
 
     "account.publicInfo": "公開資料",
+    "account.publicInfoHint": "決定別人在搜尋結果與你的主頁上看到什麼。",
+    "account.securityHint": "修改密碼需要先驗證目前密碼。",
     "account.chooseAvatar": "選擇頭像",
     "account.presetCount": "{count} 個預設",
     "account.useAvatar": "使用該頭像",
@@ -225,6 +229,8 @@ export const account = {
     "account.save": "Save profile",
 
     "account.publicInfo": "Public details",
+    "account.publicInfoHint": "What other people see in search results and on your profile.",
+    "account.securityHint": "Changing your password requires your current one.",
     "account.chooseAvatar": "Choose an avatar",
     "account.presetCount": "{count} presets",
     "account.useAvatar": "Use this avatar",
@@ -317,6 +323,8 @@ export const account = {
     "account.save": "プロフィールを保存",
 
     "account.publicInfo": "公開プロフィール",
+    "account.publicInfoHint": "検索結果とあなたのプロフィールに表示される内容です。",
+    "account.securityHint": "パスワードの変更には現在のパスワードが必要です。",
     "account.chooseAvatar": "アイコンを選択",
     "account.presetCount": "プリセット {count} 種類",
     "account.useAvatar": "このアイコンを使う",
@@ -408,6 +416,8 @@ export const account = {
     "account.save": "프로필 저장",
 
     "account.publicInfo": "공개 프로필",
+    "account.publicInfoHint": "검색 결과와 프로필에 다른 사람에게 보이는 내용입니다.",
+    "account.securityHint": "비밀번호를 바꾸려면 현재 비밀번호가 필요합니다.",
     "account.chooseAvatar": "아바타 선택",
     "account.presetCount": "기본 이미지 {count}종",
     "account.useAvatar": "이 아바타 사용",
@@ -500,6 +510,8 @@ export const account = {
     "account.save": "Guardar perfil",
 
     "account.publicInfo": "Datos públicos",
+    "account.publicInfoHint": "Lo que otras personas ven en los resultados de búsqueda y en tu perfil.",
+    "account.securityHint": "Para cambiar la contraseña necesitas la actual.",
     "account.chooseAvatar": "Elige un avatar",
     "account.presetCount": "{count} predefinidos",
     "account.useAvatar": "Usar este avatar",
