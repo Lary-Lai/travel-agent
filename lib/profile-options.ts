@@ -8,7 +8,28 @@
  * source, i.pravatar.cc, started answering 403 to every request.)
  */
 
-/** Banner gradients. `className` must stay a literal string for Tailwind to see it. */
+/**
+ * Banner gradients.
+ *
+ * Two rules hold this palette together:
+ *
+ *  1. **`key`s never change and labels never lie.** A saved profile stores the key,
+ *     so reordering or renaming would silently repaint existing profiles, and a
+ *     preset called "深海" that renders orange is worse than no preset at all.
+ *     Colours were therefore adjusted *within* each name's meaning, and the coral
+ *     one was moved to the front rather than renamed (it is `sunset`/日落, which is
+ *     what a coral-to-amber gradient actually looks like).
+ *  2. **Nothing neon.** The previous first entry was
+ *     `from-indigo-500 via-purple-500 to-pink-500`, and because it was also the
+ *     default it was the first thing anyone saw on a new profile — the saturated
+ *     purple-to-magenta that reads as machine-generated rather than designed. Every
+ *     preset is now either warm, or a deeper and less saturated version of itself.
+ *
+ * The default is the brand coral, so a fresh profile looks like part of this
+ * product rather than like a placeholder.
+ *
+ * `className` must stay a literal string for Tailwind to see it.
+ */
 export type CoverPreset = {
   key: string;
   label: string;
@@ -17,44 +38,46 @@ export type CoverPreset = {
 
 export const COVER_PRESETS: CoverPreset[] = [
   {
-    key: "aurora",
-    label: "极光",
-    className: "bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500",
-  },
-  {
     key: "sunset",
     label: "日落",
-    className: "bg-gradient-to-br from-orange-400 via-rose-500 to-purple-600",
-  },
-  {
-    key: "ocean",
-    label: "深海",
-    className: "bg-gradient-to-br from-sky-400 via-blue-600 to-indigo-800",
-  },
-  {
-    key: "forest",
-    label: "森林",
-    className: "bg-gradient-to-br from-emerald-400 via-teal-600 to-cyan-800",
-  },
-  {
-    key: "desert",
-    label: "沙丘",
-    className: "bg-gradient-to-br from-amber-300 via-orange-500 to-red-600",
+    // The default, and the only one that uses the brand token: coral through rose
+    // to a light amber, i.e. the same light the rest of the product is lit by.
+    className: "bg-gradient-to-br from-primary via-rose-400 to-amber-300",
   },
   {
     key: "sakura",
     label: "樱花",
-    className: "bg-gradient-to-br from-pink-300 via-rose-400 to-fuchsia-600",
+    className: "bg-gradient-to-br from-rose-200 via-pink-300 to-rose-500",
+  },
+  {
+    key: "desert",
+    label: "沙丘",
+    className: "bg-gradient-to-br from-amber-200 via-orange-400 to-rose-700",
+  },
+  {
+    key: "aurora",
+    label: "极光",
+    className: "bg-gradient-to-br from-indigo-600 via-violet-600 to-indigo-900",
+  },
+  {
+    key: "ocean",
+    label: "深海",
+    className: "bg-gradient-to-br from-sky-500 via-blue-700 to-slate-900",
+  },
+  {
+    key: "forest",
+    label: "森林",
+    className: "bg-gradient-to-br from-emerald-500 via-teal-700 to-emerald-900",
+  },
+  {
+    key: "mint",
+    label: "薄荷",
+    className: "bg-gradient-to-br from-emerald-200 via-teal-300 to-cyan-500",
   },
   {
     key: "midnight",
     label: "午夜",
     className: "bg-gradient-to-br from-slate-700 via-slate-900 to-black",
-  },
-  {
-    key: "mint",
-    label: "薄荷",
-    className: "bg-gradient-to-br from-lime-300 via-emerald-400 to-teal-600",
   },
 ];
 

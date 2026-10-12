@@ -403,7 +403,12 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
         ))}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {/*
+        Weighted columns rather than equal ones: the public details are what the
+        user came to edit, while account security is secondary. At 1:1 the security
+        card was as wide as the profile card and the page had no visual centre.
+      */}
+      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         {/* -------------------------------------------------------- profile */}
         <section className="space-y-5 rounded-2xl border p-5">
           <div className="flex items-center justify-between gap-2">

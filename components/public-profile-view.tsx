@@ -142,18 +142,29 @@ export function PublicProfileView({ id }: { id: string }) {
       </section>
 
       {/* -------------------------------------------------------------- meta */}
+      {/*
+        A lightweight metrics row, not a row of cards.
+
+        Each figure was its own bordered card, which gave three numbers the same
+        visual weight as the content sections below and made the top of the page
+        read as a dashboard. The figures are now set as one strip divided by hairlines
+        — number first and larger, label beneath it — so the eye reads
+        "2 friends · 4 posts" at a glance and moves on.
+
+        The values are bare numbers for the same reason: "1位好友" as a big figure
+        puts the unit in the loudest position and the number in the quietest. The
+        label carries the unit now, which also removes the plural forms from a place
+        where they were doing no work.
+      */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label={t("social.friends")} value={t("social.friendCount", { count: stats.friends })} />
-          <StatTile label={t("social.recentPosts")} value={t("social.postsCount", { count: stats.posts })} />
+        <div className="flex flex-1 flex-wrap items-center gap-y-3">
+          <StatTile label={t("social.friends")} value={stats.friends} />
+          <StatTile label={t("social.recentPosts")} value={stats.posts} />
           {/* "Mutual friends" is meaningless on your own profile — every friend
               is a mutual friend — so the tile is only shown to a visitor, where
               it carries information neither of the other two tiles does. */}
           {user && data.relation !== "SELF" && data.mutualFriendCount > 0 ? (
-            <StatTile
-              label={t("social.friendsTitle")}
-              value={t("social.mutualFriends", { count: data.mutualFriendCount })}
-            />
+            <StatTile label={t("social.friendsTitle")} value={data.mutualFriendCount} />
           ) : null}
         </div>
 
@@ -234,11 +245,18 @@ export function PublicProfileView({ id }: { id: string }) {
   );
 }
 
-function StatTile({ label, value }: { label: string; value: string }) {
+/**
+ * One figure in the metrics strip: the number is the focus, the label explains it.
+ *
+ * The hairline is drawn by the tile itself (`:not(:first-child)`) so the strip
+ * stays correct when the optional mutual-friends tile is absent — a divider
+ * element between children would leave a dangling line in that case.
+ */
+function StatTile({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border p-4">
+    <div className="min-w-0 flex-1 [&:not(:first-child)]:border-l [&:not(:first-child)]:pl-5">
+      <p className="text-lg font-semibold tabular-nums">{value}</p>
       <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 text-sm font-semibold">{value}</p>
     </div>
   );
 }
