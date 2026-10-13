@@ -81,13 +81,31 @@ for (const suite of SUITES) {
    *    a remote-image host being down says nothing about this codebase, so they
    *    are reported rather than counted.
    */
-  let verdict = summary ? "counted" : "informational";
-  if (suite.kind === "db") {
+  /**
+   * How a suite is judged.
+   *
+   * The important case is the last one. A suite that never prints its summary has
+   * **not passed** — it crashed, was killed, ran out of output buffer, or lost the
+   * database. Treating "no summary" as informational (which this runner used to do)
+   * means a suite can vanish from the report and the total still says 0 failed:
+   * measured, `check-pages` disappeared from a run and the batch reported a clean
+   * 1025 because 113 assertions had simply not run. Only the suites explicitly marked
+   * `kind: "report"` are informational.
+   *
+   * `verify-db` prints its own verdict, and `check-encoding` signals through its exit
+   * code, so those two keep their own branches.
+   */
+  let verdict;
+  if (suite.kind === "report") {
+    verdict = "informational";
+  } else if (suite.kind === "db") {
     verdict = /ALL CHECKS PASSED/.test(output) ? "db-ok" : "db-failed";
-  }
-  if (suite.kind === "exit") {
-    // Suites that report their own verdict and signal through the exit code.
+  } else if (suite.kind === "exit") {
     verdict = run.status === 0 ? "exit-ok" : "exit-failed";
+  } else if (summary) {
+    verdict = "counted";
+  } else {
+    verdict = "crashed";
   }
 
   results.push({
@@ -99,8 +117,16 @@ for (const suite of SUITES) {
     // For a report-only suite, surface its own verdict line.
     reportLine: output.trim().split(/\r?\n/).filter(Boolean).slice(-1)[0] ?? "",
     failures,
-    crashed: verdict === "db-failed" || (!summary && suite.kind !== "report" && run.status !== 0),
-    tail: output.trim().split(/\r?\n/).slice(-3).join("\n"),
+    /**
+     * Why it produced no verdict, in the terms a person needs: a spawn failure, a
+     * signal, or the exit code.
+     */
+    crashReason: summary
+      ? null
+      : (run.error?.message ??
+        (run.signal ? `killed by ${run.signal}` : `exit code ${run.status}`)),
+    crashed: verdict === "crashed" || verdict === "db-failed",
+    tail: output.trim().split(/\r?\n/).slice(-6).join("\n"),
   });
 }
 
@@ -127,6 +153,11 @@ for (const result of results) {
   } else if (result.verdict === "exit-failed") {
     totalFailed += 1;
     console.log(`${result.name.padEnd(26)} ${result.reportLine}  FAILED`);
+  } else if (result.verdict === "crashed") {
+    // Counted as a failure, and the reason is printed: a suite that produced no
+    // summary is the one case where "what happened?" is otherwise unanswerable.
+    totalFailed += 1;
+    console.log(`${result.name.padEnd(26)} NO SUMMARY — ${result.crashReason ?? "unknown"}  FAILED`);
   } else {
     // Informational: show the provider's own verdict, and its FAIL lines so a
     // genuine problem is still visible — just not counted as a code failure.

@@ -1,17 +1,16 @@
 "use client";
 
-import { Compass, ChevronDown, Heart, Loader2, LogOut, Menu, MessagesSquare, Route, Search, Settings, Sparkles, User, Users } from "lucide-react";
+import { Compass, ChevronDown, Heart, Loader2, LogOut, Menu, MessagesSquare, Route, Search, Sparkles, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { LocaleSwitcher } from "@/components/locale-switcher";
 import { NotificationBell } from "@/components/notification-bell";
+import { SettingsDrawer } from "@/components/settings-drawer";
 import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -148,11 +147,14 @@ export function SiteHeader() {
 
         <div className="flex-1" />
 
-        {/* Language */}
-        <LocaleSwitcher />
-
-        {/* Night mode */}
-        <ThemeToggle />
+        {/*
+          Settings sits here as a first-class entry, alongside notifications — not
+          buried in the avatar menu. Language and appearance moved *into* it: they are
+          preferences, and a header that offers three separate preference controls
+          (language, theme, settings) makes the user hunt for which one holds what.
+          The avatar menu is now only about the account.
+        */}
+        {user ? <SettingsDrawer /> : null}
 
         {/* Notifications. Signed-in visitors only: the endpoint needs a session,
             and an anonymous bell would be a button that only ever 401s. */}
@@ -256,12 +258,6 @@ export function SiteHeader() {
                 <Link href="/friends" className="cursor-pointer">
                   <Users className="size-4" />
                   {t("nav.friends")}
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
-                <Link href="/settings" className="cursor-pointer">
-                  <Settings className="size-4" />
-                  {t("account.settingsTitle")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

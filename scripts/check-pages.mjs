@@ -487,18 +487,22 @@ async function main() {
     check("the hover card raised no runtime error", hover.errors.length === 0, hover.errors.join(" | "));
 
     /*
-     * The language and theme pickers sit to the left of the avatar and use the
-     * same hook, so they get the same treatment — including the two failure modes
-     * that are invisible to a "does it open" check: a menu that closes and reopens
-     * on its own, and a page that goes inert while a menu is open.
+     * The language and theme pickers use the same hook, so they get the same
+     * treatment — including the two failure modes that are invisible to a "does it
+     * open" check: a menu that closes and reopens on its own, and a page that goes
+     * inert while a menu is open.
+     *
+     * They live in `/settings` now, not the header: language and appearance are
+     * preferences, and a header offering three separate preference controls made the
+     * user hunt for which one held what.
      */
     for (const [label, selector] of [
-      ["language picker", 'header button[aria-label="语言"]'],
-      ["theme picker", 'header button[aria-label="切换主题"]'],
+      ["language picker", 'main button[aria-label="语言"], button[aria-label="语言"]'],
+      ["theme picker", 'main button[aria-label="切换主题"], button[aria-label="切换主题"]'],
     ]) {
       console.log(`\n— hovering the ${label}`);
 
-      const tab = await browser.visit(`${BASE}/`, { cookies: cookie, settle: 2500 });
+      const tab = await browser.visit(`${BASE}/settings`, { cookies: cookie, settle: 2500 });
       const target = await pointIn(selector);
       check(`the ${label} trigger is on the page`, Boolean(target), String(target));
 
@@ -869,7 +873,10 @@ async function main() {
         hasNickname: Boolean(document.querySelector('input#name, input[name="name"]')),
         headings: [...document.querySelectorAll('h2')].map((h) => h.textContent.trim()).filter(Boolean),
         hasSettingsButton: [...document.querySelectorAll('button')]
-          .some((b) => b.textContent.trim() === '设置'),
+          .some((b) => /^设置$/.test(b.textContent.trim()) || b.getAttribute('aria-label') === '设置'),
+        /** Save/revert buttons rendered in the section action rows. */
+        saveBarButtons: [...document.querySelectorAll('button')]
+          .filter((b) => /^(保存|保存资料|撤销修改)$/.test(b.textContent.trim())).length,
         // One toggle per notification type. Counted by role, not by tag: this
         // project's Checkbox renders a Radix button with role=checkbox, so looking
         // for an input element found zero while the card was rendering perfectly.
@@ -890,8 +897,18 @@ async function main() {
       JSON.stringify(settingsFields),
     );
     check(
-      "/settings 的两块是账号安全与个性化",
-      settingsFields.headings.includes("账号安全") && settingsFields.headings.includes("个性化主页"),
+      "/settings 的两块是账号安全与通知偏好",
+      settingsFields.headings.includes("账号安全") && settingsFields.headings.includes("通知偏好"),
+      settingsFields.headings.join(" / "),
+    );
+    check(
+      "/settings 含语言与外观（从头部移入）",
+      settingsFields.headings.includes("语言与外观"),
+      settingsFields.headings.join(" / "),
+    );
+    check(
+      "/settings 不再包含个性化（它属于个人主页）",
+      !settingsFields.headings.includes("个性化主页"),
       settingsFields.headings.join(" / "),
     );
     check(
@@ -919,6 +936,54 @@ async function main() {
       JSON.stringify(profileFields),
     );
     check("/profile 有 ☰ 设置入口", profileFields.hasSettingsButton === true, JSON.stringify(profileFields));
+    check(
+      "/profile 把个性化放回来了",
+      profileFields.headings.includes("个性化主页"),
+      profileFields.headings.join(" / "),
+    );
+    /*
+     * The save bar must not be there when there is nothing to save.
+     *
+     * It used to render unconditionally — a strip of permanently disabled buttons —
+     * which a user reported as "a white bar with 撤销修改 / 保存资料 that does
+     * nothing". Asserting the *clean* state is the only way to catch that: the bar
+     * being present when dirty was never the problem.
+     */
+    check(
+      "干净状态下没有那条保存栏",
+      profileFields.saveBarButtons === 0,
+      `${profileFields.saveBarButtons} 个保存/撤销按钮`,
+    );
+
+    // And it must appear once something actually changes.
+    await browser.evaluate(`
+      (() => {
+        const input = document.querySelector('input#name, input[name="name"]');
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, input.value + 'x');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 500));
+    const dirtyProfile = await browser.evaluate(`
+      (() => ({
+        saveBarButtons: [...document.querySelectorAll('button')].filter((b) => /保存|撤销修改/.test(b.textContent)).length,
+      }))()
+    `);
+    check(
+      "改动后才出现保存栏",
+      dirtyProfile.saveBarButtons > 0,
+      `${dirtyProfile.saveBarButtons} 个按钮`,
+    );
+
+    // Put the nickname back so the rest of the run sees a clean account.
+    await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')].find((b) => /撤销修改/.test(b.textContent));
+        button?.click();
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 400));
 
     // The drawer must carry the account fields, or the two entries disagree.
     await browser.evaluate(`
@@ -1293,8 +1358,18 @@ async function main() {
       previewSrc || "(no preview src)",
     );
 
+    /*
+     * The unsaved state is now carried by the section's dot (an `aria-label`), not by
+     * visible "未保存" text: the always-visible bar that used to provide that text was
+     * removed, because a strip of disabled buttons read as broken. Checking `innerText`
+     * therefore stopped being a valid way to ask the question — the state is still
+     * announced, just to assistive technology rather than to the eye.
+     */
     const unsaved = await browser.evaluate(
-      `document.body.innerText.includes('未保存') || document.body.innerText.includes('Unsaved')`,
+      `[...document.querySelectorAll('[role="img"][aria-label]')]
+         .some((el) => /未保存|Unsaved|Sin guardar|未儲存/.test(el.getAttribute('aria-label') ?? ''))
+       || document.querySelectorAll('button').length > 0
+          && [...document.querySelectorAll('button')].some((b) => /^保存/.test(b.textContent.trim()))`,
     );
     check("the form notices the change as an unsaved edit", unsaved === true, String(unsaved));
 

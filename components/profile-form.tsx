@@ -23,7 +23,9 @@ import { toast } from "sonner";
 
 import { ChipListEditor } from "@/components/chip-list-editor";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BellRing } from "lucide-react";
+import { BellRing, Languages } from "lucide-react";
+import { LocaleSwitcher } from "@/components/locale-switcher";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { EmptyState } from "@/components/empty-state";
 import { ImageUploadField } from "@/components/image-upload-field";
 import { ProfilePrivacyDialog } from "@/components/profile-privacy-dialog";
@@ -136,13 +138,16 @@ function UnsavedDot({ label }: { label: string }) {
 /**
  * The save/revert row at the foot of a section.
  *
- * Rendered inside the section it saves, so the button that commits a change sits
- * with the fields it commits. The page previously had one bar for the whole form,
- * which meant a chip added at the bottom lit up a bar above the nickname, and
- * "save" silently covered fields the user had not looked at.
+ * Rendered **only when the section has something to save**. It used to be always
+ * present so the card's height never changed, but that produced a bar of permanently
+ * disabled buttons hanging under every section — reported by a user as "a white strip
+ * with 撤销修改 / 保存资料 that does nothing", which is exactly what it looked like.
+ * A control that cannot be used is worse than one that is not there yet.
  *
- * The row is always present (rather than appearing only when dirty) so the
- * section's shape does not jump as you type; only the buttons' state changes.
+ * Rendered inside the section it saves, so the button that commits a change sits with
+ * the fields it commits. The page previously had one bar for the whole form, which
+ * meant a chip added at the bottom lit up a bar above the nickname, and "save"
+ * silently covered fields the user had not looked at.
  */
 function SectionActions({
   dirty,
@@ -163,11 +168,13 @@ function SectionActions({
   pendingLabel: string;
   disabled?: boolean;
 }) {
+  // Keep it on screen while a save is in flight, so the button does not vanish under
+  // the pointer the moment it is pressed.
+  if (!dirty && !pending) return null;
+
   return (
     <div className="flex items-center justify-between gap-3 border-t pt-4">
-      <p className="text-muted-foreground text-xs">
-        {dirty ? pendingLabel : ""}
-      </p>
+      <p className="text-muted-foreground text-xs">{pending ? pendingLabel : ""}</p>
       <div className="flex items-center gap-2">
         <Button variant="ghost" size="sm" onClick={onRevert} disabled={!dirty || pending}>
           {revertLabel}
@@ -783,9 +790,43 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
         </section>
       ) : null}
 
-      {/* ------------------------------------------------ personalisation only */}
+      {/*
+        ------------------------------------------------------------------ settings
+
+        Everything below belongs to the account rather than to the public profile:
+        notification preferences, the language and appearance controls, and the
+        personalisation lists... except those last ones are *content*, so they live
+        on the profile page instead (see the `profile` gate further down).
+      */}
       {variant === "settings" ? (
         <>
+          {/*
+            Language and appearance.
+
+            These moved out of the header: three separate preference controls up
+            there (language, theme, settings) made the user hunt for which one holds
+            what. They are preferences, so they belong with the other preferences —
+            and they still write immediately, because switching a language is not a
+            form to submit.
+          */}
+          <section className="space-y-4 rounded-2xl border p-5">
+            <div className="flex items-center gap-2">
+              <Languages className="text-primary size-4" />
+              <h2 className="text-sm font-semibold">{t("account.settingsPreferences")}</h2>
+            </div>
+            <p className="text-muted-foreground text-xs">{t("account.settingsPreferencesHint")}</p>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm">{t("locale.label")}</span>
+              <LocaleSwitcher />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span className="text-sm">{t("globals.themeToggle")}</span>
+              <ThemeToggle />
+            </div>
+          </section>
+
           {/*
             Notification preferences. Saves like every other section (the mute list
             rides along on the same profile PATCH), so this page keeps one save
@@ -843,8 +884,17 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
               pendingLabel={t("account.unsaved")}
             />
           </section>
+        </>
+      ) : null}
 
-          <section className="space-y-6 rounded-2xl border p-5">
+      {/*
+        Personalisation is *content*, not configuration: these four lists are shown
+        on the public profile, so they belong on the page that owns the public
+        profile. They were briefly on the settings page during the split, which was
+        a mistake — the profile page had nothing left to edit.
+      */}
+      {variant === "profile" ? (
+        <section className="space-y-6 rounded-2xl border p-5">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary size-4" />
           <h2 className="text-sm font-semibold">{t("account.personalisation")}</h2>
@@ -920,8 +970,7 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
           revertLabel={t("account.undo")}
           pendingLabel={t("account.unsaved")}
         />
-          </section>
-        </>
+        </section>
       ) : null}
     </div>
   );

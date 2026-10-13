@@ -7,20 +7,39 @@
  * these scripts check is invisible to HTTP assertions — a React component that
  * throws on render still returns 200 with server-rendered HTML.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const PORT = 9333;
-
 /**
- * Throwaway browser state belongs in the system temp dir, not in the repo.
- * Chrome unpacks its extensions into the profile, and a profile inside the
- * project makes `eslint .` lint megabytes of third-party bundle JS.
+ * A **per-instance** debugging port and profile directory.
+ *
+ * Both used to be constants (port 9333, a single `ta-chrome-profile`), which was
+ * harmless while every browser was shut down properly and quietly disastrous when one
+ * was not: `stop()` killed only the launcher process, Chrome's children survived, and
+ * the next run's port poll was answered by *the previous run's browser*. Measured, 13
+ * orphaned Chrome processes had accumulated on one profile, and a suite would then
+ * attach to a stale browser — hanging, or failing with no summary at all.
+ *
+ * Asking the OS for a free port and using a directory named after this process means a
+ * leftover browser can no longer be mistaken for ours.
  */
-const USER_DATA = path.join(tmpdir(), "ta-chrome-profile");
+async function freePort() {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address();
+      server.close(() => resolve(port));
+    });
+  });
+}
+
+/** Throwaway browser state belongs in the system temp dir, not in the repo. */
+const profileDir = (tag) => path.join(tmpdir(), `ta-chrome-${tag}`);
 
 /** Any Chromium will do; `TA_CHROME` overrides the search for odd installs. */
 export function findBrowser() {
@@ -66,6 +85,10 @@ export class Browser {
   }
 
   async start() {
+    this.port = await freePort();
+    this.userDataDir = profileDir(`${process.pid}-${this.port}`);
+    await mkdir(this.userDataDir, { recursive: true });
+
     this.process = spawn(
       findBrowser(),
       [
@@ -73,8 +96,8 @@ export class Browser {
         "--disable-gpu",
         "--no-first-run",
         "--no-default-browser-check",
-        `--remote-debugging-port=${PORT}`,
-        `--user-data-dir=${USER_DATA}`,
+        `--remote-debugging-port=${this.port}`,
+        `--user-data-dir=${this.userDataDir}`,
         `--window-size=${this.width},${this.height}`,
         "--hide-scrollbars",
         "about:blank",
@@ -84,7 +107,9 @@ export class Browser {
 
     for (let attempt = 0; attempt < 80; attempt++) {
       try {
-        const version = await fetch(`http://127.0.0.1:${PORT}/json/version`).then((r) => r.json());
+        const version = await fetch(`http://127.0.0.1:${this.port}/json/version`).then((r) =>
+          r.json(),
+        );
         this.rootSocket = version.webSocketDebuggerUrl;
         return this;
       } catch {
@@ -102,7 +127,7 @@ export class Browser {
 
   /** Open a tab, attach listeners, navigate, and settle. */
   async visit(url, { cookies, settle = 2500 } = {}) {
-    const target = await fetch(`http://127.0.0.1:${PORT}/json/new?about:blank`, {
+    const target = await fetch(`http://127.0.0.1:${this.port}/json/new?about:blank`, {
       method: "PUT",
     }).then((r) => r.json());
 
@@ -112,9 +137,36 @@ export class Browser {
     this.pending.clear();
     this.errors = [];
 
+    /*
+     * A bound on opening the socket, and it is not paranoia.
+     *
+     * Without it, a CDP connection that never opens leaves an `await` pending; when
+     * nothing else is keeping the event loop alive, Node **exits with code 0 and
+     * prints no summary**, which reads exactly like a suite that passed quietly. Two
+     * suites did that in one run and the batch reported "1002 passed, 0 failed" while
+     * 113 assertions had never run. A timeout turns that into a sentence.
+     */
     await new Promise((resolve, reject) => {
-      socket.addEventListener("open", resolve, { once: true });
-      socket.addEventListener("error", reject, { once: true });
+      const timer = setTimeout(() => {
+        reject(new Error(`CDP socket did not open within 15s (${target.webSocketDebuggerUrl})`));
+      }, 15_000);
+
+      socket.addEventListener(
+        "open",
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+      socket.addEventListener(
+        "error",
+        (event) => {
+          clearTimeout(timer);
+          reject(new Error(`CDP socket failed: ${event?.message ?? "unknown"}`));
+        },
+        { once: true },
+      );
     });
 
     const loaded = new Promise((resolve) => {
@@ -212,11 +264,37 @@ export class Browser {
   }
 
   async closeTab(tabId) {
-    await fetch(`http://127.0.0.1:${PORT}/json/close/${tabId}`).catch(() => {});
+    await fetch(`http://127.0.0.1:${this.port}/json/close/${tabId}`).catch(() => {});
   }
 
+  /**
+   * Shut the browser down, **including its children**.
+   *
+   * `process.kill()` only signals the launcher; Chrome re-execs itself into a browser
+   * process plus a renderer/GPU/utility family, and those keep the profile lock and the
+   * debugging port. That is how orphans accumulated, each one making the next run less
+   * reliable. `taskkill /T` walks the tree on Windows; a negative pid asks the OS for
+   * the process group elsewhere.
+   */
   stop() {
-    this.process?.kill();
+    const pid = this.process?.pid;
+    if (!pid) return;
+
+    if (process.platform === "win32") {
+      spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"], { stdio: "ignore" });
+    } else {
+      try {
+        process.kill(-pid, "SIGKILL");
+      } catch {
+        this.process.kill("SIGKILL");
+      }
+    }
+
+    // Best-effort: a leftover profile dir is only temp clutter, but on a machine that
+    // has run these suites hundreds of times it is real clutter.
+    if (this.userDataDir) {
+      void rm(this.userDataDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 }
 
