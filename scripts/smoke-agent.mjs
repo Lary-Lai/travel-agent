@@ -12,7 +12,10 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 
-const BASE = process.argv[2] ?? "http://localhost:3000";
+// 3001, matching every other suite. It used to default to 3000, which on this machine
+// belongs to an unrelated project — so running this suite directly either tested the wrong
+// server or failed with a confusing ECONNREFUSED.
+const BASE = process.argv[2] ?? "http://localhost:3001";
 const DEMO = { email: "demo@travel-agent.dev", password: "Demo1234" };
 
 let passed = 0;

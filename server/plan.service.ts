@@ -28,10 +28,14 @@ export async function getMapOverview(): Promise<MapOverviewDto> {
       title: true,
       city: true,
       country: true,
+      location: true,
       latitude: true,
       longitude: true,
       pricePerNight: true,
       rating: true,
+      // One photo per listing, for the hover card on the map pins. `take: 1` keeps the
+      // payload at one URL per listing instead of every image in the catalogue.
+      images: { select: { url: true }, take: 1, orderBy: { position: "asc" } },
     },
   });
 
@@ -62,10 +66,12 @@ export async function getMapOverview(): Promise<MapOverviewDto> {
       id: row.id,
       title: row.title,
       city: row.city,
+      location: row.location,
       latitude: row.latitude,
       longitude: row.longitude,
       pricePerNight: row.pricePerNight,
       rating: row.rating,
+      image: row.images[0]?.url ?? null,
     })),
   };
 }

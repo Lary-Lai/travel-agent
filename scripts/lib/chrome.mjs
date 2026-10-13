@@ -125,11 +125,40 @@ export class Browser {
     return new Promise((resolve, reject) => this.pending.set(id, { resolve, reject }));
   }
 
+  /**
+   * Move the real pointer to a point.
+   *
+   * CDP-level input rather than a synthetic `pointerenter`: hover behaviour depends on
+   * where the browser thinks the pointer is, so a dispatched event would fire on whatever
+   * element the test names whether or not it is under the cursor. A card that only opens
+   * for synthetic events is a card that never opens for a user.
+   */
+  async mouseMove(x, y) {
+    await this.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: Math.round(x),
+      y: Math.round(y),
+      buttons: 0,
+    });
+  }
+
   /** Open a tab, attach listeners, navigate, and settle. */
   async visit(url, { cookies, settle = 2500 } = {}) {
     const target = await fetch(`http://127.0.0.1:${this.port}/json/new?about:blank`, {
       method: "PUT",
     }).then((r) => r.json());
+
+    /*
+     * Make this tab the active one.
+     *
+     * Without it, a long suite that opens many tabs leaves this page in the background,
+     * and Chrome defers resource loading in background tabs — which showed up here as the
+     * map's tiles never being fetched at all (0 of 16, still 0 after twelve seconds) while
+     * a single-tab probe of the same page loaded all 16 in four. A user has one active
+     * tab, so the test should too; otherwise every image-dependent assertion measures the
+     * harness instead of the page.
+     */
+    await fetch(`http://127.0.0.1:${this.port}/json/activate/${target.id}`).catch(() => {});
 
     const socket = new WebSocket(target.webSocketDebuggerUrl);
     this.socket = socket;

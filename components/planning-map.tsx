@@ -4,8 +4,8 @@ import { Loader2, MapPin, Minus, Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { useT } from "@/components/locale-provider";
+import { ListingPin } from "@/components/listing-pin";
 import { Button } from "@/components/ui/button";
-import { formatPrice } from "@/lib/format";
 import {
   buildTileGrid,
   boundsOf,
@@ -281,7 +281,17 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
               }}
               onLoad={() => setLoaded((previous) => new Set(previous).add(tile.key))}
               onError={() => setFailed((previous) => new Set(previous).add(tile.key))}
-              loading="lazy"
+              /*
+               * Eager, deliberately — no `loading="lazy"`.
+               *
+               * Lazy loading a mosaic means holes. These tiles sit inside a clipped,
+               * negatively-offset layer, so the browser's "is it near the viewport"
+               * heuristic misfires: measured in the city view, only **6 of 16** tiles
+               * had loaded and the map showed blank patches where streets should be. The
+               * mosaic is a bounded 16 tiles, all of which the user can see, so there is
+               * nothing to defer.
+               */
+              loading="eager"
               draggable={false}
             />
           ))}
@@ -316,16 +326,10 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
           );
         })}
 
-        {/* Listing markers, only inside a city */}
+        {/* Listing markers, only inside a city. Each carries its own hover card —
+            see `ListingPin` for why the `title` attribute is not enough. */}
         {listingMarkers.map(({ listing, point }) => (
-          <a
-            key={listing.id}
-            href={`/listings/${listing.id}`}
-            className="bg-primary ring-background absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 transition-transform hover:scale-150"
-            style={{ left: point.x, top: point.y }}
-            title={`${listing.title} · ${formatPrice(listing.pricePerNight)}`}
-            aria-label={`${listing.title} · ${formatPrice(listing.pricePerNight)}`}
-          />
+          <ListingPin key={listing.id} listing={listing} x={point.x} y={point.y} />
         ))}
 
         {!allFailed && loaded.size === 0 ? (

@@ -489,10 +489,14 @@ export type MapListingDto = {
   id: string;
   title: string;
   city: string;
+  /** Neighbourhood, e.g. 新宿区 — the line that makes a pin recognisable. */
+  location: string;
   latitude: number;
   longitude: number;
   pricePerNight: number;
   rating: number;
+  /** First photo, for the pin's hover card. */
+  image: string | null;
 };
 
 export type MapOverviewDto = {
