@@ -500,6 +500,26 @@ export type MapOverviewDto = {
   listings: MapListingDto[];
 };
 
+/** One listing placed on a day of a trip. */
+export type PlanItemDto = {
+  id: string;
+  /** 1-based day number, not a date: see the `PlanItem` model. */
+  day: number;
+  note: string | null;
+  createdAt: string;
+  listing: {
+    id: string;
+    title: string;
+    city: string;
+    location: string;
+    pricePerNight: number;
+    rating: number;
+    latitude: number;
+    longitude: number;
+    image: string | null;
+  };
+};
+
 /** The minimum needed to render a person anywhere in the UI. */
 export type PublicUserBrief = {
   id: string;

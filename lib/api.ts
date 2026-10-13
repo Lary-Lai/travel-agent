@@ -31,6 +31,7 @@ import type {
   MapOverviewDto,
   NotificationListDto,
   NotificationTypeValue,
+  PlanItemDto,
   SessionUserDto,  UploadedMediaDto,
   UploadKindValue,
   WishlistDto,
@@ -195,6 +196,23 @@ export const api = {
 
   // --------------------------------------------------------- trip planning
   getMapOverview: () => request<MapOverviewDto>("/api/map/listings"),
+
+  getPlan: () => request<{ items: PlanItemDto[] }>("/api/plan"),
+
+  putPlanItem: (input: { listingId: string; day: number; note?: string }) =>
+    request<{ item: PlanItemDto; items: PlanItemDto[] }>("/api/plan", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  removePlanItem: (input: { itemId?: string; listingId?: string }) => {
+    const params = new URLSearchParams();
+    if (input.itemId) params.set("itemId", input.itemId);
+    if (input.listingId) params.set("listingId", input.listingId);
+    return request<{ removed: number; items: PlanItemDto[] }>(`/api/plan?${params}`, {
+      method: "DELETE",
+    });
+  },
 
   // ------------------------------------------------------------- wishlists
   listWishlists: () => request<{ wishlists: WishlistDto[] }>("/api/wishlists"),

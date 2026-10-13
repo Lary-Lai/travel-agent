@@ -372,6 +372,111 @@ async function main() {
   // Cleaning up keeps the demo account's history from growing across runs.
   await prisma.searchEvent.deleteMany({ where: { userId: demo.id } });
 
+  // ------------------------------------------------------- itinerary planning
+  console.log("\n— getMyPlan / addToPlan / removeFromPlan (第 4 期)");
+
+  // Start from a known state: earlier runs may have left items behind.
+  await prisma.planItem.deleteMany({ where: { userId: demo.id } });
+
+  const emptyPlan = await run("getMyPlan", {});
+  check("an empty plan is reported as such", emptyPlan.ok === true && emptyPlan.itemCount === 0, JSON.stringify(emptyPlan));
+
+  // A listing to plan with, taken from the real catalogue.
+  const planningListing = await prisma.listing.findFirstOrThrow({
+    where: { city: "Tokyo" },
+    select: { id: true, title: true },
+  });
+
+  const planAdded = await run("addToPlan", { listingId: planningListing.id, day: 2 });
+  check("a listing can be added to a day", planAdded.ok === true, String(planAdded.error));
+  check(
+    "the result names the day it landed on",
+    (planAdded.added as { day?: number } | undefined)?.day === 2,
+    JSON.stringify(planAdded.added),
+  );
+
+  const afterAdd = await prisma.planItem.findMany({
+    where: { userId: demo.id },
+    select: { day: true, listingId: true },
+  });
+  check("the row really exists in PostgreSQL", afterAdd.length === 1, JSON.stringify(afterAdd));
+
+  /*
+   * The semantic that matters most: adding the same listing again **moves** it.
+   *
+   * The model adds, the user says "actually day 3", the model adds again. If that
+   * created a second row the plan would quietly contain duplicates the user never asked
+   * for, and nothing in the UI would explain where they came from.
+   */
+  const moved = await run("addToPlan", { listingId: planningListing.id, day: 3 });
+  const afterMove = await prisma.planItem.findMany({
+    where: { userId: demo.id },
+    select: { day: true },
+  });
+  check("re-adding the same listing does not duplicate it", afterMove.length === 1, `${afterMove.length} rows`);
+  check("it moves to the new day instead", afterMove[0]?.day === 3, JSON.stringify(afterMove));
+  check(
+    "and the tool says the day changed",
+    (moved.added as { day?: number } | undefined)?.day === 3,
+    JSON.stringify(moved.added),
+  );
+
+  // The model is told what the day now looks like, or it cannot comment on it.
+  check(
+    "the result carries the day's contents and the total",
+    Array.isArray(moved.daySummary) && moved.totalItems === 1,
+    JSON.stringify({ daySummary: moved.daySummary, totalItems: moved.totalItems }),
+  );
+
+  // Reading it back is the other half of "the assistant knows your plan".
+  const readBack = await run("getMyPlan", {});
+  const days = (readBack.days ?? []) as Array<{ day: number; items: Array<{ listingId: string }> }>;
+  check("getMyPlan reports the stored item", readBack.itemCount === 1, String(readBack.itemCount));
+  check(
+    "grouped under its day, with the listing id the model needs",
+    days[0]?.day === 3 && days[0]?.items[0]?.listingId === planningListing.id,
+    JSON.stringify(days),
+  );
+
+  // Position references, the same convention the wishlist tools use.
+  const byPosition = await run("addToPlan", { position: 1, day: 1 });
+  check(
+    "a listing can be referenced by search position",
+    byPosition.ok === true,
+    String(byPosition.error),
+  );
+
+  // Out-of-range days must be refused rather than silently stored.
+  const badDay = await run("addToPlan", { listingId: planningListing.id, day: 0 });
+  check("day 0 is rejected", badDay.ok === false, JSON.stringify(badDay));
+  const hugeDay = await run("addToPlan", { listingId: planningListing.id, day: 999 });
+  check("day 999 is rejected", hugeDay.ok === false, JSON.stringify(hugeDay));
+  const ghost = await run("addToPlan", { listingId: "does-not-exist", day: 1 });
+  check("an unknown listing is rejected", ghost.ok === false, JSON.stringify(ghost));
+
+  const removedFromPlan = await run("removeFromPlan", { listingId: planningListing.id });
+  check("it can be taken off the plan", removedFromPlan.ok === true, String(removedFromPlan.error));
+  check("and the removal is reported", removedFromPlan.removed === 1, String(removedFromPlan.removed));
+
+  const removeAgain = await run("removeFromPlan", { listingId: planningListing.id });
+  check(
+    "removing something that is not there is not an error",
+    removeAgain.ok === true && removeAgain.removed === 0,
+    JSON.stringify(removeAgain),
+  );
+
+  // Signed-out callers must be refused, not silently given an empty plan.
+  const anonymousTools = createAgentTools({ userId: null, session: getSession(`${sessionId}-anon`) }, "anon");
+  const anonExecute = (
+    anonymousTools.addToPlan as unknown as { execute: (i: unknown, o: unknown) => Promise<unknown> }
+  ).execute;
+  const anonResult = (await anonExecute({ listingId: planningListing.id, day: 1 }, EXEC_OPTIONS)) as {
+    ok: boolean;
+  };
+  check("an anonymous visitor cannot write to a plan", anonResult.ok === false, JSON.stringify(anonResult));
+
+  await prisma.planItem.deleteMany({ where: { userId: demo.id } });
+
   // ---------------------------------------------------------------- cleanup
   await prisma.wishlist.deleteMany({ where: { name: { startsWith: "AI 验证-" } } });
   const leftover = await prisma.wishlist.count({ where: { name: { startsWith: "AI 验证-" } } });

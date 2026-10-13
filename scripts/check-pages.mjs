@@ -1169,6 +1169,120 @@ async function main() {
     `);
     check("有 AI 咨询入口", Boolean(askButton), String(askButton));
 
+    /*
+     * ------------------------------------------------ the itinerary (phase 4)
+     *
+     * Building a plan by clicking, which is the half of the feature that is not the
+     * assistant. The three things that can silently break:
+     *   - the add button writes, but the panel does not update (two sources of truth),
+     *   - the day stepper is decorative and everything lands on day 1,
+     *   - removal leaves the row behind.
+     *
+     * Everything added here is removed again before the section ends, so the demo
+     * account is left with the plan it started with.
+     */
+    console.log("\n— 行程（第 4 期）");
+
+    const readItinerary = () =>
+      browser.evaluate(`
+        (() => {
+          const panel = document.querySelector('[data-trip-itinerary]');
+          if (!panel) return { missing: true };
+          const text = panel.innerText;
+          const days = [...text.matchAll(/第 (\\d+) 天/g)].map((m) => Number(m[1]));
+          return {
+            text,
+            empty: /行程还是空的/.test(text),
+            dayLabels: [...new Set(days)].sort((a, b) => a - b),
+            items: [...panel.querySelectorAll('a[href^="/listings/"]')].map((a) => a.textContent.trim()),
+            removeButtons: panel.querySelectorAll('button[aria-label^="移出"]').length,
+          };
+        })()
+      `);
+
+    const planned0 = await readItinerary();
+    check("行程面板存在", planned0.missing !== true, JSON.stringify(planned0));
+    check("初始为空并说明了怎么开始", planned0.empty === true, planned0.text?.slice(0, 80));
+
+    const addButtons = await browser.evaluate(`
+      (() => {
+        const buttons = [...document.querySelectorAll('button[aria-label^="加入第"]')];
+        return { count: buttons.length, label: buttons[0]?.getAttribute('aria-label') ?? null };
+      })()
+    `);
+    check("每个房源都有加入行程的按钮", addButtons.count > 0, JSON.stringify(addButtons));
+    check("按钮标明会加到哪一天", /第 1 天/.test(String(addButtons.label)), String(addButtons.label));
+
+    // Add the first listing of the selected city.
+    const addedTitle = await browser.evaluate(`
+      (() => {
+        const link = document.querySelector('aside a[href^="/listings/"]');
+        const title = link?.querySelector('span')?.textContent?.trim() ?? null;
+        document.querySelector('button[aria-label^="加入第"]')?.click();
+        return title;
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const planned1 = await readItinerary();
+    check("加入后行程里出现了该房源", planned1.items.some((t) => t.includes(addedTitle ?? "—")), JSON.stringify(planned1.items));
+    check("面板立刻更新（不是等刷新）", planned1.empty === false, planned1.text?.slice(0, 60));
+    check("移出按钮随条目出现", planned1.removeButtons === 1, String(planned1.removeButtons));
+
+    // The day stepper must actually change which day things land on. Note that clicking
+    // the *same* listing's button on another day moves it rather than adding a second
+    // item — that is the store-level semantic, and it should hold through the UI too.
+    await browser.evaluate(`
+      (() => {
+        const plus = [...document.querySelectorAll('[data-trip-itinerary] button')]
+          .find((b) => /第 2 天/.test(b.getAttribute('aria-label') ?? ''));
+        plus?.click();
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 400));
+    await browser.evaluate(`
+      (() => document.querySelector('button[aria-label^="加入第 2 天"]')?.click())()
+    `);
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const movedInUi = await readItinerary();
+    check(
+      "同一天再次加入会移过去，而不是变成两条",
+      movedInUi.items.length === 1 && movedInUi.dayLabels.includes(2),
+      `items=${movedInUi.items.length} days=${JSON.stringify(movedInUi.dayLabels)}`,
+    );
+
+    // Now a genuinely different listing, which must add rather than move.
+    await browser.evaluate(`
+      (() => {
+        const buttons = [...document.querySelectorAll('button[aria-label^="加入第 2 天"]')];
+        buttons[1]?.click();
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 1200));
+
+    const planned2 = await readItinerary();
+    check("另一个房源加入后是第二条", planned2.items.length === 2, JSON.stringify(planned2.items));
+    check("两条都在第 2 天", planned2.dayLabels.filter((day) => day === 2).length >= 1, JSON.stringify(planned2.dayLabels));
+    check(
+      "房源行标出已在行程中及所在天",
+      /已在行程中/.test(await browser.evaluate(`document.querySelector('aside').innerText`)),
+    );
+
+    // Clean up: remove everything this section added.
+    await browser.evaluate(`
+      (() => {
+        for (const button of [...document.querySelectorAll('[data-trip-itinerary] button[aria-label^="移出"]')]) {
+          button.click();
+        }
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 1500));
+    const planned3 = await readItinerary();
+    check("移出后行程回到空状态", planned3.empty === true, planned3.text?.slice(0, 60));
+
+    await browser.screenshot(path.join(SHOTS, "plan-itinerary.png"));
+
     await browser.screenshot(path.join(SHOTS, "plan-city-view.png"));
     await browser.closeTab(planTab.tabId);
 

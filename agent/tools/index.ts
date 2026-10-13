@@ -1,11 +1,14 @@
 import type { AgentContext } from "../types";
+import { addToPlanTool } from "./addToPlan";
 import { addToWishlistTool } from "./addToWishlist";
 import { compareListingsTool } from "./compareListings";
 import { createWishlistTool } from "./createWishlist";
 import { getListingDetailTool } from "./getListingDetail";
+import { getMyPlanTool } from "./getMyPlan";
 import { getMySearchHistoryTool } from "./getMySearchHistory";
 import { getUserWishlistsTool } from "./getUserWishlists";
 import { recommendListingsTool } from "./recommendListings";
+import { removeFromPlanTool } from "./removeFromPlan";
 import { removeFromWishlistTool } from "./removeFromWishlist";
 import { searchListingsTool } from "./searchListings";
 
@@ -27,6 +30,9 @@ export function createAgentTools(context: AgentContext, sessionId: string) {
     createWishlist: createWishlistTool(context),
     addToWishlist: addToWishlistTool(context),
     removeFromWishlist: removeFromWishlistTool(context),
+    getMyPlan: getMyPlanTool(context),
+    addToPlan: addToPlanTool(context),
+    removeFromPlan: removeFromPlanTool(context),
   };
 }
 
@@ -41,6 +47,22 @@ export const AGENT_TOOL_LABELS: Record<string, string> = {
   createWishlist: "创建心愿单",
   addToWishlist: "加入心愿单",
   removeFromWishlist: "移出心愿单",
+  getMyPlan: "读行程",
+  addToPlan: "加进行程",
+  removeFromPlan: "移出行程",
 };
 
-export { addToWishlistTool, compareListingsTool, createWishlistTool, getListingDetailTool, getMySearchHistoryTool, getUserWishlistsTool, recommendListingsTool, removeFromWishlistTool, searchListingsTool };
+export {
+  addToPlanTool,
+  addToWishlistTool,
+  compareListingsTool,
+  createWishlistTool,
+  getListingDetailTool,
+  getMyPlanTool,
+  getMySearchHistoryTool,
+  getUserWishlistsTool,
+  recommendListingsTool,
+  removeFromPlanTool,
+  removeFromWishlistTool,
+  searchListingsTool,
+};

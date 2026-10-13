@@ -1,12 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { Sparkles, Star } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Sparkles, Star } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { useT } from "@/components/locale-provider";
 import { PlanningMap } from "@/components/planning-map";
+import { TripItinerary } from "@/components/trip-itinerary";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
@@ -15,7 +16,7 @@ import { useAgentStore } from "@/lib/store";
 import type { MapOverviewDto } from "@/types";
 
 /**
- * Trip planner: a map of the catalogue, and the assistant to plan against it.
+ * Trip planner: a map of the catalogue, an itinerary, and the assistant to plan with.
  *
  * The AI entry point is the point of this page. Asking the assistant to "plan three
  * days" is only useful if it knows *what* you are looking at, so the button seeds a
@@ -23,16 +24,53 @@ import type { MapOverviewDto } from "@/types";
  * through `openWithPrompt`, which the agent provider auto-sends. A bare "ask AI"
  * button that opens an empty drawer is the version of this feature that looks
  * finished and is useless.
+ *
+ * The itinerary is stored server-side because two actors write to it: this page, and the
+ * assistant through `addToPlan`. Sharing one plan is what makes "ask the AI to arrange
+ * my trip" and "drag things around myself" the same trip rather than two lists.
  */
 export function PlanView() {
   const t = useT();
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState(1);
   const openWithPrompt = useAgentStore((state) => state.openWithPrompt);
+  const queryClient = useQueryClient();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["map-overview"],
     queryFn: () => api.getMapOverview(),
     staleTime: 5 * 60_000,
+  });
+
+  /**
+   * The itinerary.
+   *
+   * Not gated on auth: an anonymous visitor gets a 401, which is a fact worth showing
+   * ("sign in to arrange places") rather than an error to hide. `retry: false` because a
+   * 401 will not become a 200 by trying again.
+   */
+  const planQuery = useQuery({
+    queryKey: ["plan"],
+    queryFn: () => api.getPlan(),
+    retry: false,
+  });
+
+  /**
+   * Both mutations replace the cached plan with the one the server returns.
+   *
+   * The assistant writes to the same plan, so a client-side guess about what the list now
+   * contains would drift from the truth as soon as the user also asks the AI to add
+   * something. The endpoint answers with the whole plan precisely so this can be a
+   * replacement rather than a patch.
+   */
+  const addToPlan = useMutation({
+    mutationFn: (input: { listingId: string; day: number }) => api.putPlanItem(input),
+    onSuccess: (result) => queryClient.setQueryData(["plan"], { items: result.items }),
+  });
+
+  const removeFromPlan = useMutation({
+    mutationFn: (input: { itemId: string }) => api.removePlanItem(input),
+    onSuccess: (result) => queryClient.setQueryData(["plan"], { items: result.items }),
   });
 
   if (isLoading) {
@@ -53,6 +91,9 @@ export function PlanView() {
   const cityListings = selected
     ? overview.listings.filter((listing) => listing.city === selected.city)
     : [];
+
+  const planItems = planQuery.data?.items ?? [];
+  const planDays = new Set(planItems.map((item) => item.day)).size;
 
   /** A prompt that carries the current view, so the assistant starts informed. */
   const askPrompt = selected
@@ -115,29 +156,63 @@ export function PlanView() {
             </ul>
           ) : (
             <ul className="space-y-2">
-              {cityListings.map((listing) => (
-                <li key={listing.id}>
-                  <Link
-                    href={`/listings/${listing.id}`}
-                    className="hover:bg-accent block rounded-lg px-2 py-1.5 transition-colors"
-                  >
-                    <span className="line-clamp-1 text-sm">{listing.title}</span>
-                    <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
-                      <span className="flex items-center gap-1">
-                        <Star className="size-3 fill-current" />
-                        {listing.rating.toFixed(1)}
+              {cityListings.map((listing) => {
+                const planned = planItems.find((item) => item.listing.id === listing.id);
+                return (
+                  <li key={listing.id} className="group flex items-start gap-1">
+                    <Link
+                      href={`/listings/${listing.id}`}
+                      className="hover:bg-accent min-w-0 flex-1 rounded-lg px-2 py-1.5 transition-colors"
+                    >
+                      <span className="line-clamp-1 text-sm">{listing.title}</span>
+                      <span className="text-muted-foreground mt-0.5 flex items-center gap-2 text-xs">
+                        <span className="flex items-center gap-1">
+                          <Star className="size-3 fill-current" />
+                          {listing.rating.toFixed(1)}
+                        </span>
+                        <span className="tabular-nums">
+                          {formatPrice(listing.pricePerNight)}
+                          {t("plan.perNight")}
+                        </span>
+                        {planned ? (
+                          <span className="text-primary">
+                            {t("plan.inPlan")} · {t("plan.day", { day: planned.day })}
+                          </span>
+                        ) : null}
                       </span>
-                      <span className="tabular-nums">
-                        {formatPrice(listing.pricePerNight)}
-                        {t("plan.perNight")}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              ))}
+                    </Link>
+
+                    {planQuery.isSuccess ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="mt-1 size-7 shrink-0"
+                        aria-label={t("plan.addToPlan", { day: selectedDay })}
+                        title={t("plan.addToPlan", { day: selectedDay })}
+                        disabled={addToPlan.isPending}
+                        onClick={() =>
+                          addToPlan.mutate({ listingId: listing.id, day: selectedDay })
+                        }
+                      >
+                        <Plus className="size-3.5" />
+                      </Button>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </aside>
+
+        <TripItinerary
+          items={planItems}
+          days={planDays}
+          selectedDay={selectedDay}
+          onSelectDay={setSelectedDay}
+          onRemove={(item) => removeFromPlan.mutate({ itemId: item.id })}
+          pending={removeFromPlan.isPending}
+          isAuthenticated={planQuery.isSuccess}
+        />
       </div>
     </div>
   );

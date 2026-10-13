@@ -170,6 +170,9 @@ model User {
   /// which is what you want when adding a feature: silence would make it invisible.
   mutedNotificationTypes NotificationType[] @default([])
 
+  // ------------------------------------------------------- trip planning
+  planItems PlanItem[]
+
   @@index([email])
   @@index([profileVisibility])
 }
@@ -219,6 +222,30 @@ model Notification {
 
   @@index([recipientId, readAt])
   @@index([recipientId, createdAt])
+}
+
+/// A listing the traveller has placed on a day of a trip.
+///
+/// Deliberately **day numbers, not dates**. A plan is "day 1, day 2, …"; pinning it to
+/// real calendar dates would make every item wrong the moment the trip shifts by a day,
+/// and would mean the planner could not be used before the dates are known — which is
+/// exactly when people plan.
+model PlanItem {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+  /// 1-based day of the trip.
+  day       Int
+  note      String?
+  createdAt DateTime @default(now())
+
+  /// One listing appears once in a plan. Re-adding it moves it rather than duplicating,
+  /// because "add this to day 3" after "add this to day 1" means the user changed their
+  /// mind about the day, not that they want it twice.
+  @@unique([userId, listingId])
+  @@index([userId, day])
 }
 
 model Listing {
@@ -273,6 +300,7 @@ model Listing {
   amenities     ListingAmenity[]
   wishlistItems WishlistItem[]
   bookings      Booking[]
+  planItems     PlanItem[]
   reviews       Review[]
 
   @@index([city])
