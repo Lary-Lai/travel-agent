@@ -25,9 +25,13 @@ export function SettingsDrawer() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2" aria-label={t("account.settingsTitle")}>
+        {/*
+          Icon only, at the user's request. The label lives on in `aria-label`, so the
+          control is still announced as "设置" — an icon-only button without a name is a
+          button a screen reader can only call "button".
+        */}
+        <Button variant="outline" size="icon" aria-label={t("account.settingsTitle")}>
           <Menu className="size-4" />
-          <span className="hidden sm:inline">{t("account.settingsTitle")}</span>
         </Button>
       </SheetTrigger>
 

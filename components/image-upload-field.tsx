@@ -140,7 +140,16 @@ export function ImageUploadField({
               </Button>
             ) : null}
           </div>
-          <p className="text-muted-foreground text-xs">{t("account.uploadHint")}</p>
+          {/*
+            The "JPG / PNG / WebP / GIF, max 4MB, no SVG" line was removed here, which
+            removes it from both callers (avatar and cover) — that is the point, since it
+            was asked to go from both.
+
+            The limits still exist and are still enforced; they are simply not recited up
+            front. `account.uploadHint` is now unused, and the field reports a rejected
+            file through its own error text (`uploadWrongType` / `uploadTooLarge`), which
+            is where the information is actually needed.
+          */}
         </div>
       </div>
 

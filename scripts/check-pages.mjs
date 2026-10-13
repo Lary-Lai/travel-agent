@@ -875,7 +875,7 @@ async function main() {
         hasNickname: Boolean(document.querySelector('input#name, input[name="name"]')),
         headings: [...document.querySelectorAll('h2')].map((h) => h.textContent.trim()).filter(Boolean),
         hasSettingsButton: [...document.querySelectorAll('button')]
-          .some((b) => /^设置$/.test(b.textContent.trim()) || b.getAttribute('aria-label') === '设置'),
+          .some((b) => b.getAttribute('aria-label') === '设置'),
         /** Save/revert buttons rendered in the section action rows. */
         saveBarButtons: [...document.querySelectorAll('button')]
           .filter((b) => /^(保存|保存资料|撤销修改)$/.test(b.textContent.trim())).length,
@@ -988,10 +988,12 @@ async function main() {
     await new Promise((r) => setTimeout(r, 400));
 
     // The drawer must carry the account fields, or the two entries disagree.
+    // Selected by accessible name, not by visible text: the trigger is icon-only now,
+    // so its label lives on `aria-label` and `textContent` is empty.
     await browser.evaluate(`
       (() => {
         const button = [...document.querySelectorAll('button')]
-          .find((b) => b.textContent.trim() === '设置');
+          .find((b) => b.getAttribute('aria-label') === '设置');
         button?.click();
       })()
     `);
