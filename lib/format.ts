@@ -84,6 +84,29 @@ export function formatDateShort(value: string | Date, locale: Locale): string {
   return dateFormatter(locale, SHORT_DATE).format(parseDateOnly(value));
 }
 
+/**
+ * `3 分钟前` / `3 minutes ago`, for notification timestamps.
+ *
+ * Built on `Intl.RelativeTimeFormat`, so all six languages come from the platform
+ * and no per-locale strings are needed. Older than a week it falls back to the
+ * absolute date, because "23 days ago" is harder to place than a date.
+ *
+ * A future timestamp — clock skew between the server and the browser — is reported
+ * as "now" rather than "in 3 minutes", which would read like a bug in the app.
+ */
+export function formatRelativeTime(value: string | Date, locale: Locale): string {
+  const then = typeof value === "string" ? new Date(value) : value;
+  const seconds = (then.getTime() - Date.now()) / 1000;
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  const abs = Math.abs(seconds);
+
+  if (seconds > 0 || abs < 45) return formatter.format(0, "second");
+  if (abs < 3600) return formatter.format(Math.round(seconds / 60), "minute");
+  if (abs < 86_400) return formatter.format(Math.round(seconds / 3600), "hour");
+  if (abs < 604_800) return formatter.format(Math.round(seconds / 86_400), "day");
+  return formatDate(value, locale);
+}
+
 /** `2026年10月1日 – 10月5日`, or the full form when the years differ. */
 export function formatDateRange(
   checkIn: string | Date,

@@ -22,6 +22,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ChipListEditor } from "@/components/chip-list-editor";
+import { Checkbox } from "@/components/ui/checkbox";
+import { BellRing } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { ImageUploadField } from "@/components/image-upload-field";
 import { ProfilePrivacyDialog } from "@/components/profile-privacy-dialog";
@@ -46,7 +48,8 @@ import {
   resolveCover,
 } from "@/lib/profile-options";
 import { cn } from "@/lib/utils";
-import type { SessionUserDto } from "@/types";
+import type { NotificationTypeValue, SessionUserDto } from "@/types";
+import type { Translate } from "@/lib/i18n";
 
 /**
  * Preset avatars, bundled locally (see lib/avatars.ts). They used to come from
@@ -178,6 +181,22 @@ function SectionActions({
   );
 }
 
+/**
+ * One row per notification type, in a fixed order so the list does not reshuffle
+ * between visits. The labels come from the notifications module, which already
+ * names these types; the settings page is simply another place they are read.
+ */
+const NOTIFICATION_TYPE_LABELS: Array<{
+  type: NotificationTypeValue;
+  labelKey: Parameters<Translate>[0];
+}> = [
+  { type: "FRIEND_REQUEST", labelKey: "notifications.typeFriendRequest" },
+  { type: "FRIEND_ACCEPTED", labelKey: "notifications.typeFriendAccepted" },
+  { type: "POST_REPLY", labelKey: "notifications.typePostReply" },
+  { type: "BOOKING_CONFIRMED", labelKey: "notifications.typeBookingConfirmed" },
+  { type: "BOOKING_CANCELLED", labelKey: "notifications.typeBookingCancelled" },
+];
+
 function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: ProfileVariant }) {
   const { locale, t } = useLocale();
   const { refresh } = useSession();
@@ -232,9 +251,26 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
     ...savedHandlers,
   });
 
+  /**
+   * Notification preferences save on their own too.
+   *
+   * Folding them into the personalisation request would have meant one Save button
+   * committing two unrelated sections — the exact ambiguity the section split was
+   * introduced to remove.
+   */
+  const notificationPrefsMutation = useMutation({
+    mutationFn: () => api.updateProfile({ mutedNotificationTypes }),
+    ...savedHandlers,
+  });
+
   /** Email change: its own little form, with its own password confirmation. */
   const [emailOpen, setEmailOpen] = useState(false);
   const [emailForm, setEmailForm] = useState({ email: "", currentPassword: "" });
+
+  /** Types the user has switched off. Empty means everything is on. */
+  const [mutedNotificationTypes, setMutedNotificationTypes] = useState<NotificationTypeValue[]>(
+    user.mutedNotificationTypes,
+  );
 
   const emailMutation = useMutation({
     mutationFn: () => api.changeEmail(emailForm),
@@ -298,6 +334,15 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
     !same(hobbies, user.hobbies) ||
     !same(visitedPlaces, user.visitedPlaces);
 
+  /**
+   * Compared as sets: the order the toggles happen to be in is not a change, and
+   * treating it as one would light up the unsaved marker for nothing.
+   */
+  const notificationPrefsDirty =
+    mutedNotificationTypes.length !== user.mutedNotificationTypes.length ||
+    [...mutedNotificationTypes].sort().join(",") !==
+      [...user.mutedNotificationTypes].sort().join(",");
+
   const passwordReady =
     passwords.currentPassword.length > 0 &&
     passwords.newPassword.length >= 8 &&
@@ -330,6 +375,8 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
     setHobbies(user.hobbies);
     setVisitedPlaces(user.visitedPlaces);
   };
+
+  const resetNotificationPrefs = () => setMutedNotificationTypes(user.mutedNotificationTypes);
 
   // An em dash stands in while its query is still in flight; the value templates
   // are part of the dictionary so the unit lands on the right side of the number
@@ -738,7 +785,66 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
 
       {/* ------------------------------------------------ personalisation only */}
       {variant === "settings" ? (
-        <section className="space-y-6 rounded-2xl border p-5">
+        <>
+          {/*
+            Notification preferences. Saves like every other section (the mute list
+            rides along on the same profile PATCH), so this page keeps one save
+            mechanism rather than growing a second one for this card.
+          */}
+          <section className="space-y-4 rounded-2xl border p-5">
+            <div className="flex items-center gap-2">
+              <BellRing className="text-primary size-4" />
+              <h2 className="text-sm font-semibold">{t("notifications.prefsTitle")}</h2>
+              {notificationPrefsDirty ? <UnsavedDot label={t("account.unsaved")} /> : null}
+            </div>
+            <p className="text-muted-foreground text-xs">{t("notifications.prefsHint")}</p>
+
+            <ul className="space-y-2">
+              {NOTIFICATION_TYPE_LABELS.map(({ type, labelKey }) => {
+                const muted = mutedNotificationTypes.includes(type);
+                return (
+                  <li key={type} className="flex items-center justify-between gap-3">
+                    <span className="text-sm">{t(labelKey)}</span>
+                    {/* A checkbox, not a switch: this project has no Switch primitive
+                        and adding one would mean a new dependency for a toggle.
+                        `aria-label` rather than a bound <label>: the visible text sits
+                        next to the control, and this way the control is named whether
+                        or not the primitive forwards its `id`. */}
+                    <Checkbox
+                      id={`notify-${type}`}
+                      aria-label={t(labelKey)}
+                      checked={!muted}
+                      onCheckedChange={(checked) =>
+                        setMutedNotificationTypes((previous) =>
+                          checked === true
+                            ? previous.filter((value) => value !== type)
+                            : [...previous, type],
+                        )
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Honest about the phase boundary: the switch that would send mail is
+                not here yet, and a fake one would be worse than none. */}
+            <p className="text-muted-foreground border-t pt-3 text-xs">
+              {t("notifications.emailNote")}
+            </p>
+
+            <SectionActions
+              dirty={notificationPrefsDirty}
+              pending={notificationPrefsMutation.isPending}
+              onSave={() => notificationPrefsMutation.mutate()}
+              onRevert={resetNotificationPrefs}
+              saveLabel={t("common.save")}
+              revertLabel={t("account.undo")}
+              pendingLabel={t("account.unsaved")}
+            />
+          </section>
+
+          <section className="space-y-6 rounded-2xl border p-5">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary size-4" />
           <h2 className="text-sm font-semibold">{t("account.personalisation")}</h2>
@@ -814,7 +920,8 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
           revertLabel={t("account.undo")}
           pendingLabel={t("account.unsaved")}
         />
-        </section>
+          </section>
+        </>
       ) : null}
     </div>
   );

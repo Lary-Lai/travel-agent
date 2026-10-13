@@ -870,6 +870,14 @@ async function main() {
         headings: [...document.querySelectorAll('h2')].map((h) => h.textContent.trim()).filter(Boolean),
         hasSettingsButton: [...document.querySelectorAll('button')]
           .some((b) => b.textContent.trim() === '设置'),
+        // One toggle per notification type. Counted by role, not by tag: this
+        // project's Checkbox renders a Radix button with role=checkbox, so looking
+        // for an input element found zero while the card was rendering perfectly.
+        notificationToggles:
+          document.querySelectorAll('[role="checkbox"], input[type="checkbox"]').length,
+        // And each must be named, or a screen reader reads five anonymous boxes.
+        namedNotificationToggles: [...document.querySelectorAll('[role="checkbox"]')]
+          .filter((el) => Boolean(el.getAttribute('aria-label'))).length,
       }))()
     `;
 
@@ -885,6 +893,20 @@ async function main() {
       "/settings 的两块是账号安全与个性化",
       settingsFields.headings.includes("账号安全") && settingsFields.headings.includes("个性化主页"),
       settingsFields.headings.join(" / "),
+    );
+    check(
+      "/settings 有通知偏好（每种通知一个开关）",
+      settingsFields.notificationToggles >= 5,
+      `${settingsFields.notificationToggles} toggle(s)`,
+    );
+    check(
+      "每个通知开关都有可读名称",
+      settingsFields.namedNotificationToggles >= 5,
+      `${settingsFields.namedNotificationToggles} named of ${settingsFields.notificationToggles}`,
+    );
+    check(
+      "/settings 说明邮件通知尚未接入，而不是给一个假开关",
+      (await browser.evaluate("document.body.innerText")).includes("邮件提醒"),
     );
     await browser.closeTab(settingsTab.tabId);
 

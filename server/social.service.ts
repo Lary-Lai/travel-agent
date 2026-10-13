@@ -12,6 +12,7 @@
  */
 import { prisma } from "../lib/db";
 import { badRequest, conflict, forbidden, notFound } from "../lib/http";
+import { notify } from "./notification.service";
 import type {
   FriendDto,
   FriendRelationValue,
@@ -621,9 +622,17 @@ export async function sendFriendRequest(
       },
     });
 
+    // They asked first: asking back is a yes. They are the one who wants to know
+    // the outcome — the actor here is me, so the recipient is the original asker.
+    await notify({
+      recipientId: accepted.requesterId,
+      type: "FRIEND_ACCEPTED",
+      actorId: requesterId,
+      href: `/u/${requesterId}`,
+    });
+
     return toFriendDto(accepted, requesterId, addressee);
   }
-
   const created = await prisma.friendship.create({
     data: { requesterId, addresseeId },
     select: {
@@ -633,6 +642,15 @@ export async function sendFriendRequest(
       status: true,
       createdAt: true,
     },
+  });
+
+  // The addressee hears about it. `notify` owns the "your own action" and mute
+  // checks and never throws, so a notification problem cannot fail the request.
+  await notify({
+    recipientId: addresseeId,
+    type: "FRIEND_REQUEST",
+    actorId: requesterId,
+    href: "/friends",
   });
 
   return toFriendDto(created, requesterId, addressee);
@@ -708,6 +726,16 @@ export async function respondToFriendRequest(
       status: true,
       createdAt: true,
     },
+  });
+
+  // The requester asked and waited; they are the one who wants the answer. The
+  // actor is the accepting side (the signed-in user), so the copy reads
+  // "<name> accepted your friend request".
+  await notify({
+    recipientId: accepted.requesterId,
+    type: "FRIEND_ACCEPTED",
+    actorId: userId,
+    href: `/u/${userId}`,
   });
 
   return toFriendDto(accepted, userId, other);

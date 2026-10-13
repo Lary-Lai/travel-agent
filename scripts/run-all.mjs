@@ -43,6 +43,7 @@ const SUITES = [
   { name: "smoke-payment-deadline", cmd: ["node", "scripts/smoke-payment-deadline.mjs"] },
   { name: "smoke-uploads", cmd: ["node", "scripts/smoke-uploads.mjs"] },
   { name: "smoke-social", cmd: ["node", "scripts/smoke-social.mjs"] },
+  { name: "smoke-notifications", cmd: ["node", "scripts/smoke-notifications.mjs"] },
   { name: "smoke-forum", cmd: ["node", "scripts/smoke-forum.mjs"] },
   { name: "verify-guests", cmd: [...TSX, "scripts/verify-guests.ts"] },
   { name: "verify-tiles", cmd: [...TSX, "scripts/verify-tiles.ts"] },

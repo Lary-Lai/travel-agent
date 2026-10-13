@@ -17,6 +17,7 @@ import { agentUi } from "./agentUi";
 import { forum } from "./forum";
 import { globals } from "./globals";
 import { media } from "./media";
+import { notifications } from "./notifications";
 import { payment } from "./payment";
 import { social } from "./social";
 import { trips } from "./trips";
@@ -34,6 +35,7 @@ export const MESSAGE_MODULES = {
   globals,
   social,
   forum,
+  notifications,
 } as const;
 
 export type ModuleName = keyof typeof MESSAGE_MODULES;

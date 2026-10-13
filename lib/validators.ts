@@ -13,6 +13,7 @@ import { isPresetAvatar } from "./avatars";
 import { isUploadedMediaPath } from "./uploads";
 import { MAX_GUESTS } from "./pricing";
 import { isCoverPreset, MAX_CHIPS, normaliseChips } from "./profile-options";
+import { NOTIFICATION_TYPES } from "../types";
 import { SORT_OPTIONS, type ListingSearchInput, type PropertyTypeValue } from "../types";
 
 export const propertyTypeSchema = z.enum([
@@ -208,6 +209,14 @@ export const updateProfileSchema = z.object({
   dreamDestinations: chipListSchema(MAX_CHIPS.dreamDestinations).optional(),
   hobbies: chipListSchema(MAX_CHIPS.hobbies).optional(),
   visitedPlaces: chipListSchema(MAX_CHIPS.visitedPlaces).optional(),
+  /**
+   * Notification types the user has switched off, saved like the other sections so
+   * the settings page keeps one save mechanism rather than two.
+   *
+   * `z.enum` over the shared tuple means an unknown value is rejected at the edge
+   * instead of being stored and silently ignored at send time.
+   */
+  mutedNotificationTypes: z.array(z.enum(NOTIFICATION_TYPES)).optional(),
 });
 
 /**

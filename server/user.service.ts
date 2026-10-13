@@ -6,7 +6,7 @@ import { prisma } from "../lib/db";
 import { badRequest, conflict, unauthorized } from "../lib/http";
 import { isCoverPreset, MAX_CHIPS, normaliseChips } from "../lib/profile-options";
 import { isUploadedMediaPath } from "../lib/uploads";
-import type { ProfileVisibilityValue, SessionUserDto } from "../types";
+import type { NotificationTypeValue, ProfileVisibilityValue, SessionUserDto } from "../types";
 
 /** bcrypt cost. 10 is the usual balance of safety and login latency. */
 const BCRYPT_ROUNDS = 10;
@@ -27,6 +27,7 @@ const userSelect = {
   hobbies: true,
   visitedPlaces: true,
   profileVisibility: true,
+  mutedNotificationTypes: true,
 } as const;
 
 type SelectedUser = {
@@ -42,6 +43,7 @@ type SelectedUser = {
   hobbies: string[];
   visitedPlaces: string[];
   profileVisibility: ProfileVisibilityValue;
+  mutedNotificationTypes: NotificationTypeValue[];
 };
 
 const toDto = (user: SelectedUser): SessionUserDto => ({
@@ -57,6 +59,7 @@ const toDto = (user: SelectedUser): SessionUserDto => ({
   hobbies: user.hobbies,
   visitedPlaces: user.visitedPlaces,
   profileVisibility: user.profileVisibility,
+  mutedNotificationTypes: user.mutedNotificationTypes,
 });
 
 export const normaliseEmail = (email: string) => email.trim().toLowerCase();
@@ -138,6 +141,7 @@ export async function updateProfile(
     dreamDestinations?: string[];
     hobbies?: string[];
     visitedPlaces?: string[];
+    mutedNotificationTypes?: NotificationTypeValue[];
   },
 ): Promise<SessionUserDto> {
   const name = input.name?.trim();
@@ -186,6 +190,11 @@ export async function updateProfile(
       hobbies: input.hobbies && normaliseChips(input.hobbies, MAX_CHIPS.hobbies),
       visitedPlaces:
         input.visitedPlaces && normaliseChips(input.visitedPlaces, MAX_CHIPS.visitedPlaces),
+      // De-duplicated: the UI sends a set, but the API is a public entry point and
+      // a repeated value would be stored as-is.
+      mutedNotificationTypes: input.mutedNotificationTypes && [
+        ...new Set(input.mutedNotificationTypes),
+      ],
     },
     select: userSelect,
   });

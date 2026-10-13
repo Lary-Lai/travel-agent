@@ -162,8 +162,63 @@ model User {
   reviews        Review[]
   searchEvents   SearchEvent[]
 
+  // ------------------------------------------------------- notifications
+  notifications        Notification[] @relation("NotificationRecipient")
+  actedNotifications   Notification[] @relation("NotificationActor")
+  /// Types the user has switched off. Storing the *muted* ones (rather than the
+  /// enabled ones) means a new notification type is on by default for everyone,
+  /// which is what you want when adding a feature: silence would make it invisible.
+  mutedNotificationTypes NotificationType[] @default([])
+
   @@index([email])
   @@index([profileVisibility])
+}
+
+/// Why a notification exists.
+///
+/// The type is stored, not the sentence: the copy is rendered from this value plus
+/// the actor and target in the reader's current language. A stored string would
+/// freeze whichever language the event happened in, and this app has six.
+enum NotificationType {
+  /// Someone asked to be your friend.
+  FRIEND_REQUEST
+  /// Your request was accepted.
+  FRIEND_ACCEPTED
+  /// Someone replied to a post you wrote.
+  POST_REPLY
+  /// A booking was confirmed (payment succeeded).
+  BOOKING_CONFIRMED
+  /// A booking was cancelled, including by the payment deadline.
+  BOOKING_CANCELLED
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  recipient User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  recipientId String
+  type      NotificationType
+
+  /// Who caused it. Nullable because the actor may be gone (cascade deletes the
+  /// notification in that case) or because the event has no actor, e.g. an
+  /// automatic cancellation by the payment deadline.
+  actor     User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorId   String?
+
+  /// Where clicking it should go, resolved when the notification is created so the
+  /// reader never has to reconstruct it (and so it survives the target being
+  /// deleted later — the link simply 404s instead of breaking the list).
+  href      String
+
+  /// Free-form extras for the copy: a post title, a city, an amount.
+  meta      Json?
+
+  /// Null means unread. A timestamp rather than a boolean, so "read at" is
+  /// available if it is ever needed and there is no second field to keep in sync.
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([recipientId, readAt])
+  @@index([recipientId, createdAt])
 }
 
 model Listing {

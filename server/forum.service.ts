@@ -22,6 +22,7 @@
 import { prisma } from "../lib/db";
 import { badRequest, forbidden, notFound } from "../lib/http";
 import { findCity } from "../lib/cities";
+import { notify } from "./notification.service";
 import type {
   BoardDto,
   ForumSortValue,
@@ -382,14 +383,19 @@ export async function createReply(
   postId: string,
   body: string,
 ): Promise<{ reply: ReplyDto; replyCount: number }> {
-  const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    // `authorId` and `title` are for the notification: the author needs telling,
+    // and the copy quotes the thread.
+    select: { id: true, authorId: true, title: true },
+  });
   if (!post) throw notFound("帖子不存在或已被删除");
 
   const text = cleanBody(body);
   if (text.length === 0) throw badRequest("回复不能为空");
   if (text.length > MAX_REPLY) throw badRequest(`回复不能超过 ${MAX_REPLY} 个字`);
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const reply = await tx.reply.create({
       data: { postId, authorId, body: text },
       select: {
@@ -420,6 +426,24 @@ export async function createReply(
       replyCount: updated.replyCount,
     };
   });
+
+  /*
+   * Notified *after* the transaction commits, not inside it.
+   *
+   * `notify` writes on its own connection, so calling it inside the callback would
+   * have it racing the open transaction; and a notification about a reply that got
+   * rolled back would be a lie. `notify` handles "you replied to yourself" and the
+   * recipient's mutes, and never throws.
+   */
+  await notify({
+    recipientId: post.authorId,
+    type: "POST_REPLY",
+    actorId: authorId,
+    href: `/forum/${postId}`,
+    meta: { postTitle: post.title },
+  });
+
+  return result;
 }
 
 /** Delete a post. Only its author may; the replies go with it (`onDelete: Cascade`). */

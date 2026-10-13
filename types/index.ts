@@ -345,6 +345,8 @@ export type SessionUserDto = {
   visitedPlaces: string[];
   /** Who may open this profile at `/u/[id]`. Editable from the profile page. */
   profileVisibility: ProfileVisibilityValue;
+  /** Notification types the user has switched off. */
+  mutedNotificationTypes: NotificationTypeValue[];
 };
 
 /** Uniform API envelope. */
@@ -441,6 +443,35 @@ export type ProfileAccessKindValue = (typeof PROFILE_ACCESS_KINDS)[number];
 
 export const FRIENDSHIP_STATUSES = ["PENDING", "ACCEPTED"] as const;
 export type FriendshipStatusValue = (typeof FRIENDSHIP_STATUSES)[number];
+
+// ------------------------------------------------------------- notifications
+
+export const NOTIFICATION_TYPES = [
+  "FRIEND_REQUEST",
+  "FRIEND_ACCEPTED",
+  "POST_REPLY",
+  "BOOKING_CONFIRMED",
+  "BOOKING_CANCELLED",
+] as const;
+export type NotificationTypeValue = (typeof NOTIFICATION_TYPES)[number];
+
+export type NotificationDto = {
+  id: string;
+  type: NotificationTypeValue;
+  /** Deep link resolved when the event happened. */
+  href: string;
+  /** Extras the copy needs: a post title, a city, an amount. */
+  meta: Record<string, unknown> | null;
+  read: boolean;
+  createdAt: string;
+  /** Null when the event had no actor, e.g. an automatic cancellation. */
+  actor: PublicUserBrief | null;
+};
+
+export type NotificationListDto = {
+  items: NotificationDto[];
+  unreadCount: number;
+};
 
 /** The minimum needed to render a person anywhere in the UI. */
 export type PublicUserBrief = {

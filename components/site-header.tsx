@@ -8,6 +8,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { LocaleSwitcher } from "@/components/locale-switcher";
+import { NotificationBell } from "@/components/notification-bell";
 import { useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -152,6 +153,10 @@ export function SiteHeader() {
 
         {/* Night mode */}
         <ThemeToggle />
+
+        {/* Notifications. Signed-in visitors only: the endpoint needs a session,
+            and an anonymous bell would be a button that only ever 401s. */}
+        {user ? <NotificationBell /> : null}
 
         {/* AI Agent entry point */}
         <Button

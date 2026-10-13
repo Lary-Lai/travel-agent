@@ -28,6 +28,8 @@ import type {
   ReplyDto,
   ReviewDto,
   ReviewSummary,
+  NotificationListDto,
+  NotificationTypeValue,
   SessionUserDto,
   UploadedMediaDto,
   UploadKindValue,
@@ -158,6 +160,8 @@ export const api = {
     dreamDestinations?: string[];
     hobbies?: string[];
     visitedPlaces?: string[];
+    /** Notification types to switch off; saved by its own section. */
+    mutedNotificationTypes?: NotificationTypeValue[];
   }) =>
     request<{ user: SessionUserDto }>("/api/users/me", {
       method: "PATCH",
@@ -178,6 +182,15 @@ export const api = {
     request<{ updated: boolean }>("/api/users/me/password", {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+
+  // --------------------------------------------------------- notifications
+  listNotifications: () => request<NotificationListDto>("/api/notifications"),
+
+  markNotificationsRead: (id?: string) =>
+    request<{ unreadCount: number }>("/api/notifications/read", {
+      method: "POST",
+      body: JSON.stringify(id ? { id } : {}),
     }),
 
   // ------------------------------------------------------------- wishlists
