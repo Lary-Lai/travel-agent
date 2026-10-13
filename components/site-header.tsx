@@ -1,6 +1,6 @@
 "use client";
 
-import { Compass, ChevronDown, Heart, Loader2, LogOut, Menu, MessagesSquare, Route, Search, Sparkles, User, Users } from "lucide-react";
+import { Compass, ChevronDown, Heart, Loader2, LogOut, Menu, MessagesSquare, Route, Search, Settings, Sparkles, User, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -251,6 +251,12 @@ export function SiteHeader() {
                 <Link href="/friends" className="cursor-pointer">
                   <Users className="size-4" />
                   {t("nav.friends")}
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild onSelect={accountMenu.closeNow}>
+                <Link href="/settings" className="cursor-pointer">
+                  <Settings className="size-4" />
+                  {t("account.settingsTitle")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />

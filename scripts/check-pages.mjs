@@ -852,6 +852,80 @@ async function main() {
       console.log("  SKIP  no listing id available");
     }
 
+    // ------------------------------------------- the profile/settings split
+    /**
+     * The personal space and the account settings are two surfaces now, and the ☰
+     * on the profile opens the same account fields in a drawer.
+     *
+     * Asserted from the user's side — which fields exist where — rather than by
+     * checking that a route returns 200: the point of the split is *what is on
+     * which page*, and a route rendering the wrong half would still be 200.
+     */
+    console.log("\n— 个人空间与账号设置是两个界面");
+
+    const fieldProbe = `
+      (() => ({
+        hasPassword: Boolean(document.querySelector('input#currentPassword')),
+        hasNickname: Boolean(document.querySelector('input#name, input[name="name"]')),
+        headings: [...document.querySelectorAll('h2')].map((h) => h.textContent.trim()).filter(Boolean),
+        hasSettingsButton: [...document.querySelectorAll('button')]
+          .some((b) => b.textContent.trim() === '设置'),
+      }))()
+    `;
+
+    const settingsTab = await browser.visit(`${BASE}/settings`, { cookies: cookie, settle: 2500 });
+    const settingsFields = await browser.evaluate(fieldProbe);
+    check("/settings 提供账号字段", settingsFields.hasPassword === true, JSON.stringify(settingsFields));
+    check(
+      "/settings 不含个人空间的昵称字段",
+      settingsFields.hasNickname === false,
+      JSON.stringify(settingsFields),
+    );
+    check(
+      "/settings 的两块是账号安全与个性化",
+      settingsFields.headings.includes("账号安全") && settingsFields.headings.includes("个性化主页"),
+      settingsFields.headings.join(" / "),
+    );
+    await browser.closeTab(settingsTab.tabId);
+
+    const profileTab = await browser.visit(`${BASE}/profile`, { cookies: cookie, settle: 2500 });
+    const profileFields = await browser.evaluate(fieldProbe);
+    check("/profile 不再包含密码字段", profileFields.hasPassword === false, JSON.stringify(profileFields));
+    check(
+      "/profile 保留个人空间的昵称字段",
+      profileFields.hasNickname === true,
+      JSON.stringify(profileFields),
+    );
+    check("/profile 有 ☰ 设置入口", profileFields.hasSettingsButton === true, JSON.stringify(profileFields));
+
+    // The drawer must carry the account fields, or the two entries disagree.
+    await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find((b) => b.textContent.trim() === '设置');
+        button?.click();
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 800));
+    const drawerFields = await browser.evaluate(`
+      (() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        if (!dialog) return { open: false };
+        return {
+          open: true,
+          hasPassword: Boolean(dialog.querySelector('input#currentPassword')),
+          hasNickname: Boolean(dialog.querySelector('input#name, input[name="name"]')),
+        };
+      })()
+    `);
+    check("☰ 打开抽屉", drawerFields.open === true, JSON.stringify(drawerFields));
+    check(
+      "抽屉里是账号字段（与 /settings 一致）",
+      drawerFields.open === true && drawerFields.hasPassword === true && drawerFields.hasNickname === false,
+      JSON.stringify(drawerFields),
+    );
+    await browser.closeTab(profileTab.tabId);
+
     // ------------------------------------------------------ forum reply badge
     /**
      * A reply written by the signed-in user must be labelled 我的回复, not 我的帖子.

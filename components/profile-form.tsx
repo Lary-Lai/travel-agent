@@ -27,6 +27,7 @@ import { ImageUploadField } from "@/components/image-upload-field";
 import { ProfilePrivacyDialog } from "@/components/profile-privacy-dialog";
 import { useLocale, useT } from "@/components/locale-provider";
 import { useSession } from "@/components/session-provider";
+import { SettingsDrawer } from "@/components/settings-drawer";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +63,20 @@ const AVATAR_PRESETS = PRESET_AVATARS;
  * useEffect would cause a cascading render (and is flagged by the React lint
  * rules); `key` remounts the editor if the account changes.
  */
-export function ProfileForm() {
+/**
+ * Which half of the editor to render.
+ *
+ * The editor used to be one page holding both the personal space (banner, stats,
+ * name/avatar/cover) and the account settings (sign-in email, password, profile
+ * visibility, the personalisation lists). That read as clutter: two unrelated jobs
+ * competing on one screen. It is now the same component rendered in two places —
+ * `/profile` for the personal space and `/settings` for the account — so state,
+ * mutations, validation and the per-section save rows are shared rather than
+ * duplicated.
+ */
+export type ProfileVariant = "profile" | "settings";
+
+export function ProfileForm({ variant = "profile" }: { variant?: ProfileVariant } = {}) {
   const t = useT();
   const { user, isLoading } = useSession();
 
@@ -94,7 +108,7 @@ export function ProfileForm() {
     );
   }
 
-  return <ProfileEditor key={user.id} user={user} />;
+  return <ProfileEditor key={user.id} user={user} variant={variant} />;
 }
 
 /**
@@ -164,7 +178,7 @@ function SectionActions({
   );
 }
 
-function ProfileEditor({ user }: { user: SessionUserDto }) {
+function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: ProfileVariant }) {
   const { locale, t } = useLocale();
   const { refresh } = useSession();
 
@@ -344,7 +358,10 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
       </div>
 
       {/* ------------------------------------------------------ banner preview */}
-      <section className="relative overflow-hidden rounded-2xl border">
+      {/* ------------------------------------------------- personal space only */}
+      {variant === "profile" ? (
+        <>
+          <section className="relative overflow-hidden rounded-2xl border">
         {cover.kind === "image" ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -394,22 +411,25 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
       </section>
 
       {/* ------------------------------------------------------- account meta */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {stats.map((tile) => (
-          <div key={tile.label} className="rounded-2xl border p-4">
-            <p className="text-muted-foreground text-xs">{tile.label}</p>
-            <p className="mt-1 text-sm font-semibold">{tile.value}</p>
-          </div>
-        ))}
-      </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:grid-cols-4">
+          {stats.map((tile) => (
+            <div key={tile.label} className="rounded-2xl border p-4">
+              <p className="text-muted-foreground text-xs">{tile.label}</p>
+              <p className="mt-1 text-sm font-semibold">{tile.value}</p>
+            </div>
+          ))}
+        </div>
 
-      {/*
-        Weighted columns rather than equal ones: the public details are what the
-        user came to edit, while account security is secondary. At 1:1 the security
-        card was as wide as the profile card and the page had no visual centre.
-      */}
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        {/* -------------------------------------------------------- profile */}
+        {/* The settings entry sits beside the personal space rather than inside it:
+            that separation is the whole point of splitting the two. */}
+        <SettingsDrawer />
+      </div>
+        </>
+      ) : null}
+
+      {/* -------------------------------------------------- public details */}
+      {variant === "profile" ? (
         <section className="space-y-5 rounded-2xl border p-5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -553,11 +573,14 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
 
           <Separator />
 
+          {/*
+            The sign-in address used to be echoed here as read-only ("email is
+            fixed"), which stopped being true once it could be changed — and it
+            belongs to the account, not to the public profile. It now lives in
+            `/settings` as an editable field, so all that is left here is when the
+            account was created.
+          */}
           <div className="text-muted-foreground space-y-1.5 text-xs">
-            <p className="flex items-center gap-1.5">
-              <Mail className="size-3.5" />
-              {t("account.emailFixed", { email: user.email })}
-            </p>
             <p className="flex items-center gap-1.5">
               <CalendarDays className="size-3.5" />
               {t("account.joinedAt", { date: formatDate(user.createdAt, locale) })}
@@ -565,7 +588,10 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
           </div>
         </section>
 
-        {/* ---------------------------------------------------- password */}
+      ) : null}
+
+      {/* ------------------------------------------------ account and security */}
+      {variant === "settings" ? (
         <section className="space-y-5 rounded-2xl border p-5">
           <div className="flex items-center gap-2">
             <ShieldCheck className="text-primary size-4" />
@@ -708,10 +734,11 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
             {t("account.passwordHint")}
           </p>
         </section>
-      </div>
+      ) : null}
 
-      {/* ------------------------------------------------------ personalisation */}
-      <section className="space-y-6 rounded-2xl border p-5">
+      {/* ------------------------------------------------ personalisation only */}
+      {variant === "settings" ? (
+        <section className="space-y-6 rounded-2xl border p-5">
         <div className="flex items-center gap-2">
           <Sparkles className="text-primary size-4" />
           <h2 className="text-sm font-semibold">{t("account.personalisation")}</h2>
@@ -787,7 +814,8 @@ function ProfileEditor({ user }: { user: SessionUserDto }) {
           revertLabel={t("account.undo")}
           pendingLabel={t("account.unsaved")}
         />
-      </section>
+        </section>
+      ) : null}
     </div>
   );
 }

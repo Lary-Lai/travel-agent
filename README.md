@@ -1809,6 +1809,43 @@ DATABASE_URL="postgresql://neondb_owner:***@ep-quiet-fire-....us-east-2.aws.neon
 
 全量回归 **1059 项全通过（0 失败）**，上一轮那两项环境导致的失败也一并消失（`smoke-weather-profile`、`smoke-payment-deadline` 均恢复绿色——本地数据库的功劳）。
 
+**49. 把"个人空间"和"账号设置"拆成两个界面（第 1 期）**
+
+问题不是字段不够，而是**两个不同的职责挤在同一页**：`/profile` 既是"我是谁"（横幅、统计、昵称、头像、封面），又是"账号机器"（登录邮箱、密码、可见性、个性化列表）。用户的原话是"信息显得很杂乱"——准确。
+
+**手法：同一个组件渲染两次，而不是复制一份。** 给 `ProfileForm` 加一个 `variant`：
+
+```tsx
+export type ProfileVariant = "profile" | "settings";
+export function ProfileForm({ variant = "profile" }: { variant?: ProfileVariant } = {})
+```
+
+`ProfileEditor` 内的四块 JSX 按 variant 分别渲染：`profile` = 横幅 + 统计 + 公开资料；`settings` = 账号安全（邮箱 + 密码）+ 个性化主页（四个列表）。这样**状态、四个 mutation、校验、分区保存行、六语言文案全部只有一份**——抽屉和独立页面天然不可能不一致，因为它们就是同一个组件。
+
+| 新增 | 作用 |
+| --- | --- |
+| `app/settings/page.tsx` | 独立设置页（标题 + 副标题 + `<ProfileForm variant="settings" />`） |
+| `components/settings-drawer.tsx` | ☰ 入口，`Sheet` 里放**同一个** settings 变体 |
+| `components/site-header.tsx` | 账号菜单加一项「设置」→ `/settings` |
+
+☰ 放在账号统计那一行的右侧（`flex-wrap` 自适应），即用户说的"放在个人空间旁边"。
+
+**顺手修掉一处自相矛盾**：公开资料里原本有一行只读提示 `account.emailFixed`（"邮箱已固定"）——上一轮邮箱已经可改，这句话就不成立了；它属于账号而非公开资料，已删除，那里只留"加入时间"。
+
+**验证（真实浏览器，三处分别探测）**：
+
+```
+PROFILE : passwordField=false emailField=false nicknameField=true  h2=[公开资料]  ☰=true
+SETTINGS: passwordField=true  nicknameField=false  h2=[账号安全, 个性化主页]
+DRAWER  : open=true hasPassword=true  ← 与 /settings 同一组件，内容一致
+```
+
+`/settings` 的邮箱输入框默认收起（点「修改邮箱」才展开），所以 `emailField=false` 是预期行为。
+
+**一个刻意的取舍**：`ProfilePrivacyDialog`（主页可见性）**留在 `/profile`**，没有搬进设置页——代码注释里原本就写着理由："它是公开资料的属性，不是凭据的属性"。留在它描述的那张卡片的标题栏里，比塞进账号页更合理。
+
+**踩到的类型约束（值得记）**：我最初把新文案命名成 `settings.*` 放进 `messages/account.ts`，`tsc` 直接拒绝——**消息模块的 key 必须与模块同名**（`account.*`），这正是生成的 `ModuleKey` 类型所编码的规则。改名进 `account.settings*` 即可，不需要新建模块并注册进 i18n 索引。
+
 ### 技术选择记录
 
 | 决策 | 理由 |
