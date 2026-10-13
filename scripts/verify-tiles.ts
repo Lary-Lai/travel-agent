@@ -8,12 +8,16 @@
  *     npx tsx scripts/verify-tiles.ts
  */
 import {
+  boundsOf,
   buildTileGrid,
   clampZoom,
+  fitZoom,
   latitudeToTileY,
   longitudeToTileX,
   MAX_MAP_ZOOM,
+  MIN_FIT_ZOOM,
   MIN_MAP_ZOOM,
+  positionInGrid,
   worldPixelPosition,
 } from "../lib/tiles";
 
@@ -182,6 +186,94 @@ console.log("\n— zoom clamping");
 check("zoom below the minimum clamps up", clampZoom(0) === MIN_MAP_ZOOM, String(clampZoom(0)));
 check("zoom above the maximum clamps down", clampZoom(99) === MAX_MAP_ZOOM, String(clampZoom(99)));
 check("a fractional zoom rounds", clampZoom(13.6) === 14, String(clampZoom(13.6)));
+
+console.log("\n— fitting the whole catalogue into one view");
+
+/*
+ * The trip planner opens showing every city; this is the check that keeps them all
+ * on screen.
+ *
+ * The bug it was written for: the fit asked for zoom 2 and the caller then applied
+ * `clampZoom`, whose floor is the listing map's MIN_MAP_ZOOM of 3 — one level too
+ * far in, which pushed New York and Sydney off the mosaic. Six of ten city markers
+ * were drawn and nothing indicated the other four existed. Real coordinates from
+ * the seeded catalogue: New York is the western extreme, Sydney the eastern,
+ * Singapore the southern, London the northern.
+ */
+const CATALOGUE = [
+  { city: "New York", longitude: -74.006, latitude: 40.7128 },
+  { city: "London", longitude: -0.1278, latitude: 51.5074 },
+  { city: "Paris", longitude: 2.3522, latitude: 48.8566 },
+  { city: "Barcelona", longitude: 2.1734, latitude: 41.3851 },
+  { city: "Singapore", longitude: 103.8198, latitude: 1.3521 },
+  { city: "Bangkok", longitude: 100.5018, latitude: 13.7563 },
+  { city: "Seoul", longitude: 126.978, latitude: 37.5665 },
+  { city: "Kyoto", longitude: 135.7681, latitude: 35.0116 },
+  { city: "Tokyo", longitude: 139.6917, latitude: 35.6895 },
+  { city: "Sydney", longitude: 151.2093, latitude: -33.8688 },
+];
+
+// The planner's mosaic: 3 x 3 tiles, the same numbers the component uses. If those
+// change, this has to change with them — that coupling is why the assertion below
+// says what it is checking rather than just "the zoom is fine".
+const PLANNER_WIDTH = 3 * 256;
+const PLANNER_HEIGHT = 3 * 256;
+
+const catalogueBounds = boundsOf(CATALOGUE);
+check("boundsOf returns a box for the catalogue", catalogueBounds !== null);
+check("boundsOf returns null for nothing", boundsOf([]) === null);
+
+if (catalogueBounds) {
+  const centre = {
+    longitude: (catalogueBounds.minLongitude + catalogueBounds.maxLongitude) / 2,
+    latitude: (catalogueBounds.minLatitude + catalogueBounds.maxLatitude) / 2,
+  };
+  const outsideAt = (zoom: number) =>
+    CATALOGUE.filter(
+      (city) =>
+        !positionInGrid(
+          city.longitude,
+          city.latitude,
+          zoom,
+          centre.longitude,
+          centre.latitude,
+          PLANNER_WIDTH,
+          PLANNER_HEIGHT,
+        ).inside,
+    );
+
+  const fit = fitZoom(catalogueBounds, PLANNER_WIDTH, PLANNER_HEIGHT);
+  check("the fitted zoom is within the allowed range", fit >= MIN_FIT_ZOOM && fit <= MAX_MAP_ZOOM, String(fit));
+  check("and it is low enough for a catalogue from New York to Sydney", fit <= 3, String(fit));
+
+  const outside = outsideAt(fit);
+  check(
+    "every city is inside the mosaic at the fitted zoom",
+    outside.length === 0,
+    `off-screen: ${outside.map((city) => city.city).join(", ")}`,
+  );
+
+  // Proving the fit is doing work rather than the floor being lucky: at the listing
+  // page's zoom 3 the same set does not fit, which is the state the bug produced.
+  const atListingFloor = outsideAt(3);
+  check(
+    "zoom 3 (the listing map's floor) is genuinely too far in",
+    atListingFloor.length > 0,
+    `would clip: ${atListingFloor.map((city) => city.city).join(", ")}`,
+  );
+}
+
+check(
+  "a coordinate at the mosaic centre lands in the middle",
+  (() => {
+    const point = positionInGrid(139.6917, 35.6895, 12, 139.6917, 35.6895, 1024, 768);
+    return Math.abs(point.x - 512) < 0.001 && Math.abs(point.y - 384) < 0.001;
+  })(),
+);
+check(
+  "a coordinate on the far side of the world is reported outside",
+  positionInGrid(-74.006, 40.7128, 12, 139.6917, 35.6895, 1024, 768).inside === false,
+);
 
 console.log(`\n${"=".repeat(56)}`);
 console.log(`PASSED: ${passed}   FAILED: ${failed}`);

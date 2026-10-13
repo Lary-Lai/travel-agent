@@ -28,10 +28,10 @@ import type {
   ReplyDto,
   ReviewDto,
   ReviewSummary,
+  MapOverviewDto,
   NotificationListDto,
   NotificationTypeValue,
-  SessionUserDto,
-  UploadedMediaDto,
+  SessionUserDto,  UploadedMediaDto,
   UploadKindValue,
   WishlistDto,
 } from "@/types";
@@ -192,6 +192,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify(id ? { id } : {}),
     }),
+
+  // --------------------------------------------------------- trip planning
+  getMapOverview: () => request<MapOverviewDto>("/api/map/listings"),
 
   // ------------------------------------------------------------- wishlists
   listWishlists: () => request<{ wishlists: WishlistDto[] }>("/api/wishlists"),

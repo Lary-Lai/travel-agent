@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu } from "lucide-react";
+import { ChevronRight, Map, Menu } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { ProfileForm } from "@/components/profile-form";
@@ -35,6 +36,21 @@ export function SettingsDrawer() {
           <SheetTitle>{t("account.settingsTitle")}</SheetTitle>
           <SheetDescription>{t("account.settingsSubtitle")}</SheetDescription>
         </SheetHeader>
+
+        {/* Trip planning lives on its own page — a map needs the width — so the
+            drawer offers the way in rather than a cramped copy of it. */}
+        <Link
+          href="/plan"
+          onClick={() => setOpen(false)}
+          className="hover:bg-accent mb-4 flex items-center gap-3 rounded-xl border p-3 transition-colors"
+        >
+          <Map className="text-primary size-4" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">{t("plan.title")}</span>
+            <span className="text-muted-foreground block text-xs">{t("plan.drawerHint")}</span>
+          </span>
+          <ChevronRight className="text-muted-foreground size-4" />
+        </Link>
 
         <ProfileForm variant="settings" />
       </SheetContent>

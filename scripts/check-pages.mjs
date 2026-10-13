@@ -948,6 +948,105 @@ async function main() {
     );
     await browser.closeTab(profileTab.tabId);
 
+    // --------------------------------------------------- the trip planner map
+    /**
+     * The planner is the one page whose value is entirely in the rendering: markers
+     * have to land on their cities, all of them have to be on screen, and clicking
+     * one has to actually change what is drawn.
+     *
+     * The pin count is the assertion that matters. The first version fitted the map
+     * to zoom 2 and then clamped it to the listing map's floor of 3, which drew six
+     * of the ten cities and looked perfectly normal.
+     */
+    console.log("\n— 行程规划地图");
+
+    const planTab = await browser.visit(`${BASE}/plan`, { cookies: cookie, settle: 4000 });
+
+    const readMap = () =>
+      browser.evaluate(`
+        (() => {
+          const mosaic = document.querySelector('[data-plan-map]');
+          if (!mosaic) return { missing: true };
+          const rect = mosaic.getBoundingClientRect();
+          const cityPins = [...mosaic.querySelectorAll('button[aria-label]')]
+            .filter((b) => /套房源|listings/.test(b.getAttribute('aria-label') ?? ''));
+          // Scoped to the map: the sidebar next to it links to the same listings.
+          const pins = [...mosaic.querySelectorAll('a[href^="/listings/"]')];
+          return {
+            cityPins: cityPins.length,
+            labels: cityPins.map((p) => p.getAttribute('aria-label')),
+            listingPins: pins.length,
+            zoom: (document.body.innerText.match(/z(\\d+)/) ?? [])[1] ?? null,
+            mosaicWidth: Math.round(rect.width),
+            heading: document.querySelector('aside h2')?.textContent ?? null,
+            pinsInsideMosaic: [...cityPins, ...pins].every((pin) => {
+              const box = pin.getBoundingClientRect();
+              return box.left >= rect.left - 2 && box.right <= rect.right + 2 &&
+                     box.top >= rect.top - 60 && box.bottom <= rect.bottom + 2;
+            }),
+          };
+        })()
+      `);
+
+    const world = await readMap();
+    check(
+      "地图上出现了全部 10 座城市",
+      world.cityPins === 10,
+      `${world.cityPins} 个城市标签：${(world.labels ?? []).join(", ")}`,
+    );
+    check("城市标签带房源数，可读", (world.labels ?? [])[0]?.includes("套房源"), String(world.labels?.[0]));
+    check("初始视图没有房源点（先看城市）", world.listingPins === 0, String(world.listingPins));
+    check("城市标签都在地图范围内", world.pinsInsideMosaic === true);
+    check(
+      "地图瓦片比容器窄，没有被裁掉（3x3 而非 4x3）",
+      world.mosaicWidth !== null && world.mosaicWidth <= 800,
+      `${world.mosaicWidth}px`,
+    );
+
+    // Click a city: the view must zoom and reveal that city's listings only.
+    const clickedCity = await browser.evaluate(`
+      (() => {
+        const pin = [...document.querySelectorAll('button[aria-label]')]
+          .find((b) => /套房源|listings/.test(b.getAttribute('aria-label') ?? ''));
+        if (!pin) return null;
+        const label = pin.getAttribute('aria-label');
+        pin.click();
+        return label;
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 1500));
+
+    const zoomed = await readMap();
+    check("点击城市后进入该城市视图", zoomed.listingPins > 0, `${zoomed.listingPins} 个房源点`);
+    check(
+      "并且放大了",
+      Number(zoomed.zoom) > Number(world.zoom),
+      `${world.zoom} -> ${zoomed.zoom}`,
+    );
+    check(
+      "侧栏标题就是被点的城市",
+      Boolean(clickedCity) && zoomed.heading === clickedCity.split("：")[0],
+      `clicked ${clickedCity} / heading ${zoomed.heading}`,
+    );
+    check("房源点都在地图范围内", zoomed.pinsInsideMosaic === true);
+    check(
+      "城市视图只显示该城市的房源",
+      zoomed.listingPins <= 18,
+      `${zoomed.listingPins} pins`,
+    );
+
+    // The AI entry must carry the selection, not just open a drawer.
+    const askButton = await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')].find((b) => /AI/.test(b.textContent));
+        return button ? button.textContent.trim() : null;
+      })()
+    `);
+    check("有 AI 咨询入口", Boolean(askButton), String(askButton));
+
+    await browser.screenshot(path.join(SHOTS, "plan-city-view.png"));
+    await browser.closeTab(planTab.tabId);
+
     // ------------------------------------------------------ forum reply badge
     /**
      * A reply written by the signed-in user must be labelled 我的回复, not 我的帖子.

@@ -128,3 +128,81 @@ export function buildTileGrid(
 export function clampZoom(zoom: number): number {
   return Math.max(MIN_MAP_ZOOM, Math.min(MAX_MAP_ZOOM, Math.round(zoom)));
 }
+
+/** Lowest zoom the planner is willing to draw: below 3 the world repeats oddly. */
+export const MIN_FIT_ZOOM = 2;
+
+export type MapBounds = {
+  minLongitude: number;
+  maxLongitude: number;
+  minLatitude: number;
+  maxLatitude: number;
+};
+
+/** Bounding box of a set of coordinates, or null when there are none. */
+export function boundsOf(points: Array<{ longitude: number; latitude: number }>): MapBounds | null {
+  if (points.length === 0) return null;
+
+  return points.reduce<MapBounds>(
+    (bounds, point) => ({
+      minLongitude: Math.min(bounds.minLongitude, point.longitude),
+      maxLongitude: Math.max(bounds.maxLongitude, point.longitude),
+      minLatitude: Math.min(bounds.minLatitude, point.latitude),
+      maxLatitude: Math.max(bounds.maxLatitude, point.latitude),
+    }),
+    {
+      minLongitude: points[0].longitude,
+      maxLongitude: points[0].longitude,
+      minLatitude: points[0].latitude,
+      maxLatitude: points[0].latitude,
+    },
+  );
+}
+
+/**
+ * The largest zoom at which `bounds` still fits inside a `width` x `height` view.
+ *
+ * Needed because the planner opens showing *every* city: the listings span New York
+ * to Sydney, and a fixed "world" zoom either cuts half of them off or wastes the
+ * viewport. The span is measured **through the projection** rather than by treating
+ * latitude as linear — Mercator stretches the poles, so a naive degrees-per-pixel
+ * calculation puts the southern rows off-screen.
+ *
+ * Returns an integer zoom; the caller pads the bounds if it wants a margin.
+ */
+export function fitZoom(bounds: MapBounds, width: number, height: number, tileSize = 256): number {
+  // At zoom 0 the whole world is exactly one tile, so the pixel distance between
+  // two coordinates at zoom 0 is the fraction of the world they span.
+  const topLeft = worldPixelPosition(bounds.minLongitude, bounds.maxLatitude, 0, tileSize);
+  const bottomRight = worldPixelPosition(bounds.maxLongitude, bounds.minLatitude, 0, tileSize);
+  const spanX = Math.max(1e-9, bottomRight.x - topLeft.x);
+  const spanY = Math.max(1e-9, bottomRight.y - topLeft.y);
+
+  const zoom = Math.log2(Math.min(width / spanX, height / spanY));
+  if (!Number.isFinite(zoom)) return MIN_FIT_ZOOM;
+
+  return Math.max(MIN_FIT_ZOOM, Math.min(MAX_MAP_ZOOM, Math.floor(zoom)));
+}
+
+/**
+ * Position of a coordinate inside a mosaic built by `buildTileGrid`, in pixels
+ * from the mosaic's top-left corner. `null` when it falls outside the mosaic.
+ */
+export function positionInGrid(
+  longitude: number,
+  latitude: number,
+  zoom: number,
+  centerLongitude: number,
+  centerLatitude: number,
+  width: number,
+  height: number,
+  tileSize = 256,
+): { x: number; y: number; inside: boolean } {
+  const point = worldPixelPosition(longitude, latitude, zoom, tileSize);
+  const center = worldPixelPosition(centerLongitude, centerLatitude, zoom, tileSize);
+
+  const x = point.x - center.x + width / 2;
+  const y = point.y - center.y + height / 2;
+
+  return { x, y, inside: x >= 0 && x <= width && y >= 0 && y <= height };
+}

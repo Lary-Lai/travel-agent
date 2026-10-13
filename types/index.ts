@@ -473,6 +473,33 @@ export type NotificationListDto = {
   unreadCount: number;
 };
 
+// ------------------------------------------------------------ trip planning
+
+export type MapCityDto = {
+  city: string;
+  country: string;
+  /** Centroid of the city's listings. */
+  latitude: number;
+  longitude: number;
+  listingCount: number;
+  minPricePerNight: number;
+};
+
+export type MapListingDto = {
+  id: string;
+  title: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  pricePerNight: number;
+  rating: number;
+};
+
+export type MapOverviewDto = {
+  cities: MapCityDto[];
+  listings: MapListingDto[];
+};
+
 /** The minimum needed to render a person anywhere in the UI. */
 export type PublicUserBrief = {
   id: string;

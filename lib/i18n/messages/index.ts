@@ -19,6 +19,7 @@ import { globals } from "./globals";
 import { media } from "./media";
 import { notifications } from "./notifications";
 import { payment } from "./payment";
+import { plan } from "./plan";
 import { social } from "./social";
 import { trips } from "./trips";
 import { wishlist } from "./wishlist";
@@ -36,6 +37,7 @@ export const MESSAGE_MODULES = {
   social,
   forum,
   notifications,
+  plan,
 } as const;
 
 export type ModuleName = keyof typeof MESSAGE_MODULES;
