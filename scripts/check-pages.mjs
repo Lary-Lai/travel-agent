@@ -13,10 +13,12 @@
  * through the DevTools protocol, so the multipart path is exercised the way a
  * user exercises it rather than the way a test harness does.
  */
+import { readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import { Browser, loginCookie } from "./lib/chrome.mjs";
+import { decodePng, neighbourDelta } from "./lib/png.mjs";
 const BASE = process.argv[2] ?? "http://localhost:3001";
 const SHOTS = path.join(process.cwd(), "data", "shots");
 
@@ -1043,6 +1045,17 @@ async function main() {
             listingPins: pins.length,
             zoom: (document.body.innerText.match(/z(\\d+)/) ?? [])[1] ?? null,
             mosaicWidth: Math.round(rect.width),
+            mosaicRect: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.width), h: Math.round(rect.height) },
+            tileSize: (() => {
+              const img = mosaic.querySelector('img[src*="arcgisonline"]');
+              if (!img) return null;
+              const box = img.getBoundingClientRect();
+              return Math.round(box.width) + 'x' + Math.round(box.height);
+            })(),
+            coversRight: Math.max(...[...mosaic.querySelectorAll('img[src*="arcgisonline"]')].map((i) => i.getBoundingClientRect().right)) >= rect.right - 1,
+            coversLeft: Math.min(...[...mosaic.querySelectorAll('img[src*="arcgisonline"]')].map((i) => i.getBoundingClientRect().left)) <= rect.left + 1,
+            coversBottom: Math.max(...[...mosaic.querySelectorAll('img[src*="arcgisonline"]')].map((i) => i.getBoundingClientRect().bottom)) >= rect.bottom - 1,
+            coversTop: Math.min(...[...mosaic.querySelectorAll('img[src*="arcgisonline"]')].map((i) => i.getBoundingClientRect().top)) <= rect.top + 1,
             heading: document.querySelector('aside h2')?.textContent ?? null,
             pinsInsideMosaic: [...cityPins, ...pins].every((pin) => {
               const box = pin.getBoundingClientRect();
@@ -1059,12 +1072,57 @@ async function main() {
       world.cityPins === 10,
       `${world.cityPins} 个城市标签：${(world.labels ?? []).join(", ")}`,
     );
+
+    /*
+     * The tiles must actually *paint*.
+     *
+     * Every DOM-level check here passed while the map was a blank white panel: 9 of 9
+     * tiles loaded, `opacity: 1`, HTTP 200 — and each one was 0x0 pixels, because
+     * Tailwind's preflight `img { max-width: 100% }` resolved against an
+     * absolutely-positioned parent with no width. Presence and opacity are therefore
+     * not evidence; the pixels are.
+     */
+    check(
+      "瓦片有真实尺寸（不是被 preflight 压成 0 宽）",
+      world.tileSize === "256x256",
+      String(world.tileSize),
+    );
+    check(
+      "瓦片铺满整个地图容器（四边不留空白）",
+      world.coversRight && world.coversLeft && world.coversTop && world.coversBottom,
+      `right=${world.coversRight} left=${world.coversLeft} top=${world.coversTop} bottom=${world.coversBottom}`,
+    );
+
+    // And the region is not a flat fill — measured from the screenshot. The helper
+    // writes the file rather than returning it, hence the read back.
+    const mapShotPath = path.join(SHOTS, "plan-map.png");
+    await browser.screenshot(mapShotPath);
+    const mapPixels = decodePng(readFileSync(mapShotPath));
+    if (world.mosaicRect) {
+      const delta = neighbourDelta(mapPixels, {
+        x: world.mosaicRect.x,
+        y: world.mosaicRect.y,
+        width: world.mosaicRect.w,
+        height: world.mosaicRect.h,
+      });
+      check(
+        "地图区域内是真实底图（不是纯色空白）",
+        delta > 1.5,
+        `neighbour delta ${delta.toFixed(2)}`,
+      );
+    } else {
+      console.log("  SKIP  could not measure the map pixels");
+    }
+
     check("城市标签带房源数，可读", (world.labels ?? [])[0]?.includes("套房源"), String(world.labels?.[0]));
     check("初始视图没有房源点（先看城市）", world.listingPins === 0, String(world.listingPins));
     check("城市标签都在地图范围内", world.pinsInsideMosaic === true);
     check(
-      "地图瓦片比容器窄，没有被裁掉（3x3 而非 4x3）",
-      world.mosaicWidth !== null && world.mosaicWidth <= 800,
+      // The window is sized to the page's wide column (~795px measured), so the card
+      // never clips its own contents. The tile canvas behind it is larger and is
+      // clipped by design — see the coverage checks above.
+      "地图窗口尺寸符合栏目宽度（768px，不被卡片裁掉）",
+      world.mosaicWidth === 768,
       `${world.mosaicWidth}px`,
     );
 

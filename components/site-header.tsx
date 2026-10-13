@@ -148,29 +148,15 @@ export function SiteHeader() {
         <div className="flex-1" />
 
         {/*
-          Settings sits here as a first-class entry, alongside notifications — not
-          buried in the avatar menu. Language and appearance moved *into* it: they are
-          preferences, and a header that offers three separate preference controls
-          (language, theme, settings) makes the user hunt for which one holds what.
-          The avatar menu is now only about the account.
+          Right-hand order, left to right: **account · AI assistant · settings ·
+          notifications** (as requested). The account is the anchor the rest hang off,
+          the assistant is an action rather than a preference, and the two
+          preference-ish controls then sit together.
+
+          Settings is a first-class entry rather than an item inside the avatar menu;
+          language and appearance moved *into* it, because a header offering three
+          separate preference controls makes the user hunt for which one holds what.
         */}
-        {user ? <SettingsDrawer /> : null}
-
-        {/* Notifications. Signed-in visitors only: the endpoint needs a session,
-            and an anonymous bell would be a button that only ever 401s. */}
-        {user ? <NotificationBell /> : null}
-
-        {/* AI Agent entry point */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => openAgent(true)}
-          className="border-primary/30 text-primary hover:bg-primary/5 gap-1.5"
-        >
-          <Sparkles className="size-4" />
-          <span className="hidden sm:inline">{t("nav.aiAgent")}</span>
-        </Button>
-
         {/* Account */}
         {isLoading ? (
           <div className="flex size-9 items-center justify-center">
@@ -289,6 +275,22 @@ export function SiteHeader() {
             </Button>
           </div>
         )}
+
+        {/* AI Agent entry point */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => openAgent(true)}
+          className="border-primary/30 text-primary hover:bg-primary/5 gap-1.5"
+        >
+          <Sparkles className="size-4" />
+          <span className="hidden sm:inline">{t("nav.aiAgent")}</span>
+        </Button>
+
+        {user ? <SettingsDrawer /> : null}
+
+        {/* Notifications need a session; an anonymous bell would only ever 401. */}
+        {user ? <NotificationBell /> : null}
       </div>
     </header>
   );

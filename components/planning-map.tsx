@@ -47,16 +47,32 @@ const TILE_URL = (x: number, y: number, zoom: number) =>
   `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${y}/${x}`;
 
 /*
- * 3 x 3 tiles = 768px square.
+ * The visible window, and the tile canvas behind it — two different sizes.
  *
- * Measured, not guessed: the map sits in the wide column of a `max-w-7xl` page, and
- * a 4-column mosaic came out 1024px wide against a ~795px column. `maxWidth: 100%`
- * then clipped the right-hand tiles *and* left the marker maths laying out for a box
- * that was no longer there — the kind of mismatch that shows up as pins drifting off
- * the city they name. 768px fits the column, so nothing is cut.
+ * `WINDOW_SIZE` is what the user sees: 768px, which is what fits the wide column of
+ * the page (measured ~795px) without the card clipping its own contents.
+ *
+ * The canvas is **two tiles larger in each direction** than the window, and that number
+ * is forced by two constraints that pull against each other:
+ *
+ *  1. The canvas must be centred on the window, because the coordinate is centred in the
+ *     canvas — otherwise the tiles and the markers disagree by half the difference.
+ *  2. It must still cover the window, and the mosaic is shifted by a *sub-tile* offset
+ *     of up to 256px to centre the coordinate instead of snapping to a tile boundary.
+ *
+ * With one spare tile the shift could exceed the margin and leave a bare band along the
+ * right or bottom edge — measured on the first attempt: three columns left the whole
+ * eastern half blank (Tokyo, Seoul, Sydney over white), and four left the bottom edge
+ * uncovered whenever the fractional offset passed 128px, i.e. about half the time,
+ * depending on where the cities happened to centre. Two spare tiles make both hold for
+ * every coordinate.
+ *
+ * Only the tiles that actually intersect the window are rendered (see below), so the
+ * extra canvas costs layout arithmetic, not network requests.
  */
-const COLUMNS = 3;
-const ROWS = 3;
+const WINDOW_SIZE = 768;
+const COLUMNS = Math.ceil(WINDOW_SIZE / 256) + 2;
+const ROWS = Math.ceil(WINDOW_SIZE / 256) + 2;
 
 export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Props) {
   const t = useT();
@@ -79,8 +95,8 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
    * and separate listings are distinguishable.
    */
   const view = useMemo(() => {
-    const width = COLUMNS * 256;
-    const height = ROWS * 256;
+    const width = WINDOW_SIZE;
+    const height = WINDOW_SIZE;
 
     if (selected) {
       return { longitude: selected.longitude, latitude: selected.latitude, zoom: 12 + zoomOffset };
@@ -126,7 +142,30 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
     [view],
   );
 
-  const allFailed = failed.size >= grid.tiles.length;
+  /** How far the larger tile canvas hangs over each edge of the visible window. */
+  const overhang = (grid.width - WINDOW_SIZE) / 2;
+
+  /**
+   * Only the tiles that touch the window are rendered.
+   *
+   * The canvas is deliberately larger than the window (see COLUMNS above), so a third
+   * of its tiles are always outside the clip. Skipping them saves the fetches while
+   * keeping the arithmetic simple.
+   */
+  const layerLeft = grid.offsetX + overhang;
+  const layerTop = grid.offsetY + overhang;
+  const visibleTiles = grid.tiles.filter((tile) => {
+    const left = tile.column * grid.tileSize - layerLeft;
+    const top = tile.row * grid.tileSize - layerTop;
+    return (
+      left < WINDOW_SIZE &&
+      top < WINDOW_SIZE &&
+      left + grid.tileSize > 0 &&
+      top + grid.tileSize > 0
+    );
+  });
+
+  const allFailed = failed.size > 0 && visibleTiles.every((tile) => failed.has(tile.key));
 
   const place = (longitude: number, latitude: number) =>
     positionInGrid(
@@ -135,8 +174,8 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
       view.zoom,
       view.longitude,
       view.latitude,
-      grid.width,
-      grid.height,
+      WINDOW_SIZE,
+      WINDOW_SIZE,
     );
 
   /** City markers, with the selected one emphasised. */
@@ -195,12 +234,29 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
         // element, and the sidebar next to it also links to listings.
         data-plan-map=""
         className="relative overflow-hidden rounded-2xl border"
-        style={{ width: grid.width, height: grid.height, maxWidth: "100%" }}
+        style={{ width: WINDOW_SIZE, height: WINDOW_SIZE, maxWidth: "100%" }}
       >
-        {/* Tile layer, pulled back by the sub-tile offset so the centre coordinate
-            lands exactly in the middle. */}
-        <div className="absolute" style={{ left: -grid.offsetX, top: -grid.offsetY }}>
-          {grid.tiles.map((tile) => (
+        {/*
+          The tile layer, pulled back by the sub-tile offset so the centre coordinate
+          lands exactly in the middle.
+
+          `width`/`height` are set explicitly and they are load-bearing. Tailwind's
+          preflight applies `img { max-width: 100% }`, and `100%` of a zero-width
+          absolutely positioned parent is **zero** — so every tile collapsed to 0x0 and
+          the map rendered as a blank white panel while the images had loaded fine
+          (9/9, `opacity: 1`, HTTP 200). A measured symptom of exactly that: the tiles'
+          bounding boxes were `{ w: 0, h: 0 }`.
+        */}
+        <div
+          className="absolute"
+          style={{
+            left: -(grid.offsetX + overhang),
+            top: -(grid.offsetY + overhang),
+            width: grid.width,
+            height: grid.height,
+          }}
+        >
+          {visibleTiles.map((tile) => (
             /* A plain <img>: routing third-party tiles through next/image would make
                the optimiser fetch and re-encode somebody else's map. */
             // eslint-disable-next-line @next/next/no-img-element
@@ -214,7 +270,15 @@ export function PlanningMap({ cities, listings, selectedCity, onSelectCity }: Pr
                 "absolute transition-opacity duration-300 select-none",
                 loaded.has(tile.key) ? "opacity-100" : "opacity-0",
               )}
-              style={{ left: tile.column * grid.tileSize, top: tile.row * grid.tileSize }}
+              // Size in the inline style as well as the attributes: attributes give the
+              // intrinsic size, but `max-width: 100%` from preflight can still clamp it
+              // (see the layer's note), and an explicit width cannot be clamped away.
+              style={{
+                left: tile.column * grid.tileSize,
+                top: tile.row * grid.tileSize,
+                width: grid.tileSize,
+                height: grid.tileSize,
+              }}
               onLoad={() => setLoaded((previous) => new Set(previous).add(tile.key))}
               onError={() => setFailed((previous) => new Set(previous).add(tile.key))}
               loading="lazy"

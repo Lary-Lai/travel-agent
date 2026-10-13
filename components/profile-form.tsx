@@ -7,7 +7,6 @@ import {
   Check,
   Compass,
   Heart,
-  ImageOff,
   Loader2,
   LogIn,
   Mail,
@@ -595,7 +594,15 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
               })}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-normal">{t("account.coverUpload")}</Label>
+              {/*
+                Three lines were removed here at the user's request: the
+                "或从本地上传背景图" label, the JPG/PNG size hint under the button, and
+                the "背景图加载失败时会自动回退…" reassurance. The section already reads
+                as "pick a gradient or upload one" — the presets are above it and the
+                button says 上传本地背景图 — so the copy was restating the layout, and
+                the format hint is still shown by the control itself when a file is
+                rejected.
+              */}
               <ImageUploadField
                 kind="cover"
                 label={t("account.uploadCover")}
@@ -607,10 +614,6 @@ function ProfileEditor({ user, variant }: { user: SessionUserDto; variant: Profi
                 disabled={publicInfoMutation.isPending}
                 previewClassName="aspect-video w-24"
               />
-              <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                <ImageOff className="size-3" />
-                {t("account.coverHint")}
-              </p>
             </div>
           </div>
 
