@@ -475,6 +475,47 @@ async function main() {
       await new Promise((r) => setTimeout(r, 300));
       check("Escape closes the menu", (await menuOpen()) === false);
 
+      /*
+       * The focus ring must fire for the keyboard and *not* for the pointer.
+       *
+       * This was a real, reported bug: a red ring stayed around the avatar after merely
+       * hovering it and moving away. The cause was measurable — Radix returns focus to
+       * the trigger when a menu closes, and that programmatic focus matches
+       * `:focus-visible` in Chrome, so the ring was painted even though no key had been
+       * pressed (a pointer *click* painted nothing). `useHoverMenu` now suppresses the
+       * focus restore for pointer-initiated opens, and these two assertions hold both
+       * halves of that: the pointer must be quiet, the keyboard must not be.
+       */
+      const ringState = () =>
+        browser.evaluate(`
+          (() => {
+            const button = document.querySelector('header button[aria-label="账户菜单"]');
+            return {
+              ring: getComputedStyle(button).boxShadow !== 'none',
+              focusVisible: button.matches(':focus-visible'),
+            };
+          })()
+        `);
+
+      const afterKeyboard = await ringState();
+      check(
+        "键盘操作后焦点圈仍然显示（不能为了修指针而牺牲可及性）",
+        afterKeyboard.ring === true,
+        JSON.stringify(afterKeyboard),
+      );
+
+      // Now the pointer path: hover the avatar, open the menu, move away.
+      await moveTo(avatar.x, avatar.y);
+      await new Promise((r) => setTimeout(r, 600));
+      await moveTo(300, 700);
+      await new Promise((r) => setTimeout(r, 900));
+      const afterPointer = await ringState();
+      check(
+        "仅悬停后移开不会留下焦点圈（此前的 bug）",
+        afterPointer.ring === false,
+        JSON.stringify(afterPointer),
+      );
+
       // Choosing an item both closes it and navigates.
       await moveTo(avatar.x, avatar.y);
       await new Promise((r) => setTimeout(r, 350));
@@ -1450,15 +1491,28 @@ async function main() {
       /已在行程中/.test(await browser.evaluate(`document.querySelector('aside').innerText`)),
     );
 
-    // Clean up: remove everything this section added.
-    await browser.evaluate(`
-      (() => {
-        for (const button of [...document.querySelectorAll('[data-trip-itinerary] button[aria-label^="移出"]')]) {
+    /*
+     * Clean up: remove everything this section added — one at a time.
+     *
+     * Clicking every remove button in one pass does not work, and the reason is correct
+     * product behaviour: the first click puts the mutation in flight, which disables the
+     * remaining buttons, so the rest of the loop hits disabled controls and does nothing.
+     * Measured: the plan still held "共 1 个房源" afterwards.
+     */
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const clicked = await browser.evaluate(`
+        (() => {
+          const button = [...document.querySelectorAll('[data-trip-itinerary] button[aria-label^="移出"]')]
+            .find((b) => !b.disabled);
+          if (!button) return false;
           button.click();
-        }
-      })()
-    `);
-    await new Promise((r) => setTimeout(r, 1500));
+          return true;
+        })()
+      `);
+      if (!clicked) break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    await new Promise((r) => setTimeout(r, 600));
     const planned3 = await readItinerary();
     check("移出后行程回到空状态", planned3.empty === true, planned3.text?.slice(0, 60));
 

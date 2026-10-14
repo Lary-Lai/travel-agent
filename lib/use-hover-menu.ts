@@ -125,6 +125,14 @@ export function useHoverMenu() {
       hovering.current = false;
       scheduleClose();
     },
+    /**
+     * Marks this interaction as a keyboard one, so the menu may hand focus back on close
+     * (see `onCloseAutoFocus`). Hovering never fires this, so anything not marked here
+     * counts as pointer-initiated.
+     */
+    onKeyDown: () => {
+      lastPointerType.current = "keyboard";
+    },
   };
 
   /**
@@ -142,6 +150,25 @@ export function useHoverMenu() {
      */
     onEscapeKeyDown: () => {
       bypassHoverGuard.current = true;
+    },
+    /**
+     * Do not take focus back for a menu the pointer opened.
+     *
+     * Radix returns focus to the trigger when its menu closes, and a *programmatic* focus
+     * matches `:focus-visible` in Chrome even though no key was pressed. So merely
+     * hovering the avatar and moving away left the button focused with its focus ring
+     * painted. Measured: at rest `boxShadow: none`; after a hover-and-leave
+     * `matches(':focus-visible') === true` with the coral ring visible; after a pointer
+     * *click* nothing — which is why the ring looked like it appeared for no reason. That
+     * is the "red circle around the avatar even when nothing is hovered" a user reported.
+     *
+     * Suppressing the default only for pointer-initiated opens is the honest fix rather
+     * than deleting the ring: a keyboard user who tabs to the avatar still gets focus
+     * returned and the ring, because `onKeyDown` marks the interaction as keyboard. The
+     * ring was never wrong to exist — it was firing for the wrong input.
+     */
+    onCloseAutoFocus: (event: Event) => {
+      if (lastPointerType.current !== "keyboard") event.preventDefault();
     },
   };
 
