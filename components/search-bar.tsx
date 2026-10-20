@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { useLocale } from "@/components/locale-provider";
 import { cityName } from "@/lib/i18n/cities";
-import { formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
+import { formatDateShort, fromCalendarDate, toCalendarDate, toDateOnlyString, todayUtc } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useSearchDraftStore, type SearchDraft } from "@/lib/store";
 
@@ -58,8 +58,8 @@ export function SearchBar({
   const [localRange, setLocalRange] = useState<DateRange | undefined>(() => {
     if (!initial?.checkIn) return undefined;
     return {
-      from: parseDateOnly(initial.checkIn),
-      to: initial.checkOut ? parseDateOnly(initial.checkOut) : undefined,
+      from: toCalendarDate(initial.checkIn),
+      to: initial.checkOut ? toCalendarDate(initial.checkOut) : undefined,
     };
   });
   const [localGuests, setLocalGuests] = useState(initial?.guests ?? 2);
@@ -71,16 +71,19 @@ export function SearchBar({
   const range: DateRange | undefined = controlled
     ? value.checkIn
       ? {
-          from: parseDateOnly(value.checkIn),
-          to: value.checkOut ? parseDateOnly(value.checkOut) : undefined,
+          from: toCalendarDate(value.checkIn),
+          to: value.checkOut ? toCalendarDate(value.checkOut) : undefined,
         }
       : undefined
     : localRange;
 
   const draft: SearchDraft = {
     destination,
-    checkIn: range?.from ? toDateOnlyString(range.from) : "",
-    checkOut: range?.to ? toDateOnlyString(range.to) : "",
+    // `range` is in calendar space (local midnight), so it must cross back through
+    // `fromCalendarDate` before it becomes a date-only string — this is the readout
+    // that feeds the chip text, the URL and the search request.
+    checkIn: range?.from ? toDateOnlyString(fromCalendarDate(range.from)) : "",
+    checkOut: range?.to ? toDateOnlyString(fromCalendarDate(range.to)) : "",
     guests,
   };
 
@@ -95,8 +98,8 @@ export function SearchBar({
         setLocalRange(
           patch.checkIn
             ? {
-                from: parseDateOnly(patch.checkIn),
-                to: patch.checkOut ? parseDateOnly(patch.checkOut) : undefined,
+                from: toCalendarDate(patch.checkIn),
+                to: patch.checkOut ? toCalendarDate(patch.checkOut) : undefined,
               }
             : undefined,
         );
@@ -264,12 +267,12 @@ export function SearchBar({
             selected={range}
             onSelect={(next) =>
               update({
-                checkIn: next?.from ? toDateOnlyString(next.from) : "",
-                checkOut: next?.to ? toDateOnlyString(next.to) : "",
+                checkIn: next?.from ? toDateOnlyString(fromCalendarDate(next.from)) : "",
+                checkOut: next?.to ? toDateOnlyString(fromCalendarDate(next.to)) : "",
               })
             }
             numberOfMonths={1}
-            disabled={{ before: today }}
+            disabled={{ before: toCalendarDate(today) }}
             autoFocus
           />
           <div className="flex items-center justify-between gap-2 border-t p-3">

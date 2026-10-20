@@ -48,6 +48,7 @@ const SUITES = [
   { name: "smoke-forum", cmd: ["node", "scripts/smoke-forum.mjs"] },
   { name: "verify-guests", cmd: [...TSX, "scripts/verify-guests.ts"] },
   { name: "verify-tiles", cmd: [...TSX, "scripts/verify-tiles.ts"] },
+  { name: "verify-dates", cmd: [...TSX, "scripts/verify-dates.ts"] },
   { name: "verify-markdown", cmd: [...TSX, "scripts/verify-markdown.ts"] },
   { name: "verify-i18n", cmd: [...TSX, "scripts/verify-i18n.ts"] },
   { name: "verify-listing-i18n", cmd: [...TSX, "scripts/verify-listing-i18n.ts"] },

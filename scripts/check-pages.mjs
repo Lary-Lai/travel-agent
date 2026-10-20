@@ -616,6 +616,91 @@ async function main() {
     }
     await browser.closeTab(hover.tabId);
 
+    // ---------------------------------------------------- the date range picker
+    /**
+     * Clicking a day must record **that** day.
+     *
+     * The reported bug: picking the 21st stored the 20th, and the 29th stored the 28th.
+     * `lib/format` anchors date-only strings at UTC midnight (correct: a stay is a
+     * calendar square, not an instant), but react-day-picker returns **local**
+     * midnight. Reading local midnight with the UTC accessors subtracts the offset, so
+     * anywhere east of Greenwich the stay slid back one day. `verify-dates.ts` covers
+     * the two converters; this covers the wiring — that the components actually use
+     * them — which a unit test cannot see.
+     *
+     * Note the day labels are English (`Thursday, October 21st, 2026`) because that is
+     * react-day-picker's `aria-label`, not the page language.
+     */
+    console.log("\n— 日期选择器（点击哪一天就记录哪一天）");
+
+    const dateTab = await browser.visit(`${BASE}/`, { cookies: cookie, settle: 2500 });
+
+    const openDates = await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find((b) => /选择日期|入住/.test(b.textContent));
+        if (!button) return false;
+        button.click();
+        return true;
+      })()
+    `);
+    check("首页搜索栏能打开日期浮层", openDates === true);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const clickDay = (day) =>
+      browser.evaluate(`
+        (() => {
+          const grid = document.querySelector('[role="grid"], table');
+          if (!grid) return false;
+          const target = [...grid.querySelectorAll('button')].find((b) => {
+            const label = (b.getAttribute('aria-label') ?? '') + ' ' + (b.textContent ?? '');
+            return new RegExp('(^|[^0-9])' + ${day} + '([^0-9]|$)').test(label) && !b.disabled;
+          });
+          if (!target) return false;
+          target.click();
+          return true;
+        })()
+      `);
+
+    const picked21 = await clickDay(21);
+    await new Promise((r) => setTimeout(r, 600));
+    const picked29 = await clickDay(29);
+    await new Promise((r) => setTimeout(r, 800));
+
+    const dateReadout = await browser.evaluate(`
+      (() => {
+        const text = document.body.innerText;
+        const match = text.match(/(\\d{1,2})月(\\d{1,2})日\\s*[–\\-—]\\s*(\\d{1,2})月(\\d{1,2})日/);
+        return { range: match ? match[0] : null, text: text.slice(0, 400) };
+      })()
+    `);
+    check(
+      "点 21 号与 29 号后浮层读数是 21–29（此前的 bug 会显示 20–28）",
+      dateReadout.range === "10月21日 – 10月29日",
+      String(dateReadout.range),
+    );
+
+    const confirmed = await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')].find((b) => /^确定$/.test(b.textContent.trim()));
+        if (!button) return false;
+        button.click();
+        return true;
+      })()
+    `);
+    await new Promise((r) => setTimeout(r, 700));
+    const chipText = await browser.evaluate(`
+      (() => {
+        const button = [...document.querySelectorAll('button')].find((b) => /入住|退房/.test(b.textContent));
+        return button ? button.textContent.replace(/\\s+/g, ' ').trim() : null;
+      })()
+    `);
+    check("确定后输入框显示同样的日期", /10月21日\s*[–-]\s*10月29日/.test(chipText ?? ""), String(chipText));
+    check("确定按钮可用（不是被禁用）", confirmed === true);
+    check("点过日期后点 21 与 29 都命中了真实日期单元格", picked21 === true && picked29 === true, `${picked21}/${picked29}`);
+
+    await browser.closeTab(dateTab.tabId);
+
     // ------------------------------------------- price slider and the reset button
     /**
      * Dragging the price slider and then pressing 重置 must put the slider back too.

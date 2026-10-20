@@ -15,7 +15,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { api, ApiClientError } from "@/lib/api";
-import { formatCurrency, formatDateShort, parseDateOnly, toDateOnlyString, todayUtc } from "@/lib/format";
+import { formatCurrency, formatDateShort, fromCalendarDate, parseDateOnly, toCalendarDate, toDateOnlyString, todayUtc } from "@/lib/format";
 import { calculatePrice } from "@/lib/pricing";
 import type { ListingDetail } from "@/types";
 
@@ -38,8 +38,12 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
 
   const today = useMemo(() => todayUtc(), []);
 
-  const checkIn = range?.from ? toDateOnlyString(range.from) : "";
-  const checkOut = range?.to ? toDateOnlyString(range.to) : "";
+  // The calendar hands back local-midnight Dates; the booking API wants date-only
+  // strings. Converting straight through `toDateOnlyString` read them with UTC
+  // accessors and shifted the stay back a day in any eastern timezone (measured:
+  // picking the 21st stored the 20th).
+  const checkIn = range?.from ? toDateOnlyString(fromCalendarDate(range.from)) : "";
+  const checkOut = range?.to ? toDateOnlyString(fromCalendarDate(range.to)) : "";
 
   const nights =
     checkIn && checkOut
@@ -140,7 +144,7 @@ export function BookingWidget({ listing }: { listing: ListingDetail }) {
               selected={range}
               onSelect={setRange}
               numberOfMonths={1}
-              disabled={{ before: today }}
+              disabled={{ before: toCalendarDate(today) }}
               autoFocus
             />
             <div className="flex items-center justify-between gap-2 border-t p-3">

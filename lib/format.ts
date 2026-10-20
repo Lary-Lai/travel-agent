@@ -48,6 +48,32 @@ export function toDateOnlyString(value: Date | string): string {
 }
 
 /**
+ * Calendar-space dates and date-only strings are **two different things**, and mixing
+ * them is how a calendar ends up one day off.
+ *
+ *  - A date-only string (`2026-10-21`) means *that square on a calendar*, not an
+ *    instant. `parseDateOnly` anchors it at UTC midnight so it renders the same in
+ *    every timezone.
+ *  - `<Calendar>` (react-day-picker) works with **local-midnight** `Date`s: picking the
+ *    21st yields `2026-10-21T00:00+08:00` in Shanghai.
+ *
+ * Reading a local-midnight date with the UTC accessors gives the *previous* day
+ * anywhere east of Greenwich: measured, clicking 21 in UTC+8 produced `2026-10-20`, and
+ * clicking 29 produced `2026-10-28`. These two functions are the only sanctioned way
+ * across the boundary; use `toCalendarDate` going in and `fromCalendarDate` coming out.
+ */
+export function toCalendarDate(value: Date | string): Date {
+  const d = parseDateOnly(value);
+  // Same calendar day, but expressed at local midnight so the grid highlights it.
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+/** Local-midnight `Date` from the calendar -> UTC-anchored date-only `Date`. */
+export function fromCalendarDate(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
+
+/**
  * Date formatting goes through `Intl`, per locale.
  *
  * These used to be string templates that hardcoded `2026年10月1日` for every
